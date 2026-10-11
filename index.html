@@ -393,6 +393,10 @@ button.row:active, .row .hit:active { opacity: .65; }
 .met-foot .met-dot { width: 8px; height: 8px; margin: 0 2px 0 6px; }
 .met-cal { display: flex; align-items: center; gap: 8px; margin: -4px 4px 10px; }
 
+/* Misure */
+.mis-in { display: flex; gap: 8px; align-items: stretch; } .mis-in input { flex: 1; min-width: 0; } .mis-u { flex: none; }
+.mis-big { margin: 12px 2px 8px; font-size: 1.15rem; font-weight: 700; }
+
 /* Preventivi */
 .pv-box { display: flex; flex-direction: column; gap: 8px; }
 .pv-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 40px; gap: 8px; align-items: center; }
@@ -598,7 +602,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     trash: svg('<path d="M4.5 6.5h15M9.5 6.5V4h5v2.5"/><path d="M6.5 6.5l1 13.5h9l1-13.5"/><path d="M10 10.5v6M14 10.5v6"/>'),
     restore: svg('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4.2h4.2"/><path d="M12 8.5V12l2.5 1.8"/>')
   };
-  var ALTRO = ['altro', 'programma', 'pannello', 'batterie', 'scadenze', 'vari', 'magazzino', 'preventivi', 'rifiuti', 'scadcantiere', 'assenze', 'ore', 'operazioni', 'backup'];
+  var ALTRO = ['altro', 'programma', 'pannello', 'batterie', 'scadenze', 'vari', 'magazzino', 'preventivi', 'rifiuti', 'scadcantiere', 'assenze', 'misure', 'ore', 'operazioni', 'backup'];
   var LOGO_SRC = document.getElementById('logo-src').getAttribute('src');
   var LOGO_IMG = document.createElement('img'); LOGO_IMG.className = 'logo'; LOGO_IMG.alt = 'Nautica Mare'; LOGO_IMG.src = document.getElementById('scritta-src').getAttribute('src');
   var splashT0 = Date.now();
@@ -3496,6 +3500,105 @@ button.row:active, .row .hit:active { opacity: .65; }
     return h;
   }
 
+  /* ---------- Misure: millimetri e pollici, chiavi e filetti ----------
+     Tabelle standard: chiavi metriche e in pollici (SAE), viti metriche ISO grosse e fini, UNC, UNF,
+     tubi gas BSP (cilindrico G / conico R, 55°) e NPT americano (conico, 60°). Tutto sul telefono, senza rete. */
+  var MIS_KEYM = [5.5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 30, 32, 34, 36, 38, 41, 46, 50, 55];
+  var MIS_KEYI = ['1/4', '5/16', '11/32', '3/8', '7/16', '1/2', '9/16', '19/32', '5/8', '11/16', '3/4', '13/16', '7/8', '15/16', '1', '1-1/16', '1-1/8', '1-3/16', '1-1/4', '1-5/16', '1-3/8', '1-7/16', '1-1/2', '1-5/8', '1-11/16', '1-3/4', '1-13/16', '1-7/8', '2'];
+  var MIS_VITI = [['M3', '5,5'], ['M4', '7'], ['M5', '8'], ['M6', '10'], ['M8', '13'], ['M10', '17 (ISO 16)'], ['M12', '19 (ISO 18)'], ['M14', '22 (ISO 21)'], ['M16', '24'], ['M18', '27'], ['M20', '30'], ['M22', '32 (ISO 34)'], ['M24', '36'],
+    ['1/4"', '7/16"'], ['5/16"', '1/2"'], ['3/8"', '9/16"'], ['7/16"', '5/8"'], ['1/2"', '3/4"'], ['9/16"', '13/16"'], ['5/8"', '15/16"'], ['3/4"', '1-1/8"'], ['7/8"', '1-5/16"'], ['1"', '1-1/2"']];
+  // [nome, diametro nominale mm, passo mm, famiglia, nota]
+  var MIS_FIL = (function () {
+    var out = [], IN = 25.4;
+    [[3, .5], [4, .7], [5, .8], [6, 1], [8, 1.25], [10, 1.5], [12, 1.75], [14, 2], [16, 2], [18, 2.5], [20, 2.5], [22, 2.5], [24, 3], [27, 3], [30, 3.5]].forEach(function (x) { out.push(['M' + x[0] + ' × ' + String(x[1]).replace('.', ','), x[0], x[1], 'Metrico grosso', 'il più comune']); });
+    [[8, 1], [10, 1.25], [10, 1], [12, 1.5], [12, 1.25], [14, 1.5], [16, 1.5], [18, 1.5], [20, 1.5], [22, 1.5], [24, 2], [24, 1.5]].forEach(function (x) { out.push(['M' + x[0] + ' × ' + String(x[1]).replace('.', ','), x[0], x[1], 'Metrico fine', 'passo fine']); });
+    [['#4-40', .112, 40], ['#6-32', .138, 32], ['#8-32', .164, 32], ['#10-24', .19, 24], ['1/4"-20', .25, 20], ['5/16"-18', .3125, 18], ['3/8"-16', .375, 16], ['7/16"-14', .4375, 14], ['1/2"-13', .5, 13], ['9/16"-12', .5625, 12], ['5/8"-11', .625, 11], ['3/4"-10', .75, 10], ['7/8"-9', .875, 9], ['1"-8', 1, 8]]
+      .forEach(function (x) { out.push([x[0] + ' UNC', x[1] * IN, IN / x[2], 'UNC (pollici, grosso)', x[2] + ' filetti per pollice']); });
+    [['#10-32', .19, 32], ['1/4"-28', .25, 28], ['5/16"-24', .3125, 24], ['3/8"-24', .375, 24], ['7/16"-20', .4375, 20], ['1/2"-20', .5, 20], ['9/16"-18', .5625, 18], ['5/8"-18', .625, 18], ['3/4"-16', .75, 16], ['7/8"-14', .875, 14], ['1"-12', 1, 12]]
+      .forEach(function (x) { out.push([x[0] + ' UNF', x[1] * IN, IN / x[2], 'UNF (pollici, fine)', x[2] + ' filetti per pollice']); });
+    [['1/8"', 9.728, 28], ['1/4"', 13.157, 19], ['3/8"', 16.662, 19], ['1/2"', 20.955, 14], ['5/8"', 22.911, 14], ['3/4"', 26.441, 14], ['1"', 33.249, 11], ['1-1/4"', 41.91, 11], ['1-1/2"', 47.803, 11], ['2"', 59.614, 11]]
+      .forEach(function (x) { out.push(['G ' + x[0] + ' (BSP)', x[1], IN / x[2], 'Gas BSP (G cilindrico / R conico)', 'tubi e raccordi, ' + x[2] + ' filetti per pollice, 55°']); });
+    [['1/8"', 10.287, 27], ['1/4"', 13.716, 18], ['3/8"', 17.145, 18], ['1/2"', 21.336, 14], ['3/4"', 26.67, 14], ['1"', 33.401, 11.5], ['1-1/4"', 42.164, 11.5], ['1-1/2"', 48.26, 11.5], ['2"', 60.325, 11.5]]
+      .forEach(function (x) { out.push([x[0] + ' NPT', x[1], IN / x[2], 'NPT (americano conico)', 'raccordi americani, ' + String(x[2]).replace('.', ',') + ' filetti per pollice, 60°']); });
+    return out;
+  })();
+  function misParseIn(s) { // «3/8», «1-1/4», «1 1/4», «0,375», «1.25"»
+    s = String(s || '').trim().replace(/["”″]|''/g, '').replace(',', '.'); if (!s) return null;
+    var m = /^(\d+)\s*[-\s]\s*(\d+)\s*\/\s*(\d+)$/.exec(s); if (m) return +m[1] + (+m[2]) / (+m[3]);
+    m = /^(\d+)\s*\/\s*(\d+)$/.exec(s); if (m) return (+m[1]) / (+m[2]);
+    var n = parseFloat(s); return isFinite(n) ? n : null;
+  }
+  function misFrac(inch, den) { // pollici in frazione al 1/64 più vicino
+    den = den || 64; var whole = Math.floor(inch + 1e-9), r = Math.round((inch - whole) * den), d = den;
+    if (r === den) { whole++; r = 0; }
+    while (r && r % 2 === 0 && d > 1) { r /= 2; d /= 2; }
+    return (whole ? whole + (r ? '-' : '') : '') + (r ? r + '/' + d : (whole ? '' : '0')) + '"';
+  }
+  function mmTxt(v, dec) { return fmtNum(v, dec == null ? 2 : dec) + ' mm'; }
+  function misUnitSel(id, cur) { return '<div class="seg2 mis-u" role="group"><button type="button" data-act="mis-u" data-f="' + id + '" data-u="mm" aria-pressed="' + (cur !== 'in') + '">mm</button><button type="button" data-act="mis-u" data-f="' + id + '" data-u="in" aria-pressed="' + (cur === 'in') + '">pollici</button></div>'; }
+  function viewMisure() {
+    var tab = V.misTab || 'converti', h = '<div class="chips" role="group" aria-label="Strumento">' + [['converti', 'Converti'], ['chiavi', 'Chiavi'], ['filetti', 'Filetti']].map(function (c) {
+      return '<button type="button" data-act="mis-tab" data-v="' + c[0] + '" aria-pressed="' + (tab === c[0]) + '">' + c[1] + '</button>'; }).join('') + '</div><div id="mis" data-tab="' + tab + '">';
+    if (tab === 'converti') {
+      h += '<div class="grid2" style="margin-top:12px">' + field(lab('mis-mm', 'Millimetri'), inp('mis-mm', V.misMm || '', 'type="text" inputmode="decimal" placeholder="es. 9,5" autocomplete="off"')) +
+        field(lab('mis-in', 'Pollici'), inp('mis-in', V.misIn || '', 'type="text" placeholder="es. 3/8 o 1-1/4" autocomplete="off"')) + '</div><div id="mis-out"></div>' +
+        '<p class="cap" style="margin:10px 2px 0">Nei pollici puoi scrivere le frazioni: 3/8, 1-1/4, 1 1/4, oppure 0,375. 1 pollice = 25,4 mm.</p>';
+    } else if (tab === 'chiavi') {
+      h += '<div class="field" style="margin-top:12px"><label for="mis-k">Misura del dado o della testa</label><div class="mis-in">' + inp('mis-k', V.misK || '', 'type="text" inputmode="decimal" placeholder="' + (V.misKu === 'in' ? 'es. 9/16' : 'es. 14,3') + '" autocomplete="off"') + misUnitSel('k', V.misKu) + '</div><span class="hint">Misurala col calibro tra due facce piane, oppure scrivi la chiave che hai in mano.</span></div><div id="mis-out"></div>';
+      h += secH('Vite e chiave') + '<div class="group pan">' + MIS_VITI.map(function (r) { return '<div class="kv-row"><span class="k">Vite ' + esc(r[0]) + '</span><span class="v">chiave ' + esc(r[1]) + (/"/.test(r[1]) ? '' : ' mm') + '</span></div>'; }).join('') + '</div><p class="cap" style="margin:6px 2px 0">Testa esagonale normale; i dadi in pollici a volte sono più grandi della testa della vite.</p>';
+    } else {
+      h += '<div class="field" style="margin-top:12px"><label for="mis-fd">Diametro esterno misurato (sul maschio)</label><div class="mis-in">' + inp('mis-fd', V.misFd || '', 'type="text" inputmode="decimal" placeholder="es. 13,1" autocomplete="off"') + misUnitSel('fd', V.misFdu) + '</div></div>' +
+        '<div class="field"><label for="mis-fp">Passo (facoltativo)</label><div class="mis-in">' + inp('mis-fp', V.misFp || '', 'type="text" inputmode="decimal" placeholder="' + (V.misFpu === 'tpi' ? 'es. 19' : 'es. 1,25') + '" autocomplete="off"') +
+        '<div class="seg2 mis-u" role="group"><button type="button" data-act="mis-u" data-f="fp" data-u="mm" aria-pressed="' + (V.misFpu !== 'tpi') + '">mm</button><button type="button" data-act="mis-u" data-f="fp" data-u="tpi" aria-pressed="' + (V.misFpu === 'tpi') + '">filetti/pollice</button></div></div>' +
+        '<span class="hint">Col pettine, oppure conta i filetti in 25,4 mm (1 pollice). Sul femmina misura il foro e aggiungi circa un passo.</span></div><div id="mis-out"></div>';
+    }
+    return h + '</div>';
+  }
+  function misUpdate() {
+    var box = $('#mis'), out = $('#mis-out'); if (!box || !out) return;
+    var tab = box.getAttribute('data-tab'), h = '';
+    if (tab === 'converti') {
+      var mm = parseDec(V.misMm), inch = misParseIn(V.misIn);
+      if (V.misLast === 'in' && inch != null) mm = inch * 25.4; else if (mm != null) inch = mm / 25.4; else if (inch != null) mm = inch * 25.4;
+      if (mm == null) { out.innerHTML = ''; return; }
+      var fr = misFrac(inch), frV = misParseIn(fr) || 0;
+      h = '<div class="group pan" style="margin-top:12px"><div class="kv-row"><span class="k">Millimetri</span><span class="v"><b>' + esc(mmTxt(mm, 3)) + '</b></span></div>' +
+        '<div class="kv-row"><span class="k">Pollici</span><span class="v"><b>' + esc(fmtNum(inch, 4)) + '"</b></span></div>' +
+        '<div class="kv-row"><span class="k">Frazione più vicina</span><span class="v"><b>' + esc(fr) + '</b>' + (Math.abs(frV - inch) > 1e-6 ? ' <span class="cap">(' + esc(mmTxt(frV * 25.4)) + ')</span>' : '') + '</span></div></div>';
+    } else if (tab === 'chiavi') {
+      var v = V.misKu === 'in' ? misParseIn(V.misK) : parseDec(V.misK); if (v == null || v <= 0) { out.innerHTML = ''; return; }
+      var s = V.misKu === 'in' ? v * 25.4 : v;
+      function verdict(w) { var d = w - s; return d < -0.05 ? ['late', 'non entra'] : d <= 0.25 ? ['ok', 'va bene'] : d <= 0.5 ? ['soon', 'un po’ larga: rischi di arrotondare'] : ['late', 'troppo larga']; }
+      var cand = MIS_KEYM.map(function (k) { return { t: fmtNum(k, 1) + ' mm', mm: k, sis: 'Metrica' }; }).concat(MIS_KEYI.map(function (k) { var i = misParseIn(k); return { t: k + '"', mm: i * 25.4, sis: 'Pollici' }; }))
+        .filter(function (c) { return c.mm >= s - 0.6 && c.mm <= s + 1.2; }).sort(function (a, b) { return Math.abs(a.mm - s) - Math.abs(b.mm - s); }).slice(0, 6).sort(function (a, b) { return a.mm - b.mm; });
+      h = '<div class="mis-big">' + esc(mmTxt(s)) + ' = ' + esc(fmtNum(s / 25.4, 3)) + '" ≈ ' + esc(misFrac(s / 25.4)) + '</div>';
+      h += cand.length ? '<div class="group">' + cand.map(function (c) { var vd = verdict(c.mm), d = c.mm - s; return '<div class="row"><span class="main"><span class="title">Chiave ' + esc(c.t) + '</span><span class="sub">' + esc(c.sis) + ' · ' + esc(mmTxt(c.mm)) + ' · ' + (d >= 0 ? '+' : '') + esc(fmtNum(d, 2)) + ' mm</span></span><span class="pill ' + vd[0] + '">' + esc(vd[1]) + '</span></div>'; }).join('') + '</div>'
+        : '<div class="notice">Nessuna chiave standard vicina a questa misura.</div>';
+    } else {
+      var dRaw = V.misFdu === 'in' ? misParseIn(V.misFd) : parseDec(V.misFd); if (dRaw == null || dRaw <= 0) { out.innerHTML = ''; return; }
+      var dm = V.misFdu === 'in' ? dRaw * 25.4 : dRaw, pv = parseDec(V.misFp), pm = pv > 0 ? (V.misFpu === 'tpi' ? 25.4 / pv : pv) : null;
+      var res = MIS_FIL.map(function (f) {
+        var dd = (dm - f[1]) / f[1], sc = Math.abs(dd < 0 ? dd * 0.7 : dd); // il maschio misura un po' meno del nominale
+        if (pm) sc += Math.abs(pm - f[2]) / f[2] * 1.5;
+        return { f: f, sc: sc };
+      }).sort(function (a, b) { return a.sc - b.sc; }).slice(0, 6);
+      h = '<div class="group" style="margin-top:12px">' + res.map(function (r, i) {
+        var f = r.f, ok = r.sc < 0.035 ? 'ok' : r.sc < 0.09 ? 'soon' : '';
+        return '<div class="row"><span class="main"><span class="title">' + esc(f[0]) + '</span><span class="sub">' + esc(f[3]) + ' · Ø ' + esc(mmTxt(f[1])) + ' · passo ' + esc(fmtNum(f[2], 3)) + ' mm (' + esc(fmtNum(25.4 / f[2], 1)) + '/pollice)</span><span class="sub">' + esc(f[4]) + '</span></span>' +
+          (i === 0 && ok ? '<span class="pill ok">la più probabile</span>' : ok ? '<span class="pill ' + ok + '">possibile</span>' : '') + '</div>';
+      }).join('') + '</div>' + (pm ? '' : '<p class="cap" style="margin:8px 2px 0">Con il passo il risultato è molto più sicuro: metrico e pollici hanno diametri simili.</p>');
+    }
+    out.innerHTML = h;
+  }
+  document.addEventListener('input', function (e) {
+    var id = e.target && e.target.id; if (!id || !/^mis-/.test(id)) return;
+    var v = e.target.value;
+    if (id === 'mis-mm') { V.misMm = v; V.misLast = 'mm'; var m = parseDec(v), o = $('#mis-in'); if (o) { V.misIn = m != null ? String(Math.round(m / 25.4 * 10000) / 10000).replace('.', ',') : ''; o.value = V.misIn; } }
+    else if (id === 'mis-in') { V.misIn = v; V.misLast = 'in'; var n = misParseIn(v), o2 = $('#mis-mm'); if (o2) { V.misMm = n != null ? String(Math.round(n * 25.4 * 1000) / 1000).replace('.', ',') : ''; o2.value = V.misMm; } }
+    else if (id === 'mis-k') V.misK = v; else if (id === 'mis-fd') V.misFd = v; else if (id === 'mis-fp') V.misFp = v;
+    misUpdate();
+  });
+
   /* ---------- Ferie e permessi ----------
      Il dipendente chiede dal telefono, gli amministratori approvano o rifiutano. La malattia si comunica e basta.
      Tutti vedono chi è assente, ma il motivo e le note li vedono solo la persona e gli amministratori. */
@@ -4721,6 +4824,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       ['preventivi', I.doc, 'acc', 'Preventivi', 'In ore e ricambi, con la foto di quello dell’ufficio', (function () { var n = (S.prev || []).filter(function (p) { return p.stato === 'bozza' || p.stato === 'inviato'; }).length; return n ? '<span class="pill acc">' + n + ' in attesa</span>' : ''; })()],
       ['rifiuti', I.trash, 'late', 'Rifiuti', 'Cosa produciamo, deposito, ritiri della ditta e registro', rifDepKg() > 0 ? '<span class="pill">≈ ' + fmtNum(rifDepKg(), 0) + ' kg in deposito</span>' : ''],
       ['assenze', I.cal, 'vio', 'Ferie e permessi', 'Richieste, approvazioni e chi è assente', assAdmin() && assPending().length ? '<span class="pill soon">' + assPending().length + ' da approvare</span>' : assOn(todayISO()).length ? '<span class="pill">' + assOn(todayISO()).length + ' assenti oggi</span>' : ''],
+      ['misure', I.ruler, 'acc', 'Misure: mm e pollici', 'Convertitore, chiavi, filetti metrici, UNC, UNF, BSP e NPT', ''],
       ['ore', I.hours, 'ok', 'Ore del mese', 'Ore di ogni dipendente e giornate confermate', ''],
       ['operazioni', I.list, '', 'Servizi di cantiere', 'Trasporti, alaggi, movimentazioni, vari, lavaggi: passaggi e tempi', runs ? '<span class="pill acc">' + runs + ' in corso</span>' : ''],
       ['scadenze', I.alarm, 'late', 'Scadenze', 'Tagliandi, assicurazioni, contratti', late ? '<span class="pill late">' + late + ' scadute</span>' : ''],
@@ -5079,11 +5183,11 @@ button.row:active, .row .hit:active { opacity: .65; }
         (S.canWrite && S.status === 'ready' && M.area !== 'porto' ? '<button type="button" class="icon-btn" data-act="m-cfg" aria-label="Misure del cantiere">' + I.ruler + '</button>' : '') + '</div>';
       return;
     }
-    var titles = { home: 'Nautica Mare', scheda: 'Scheda lavoro', scadenze: 'Scadenze', calendario: 'Calendario', barche: 'Barche', lavori: 'Lavorazioni da fare', altro: 'Altro', vari: 'Vari e alaggi', magazzino: 'Magazzino', preventivi: 'Preventivi', assenze: 'Ferie e permessi', rifiuti: 'Rifiuti', scadcantiere: 'Scadenze del cantiere', ore: 'Ore del mese', checklist: 'Checklist', operazioni: 'Servizi di cantiere', backup: 'Copia dei dati', programma: 'Programma', pannello: 'Pannello', batterie: 'Batterie' };
+    var titles = { home: 'Nautica Mare', scheda: 'Scheda lavoro', scadenze: 'Scadenze', calendario: 'Calendario', barche: 'Barche', lavori: 'Lavorazioni da fare', altro: 'Altro', vari: 'Vari e alaggi', magazzino: 'Magazzino', preventivi: 'Preventivi', assenze: 'Ferie e permessi', misure: 'Misure mm e pollici', rifiuti: 'Rifiuti', scadcantiere: 'Scadenze del cantiere', ore: 'Ore del mese', checklist: 'Checklist', operazioni: 'Servizi di cantiere', backup: 'Copia dei dati', programma: 'Programma', pannello: 'Pannello', batterie: 'Batterie' };
     var late = S.status === 'ready' ? lateCount() : 0;
     var left = V.tab === 'home' ? '<button type="button" class="icon-btn" data-act="tab" data-tab="scadenze" aria-label="Scadenze scadute: ' + late + '">' + I.bell + (late ? '<span class="dot">' + late + '</span>' : '') + '</button>'
       : (ALTRO.indexOf(V.tab) > 0 ? '<button type="button" class="icon-btn blue" data-act="tab" data-tab="altro" aria-label="Torna ad Altro">' + I.back + '</button>' : '');
-    var addAct = ({ scheda: S.myId ? 'new-entry' : '', lavori: 'new-lav', vari: 'new-vari', magazzino: 'new-mag', checklist: 'new-modello', operazioni: 'new-op', ore: '', backup: '', programma: 'new-prog', pannello: '', batterie: '', rifiuti: 'rif-new', scadcantiere: 'sc-new', preventivi: 'prev-new', assenze: S.myId ? 'ass-new' : '' })[V.tab];
+    var addAct = ({ scheda: S.myId ? 'new-entry' : '', lavori: 'new-lav', vari: 'new-vari', magazzino: 'new-mag', checklist: 'new-modello', operazioni: 'new-op', ore: '', backup: '', programma: 'new-prog', pannello: '', batterie: '', rifiuti: 'rif-new', scadcantiere: 'sc-new', preventivi: 'prev-new', assenze: S.myId ? 'ass-new' : '', misure: '' })[V.tab];
     if (addAct == null) addAct = 'add-menu';
     var ro = S.status === 'ready' && !S.canWrite ? ' · sola lettura' : '';
     t.innerHTML = '<div class="l">' + left + '</div><h1' + (V.tab === 'home' ? ' id="logo-slot"' : '') + '>' + (V.tab === 'home' ? '' : titles[V.tab] + ro) + '</h1>' +
@@ -5116,9 +5220,10 @@ button.row:active, .row .hit:active { opacity: .65; }
     var html;
     if (S.status === 'absent') html = '<div class="notice" style="margin-top:14px">I dati del registro si aprono solo da Claude, con il tuo account. Apri il link della pagina da claude.ai o dall’app Claude per vedere e salvare barche, lavori e scadenze.</div>';
     else if (S.status === 'loading') html = '<div class="notice" style="margin-top:14px">Carico barche, lavori e scadenze…</div>';
-    else html = ({ programma: viewProgramma, pannello: viewPannello, batterie: viewBatterie, mappa: viewMappa, altro: viewAltro, backup: viewBackup, vari: viewVari, magazzino: viewMagazzino, preventivi: viewPreventivi, assenze: viewAssenze, rifiuti: viewRifiuti, scadcantiere: viewScadCantiere, ore: viewOre, checklist: viewChecklist, operazioni: viewOperazioni, home: viewHome, scheda: viewScheda, scadenze: viewScadenze, calendario: viewCalendario, lavori: viewLavori, barche: function () { return V.boatId ? viewBoat() : viewBarche(); } })[V.tab]();
+    else html = ({ programma: viewProgramma, pannello: viewPannello, batterie: viewBatterie, mappa: viewMappa, altro: viewAltro, backup: viewBackup, vari: viewVari, magazzino: viewMagazzino, preventivi: viewPreventivi, assenze: viewAssenze, misure: viewMisure, rifiuti: viewRifiuti, scadcantiere: viewScadCantiere, ore: viewOre, checklist: viewChecklist, operazioni: viewOperazioni, home: viewHome, scheda: viewScheda, scadenze: viewScadenze, calendario: viewCalendario, lavori: viewLavori, barche: function () { return V.boatId ? viewBoat() : viewBarche(); } })[V.tab]();
     $('#view').innerHTML = html;
     renderTop(); renderTabs(); bindFeat();
+    if (V.tab === 'misure') misUpdate();
     if (V.tab === 'mappa' && S.status === 'ready') { if (M.area === 'porto') { M.mounted = null; Porto.mount(); } else { M.mounted = M.mode; mapMount(); } } else M.mounted = null;
     if (S.status !== 'loading') hideSplash();
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (sel) el.setSelectionRange(sel[0], sel[1]); } catch (e) { } } }
@@ -6054,6 +6159,8 @@ button.row:active, .row .hit:active { opacity: .65; }
       case 'ass-new': if (S.db && S.canWrite && S.myId) assSheet(null); break;
       case 'ass-edit': x = (S.assenze || []).find(function (q) { return q.id === id; }); if (x) assSheet(x); break;
       case 'ass-ok': assDecide(id, true); break;
+      case 'mis-tab': V.misTab = t.getAttribute('data-v'); render(); break;
+      case 'mis-u': (function () { var f = t.getAttribute('data-f'), u = t.getAttribute('data-u'); if (f === 'k') V.misKu = u; else if (f === 'fd') V.misFdu = u; else if (f === 'fp') V.misFpu = u; })(); render(); break;
       case 'ass-no': if (confirm('Rifiutare la richiesta?')) assDecide(id, false); break;
       case 'new-attr': if (S.canWrite) attrSheet(null, t.getAttribute('data-boat') || V.boatId); break;
       case 'edit-attr': x = S.attr.find(function (a) { return a.id === id; }); if (x && S.canWrite) attrSheet(x); break;
