@@ -82,6 +82,9 @@
     '#nmfb h2{font-size:1.35rem;margin:0 0 6px}#nmfb p{color:#b9bccb;margin:0 0 14px}#nmfb label{display:block;font-size:.9rem;color:#b9bccb;margin:12px 0 6px}' +
     '#nmfb input{width:100%;box-sizing:border-box;font:inherit;font-size:17px;padding:13px 14px;border-radius:12px;border:1px solid #33355a;background:#12114a;color:#fff;outline:none}' +
     '#nmfb input:focus{border-color:#2f8ff0}#nmfb .btn{display:block;width:100%;margin-top:18px;padding:14px;border:0;border-radius:12px;background:#2f8ff0;color:#fff;font:inherit;font-weight:600;font-size:17px;cursor:pointer}' +
+    '#nmfb .pw{position:relative}#nmfb .pw input{padding-right:54px}' +
+    '#nmfb .eye{position:absolute;right:3px;top:50%;transform:translateY(-50%);width:48px;height:44px;margin:0;padding:0;border:0;border-radius:10px;background:none;color:#b9bccb;display:flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent}' +
+    '#nmfb .eye svg{width:22px;height:22px}#nmfb .eye[aria-pressed="true"]{color:#8cc2ff}' +
     '#nmfb .btn[disabled]{opacity:.6}#nmfb .lnk{display:block;width:100%;margin-top:12px;background:none;border:0;color:#8cc2ff;font:inherit;padding:8px;cursor:pointer}' +
     '#nmfb .err{color:#ff8a80;min-height:1.3em;margin-top:10px;font-size:.95rem}#nmfb .ok{color:#7fe0a0}#nmfb .card{background:#12114a;border:1px solid #33355a;border-radius:14px;padding:16px;margin-top:6px}' +
     '#nmfb .spin{width:34px;height:34px;border-radius:50%;border:3px solid #33355a;border-top-color:#2f8ff0;margin:30px auto;animation:nmspin 1s linear infinite}@keyframes nmspin{to{transform:rotate(360deg)}}' +
@@ -352,10 +355,28 @@
   };
   function authErr(e) { return AUTH_MSG[e && e.code] || ('Non è andata: ' + ((e && (e.code || e.message)) || 'errore')); }
   function busy(form, on) { form.querySelectorAll('button').forEach(function (b) { b.disabled = on; }); }
+  // campo password con l'occhio per vederla mentre si scrive
+  var EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-2.6 3.5M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></svg>';
+  function pwField(id, auto, extra) {
+    return '<div class="pw"><input id="' + id + '" type="password" autocomplete="' + auto + '" autocapitalize="off" autocorrect="off" spellcheck="false" required' + (extra || '') + '>' +
+      '<button type="button" class="eye" data-eye="' + id + '" aria-label="Mostra la password" aria-pressed="false">' + EYE + '</button></div>';
+  }
+  // tenere il cursore nel campo quando si tocca l'occhio (così la tastiera non si chiude)
+  document.addEventListener('pointerdown', function (e) { if (e.target.closest && e.target.closest('#nmfb .eye')) e.preventDefault(); });
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('#nmfb .eye'); if (!b) return;
+    var inp = document.getElementById(b.getAttribute('data-eye')); if (!inp) return;
+    var show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    b.innerHTML = show ? EYE_OFF : EYE;
+    b.setAttribute('aria-label', show ? 'Nascondi la password' : 'Mostra la password');
+    b.setAttribute('aria-pressed', String(show));
+  });
   function showLogin(msg) {
     var o = overlay('<h2>Accedi</h2><p>Entra con l’email e la password del tuo account del cantiere.</p>' +
       '<form id="nm-login"><label for="nm-em">Email</label><input id="nm-em" type="email" autocomplete="username" inputmode="email" required>' +
-      '<label for="nm-pw">Password</label><input id="nm-pw" type="password" autocomplete="current-password" required>' +
+      '<label for="nm-pw">Password</label>' + pwField('nm-pw', 'current-password') +
       '<button class="btn" type="submit">Accedi</button><div class="err" id="nm-err">' + esc(msg || '') + '</div></form>' +
       '<button class="lnk" id="nm-goreg">Prima volta? Crea il tuo account</button><button class="lnk" id="nm-goreset">Password dimenticata</button>');
     var f = $('#nm-login', o);
@@ -371,7 +392,7 @@
       '<label class="opt"><input type="radio" name="nm-tipo" value="cliente"> Sono un cliente</label>' +
       '<label for="nm-nm">Nome e cognome</label><input id="nm-nm" type="text" autocomplete="name" required maxlength="60">' +
       '<label for="nm-em">Email</label><input id="nm-em" type="email" autocomplete="username" inputmode="email" required>' +
-      '<label for="nm-pw">Password (almeno 6 caratteri)</label><input id="nm-pw" type="password" autocomplete="new-password" required minlength="6">' +
+      '<label for="nm-pw">Password (almeno 6 caratteri)</label>' + pwField('nm-pw', 'new-password', ' minlength="6"') +
       '<button class="btn" type="submit">Crea account</button><div class="err" id="nm-err"></div></form><button class="lnk" id="nm-gologin">Ho già un account: accedi</button>');
     var f = $('#nm-reg', o);
     f.addEventListener('submit', function (e) {
