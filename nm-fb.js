@@ -7,7 +7,7 @@
   var CFG = window.NM_FIREBASE_CONFIG || null;
   var COLLS = ['barche', 'lavori', 'scadenze', 'dipendenti', 'conferme', 'impostazioni', 'magazzino', 'movimenti', 'vari', 'modelli',
     'checkBarca', 'checklist', 'opModelli', 'operazioni', 'mezzi', 'attrezzatura', 'programma', 'cariche', 'posti', 'richieste'];
-  var RUOLI = { base: 'Dipendente', editor: 'Può cancellare', admin: 'Amministratore' };
+  var RUOLI = { base: 'Dipendente', editor: 'Può cancellare', admin: 'Amministratore', cliente: 'Cliente' };
   var FULL_EVERY = 7 * 864e5;            // una rilettura completa a settimana per sicurezza
   var GIF0 = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 
@@ -95,6 +95,14 @@
     '#nmpan button.b{border:1px solid #2a2c31;background:#26272d;color:#f4f5f7;border-radius:10px;padding:9px 12px;font:inherit;font-size:.92rem;cursor:pointer}' +
     '#nmpan button.b.pri{background:#2f8ff0;border-color:#2f8ff0;color:#fff}#nmpan button.b.red{color:#ff8a80}#nmpan select{font:inherit;font-size:.92rem;padding:8px 10px;border-radius:10px;background:#26272d;color:#f4f5f7;border:1px solid #2a2c31}' +
     '#nmpan .pill{display:inline-block;font-size:.78rem;padding:2px 8px;border-radius:99px;background:#26272d;color:#c9ccd6;margin-left:6px}#nmpan .note{color:#9a9daa;font-size:.9rem;margin:10px 4px}' +
+    '#nmfb .opt{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid #33355a;border-radius:12px;margin-top:8px;font-size:16px;color:#f4f5f7;cursor:pointer}#nmfb .opt input{width:20px;height:20px;padding:0;margin:0;flex:none;accent-color:#2f8ff0}' +
+    '#nmfb .bc{margin-top:14px}#nmfb .bh{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}#nmfb .bn{font-size:1.25rem;font-weight:700}#nmfb .bm{color:#b9bccb;font-size:.95rem}' +
+    '#nmfb .st{flex:none;font-size:.8rem;font-weight:600;padding:3px 10px;border-radius:99px;background:#26275e;color:#c9d4ff}#nmfb .st.acqua{background:#0f3b2a;color:#7fe0a0}#nmfb .st.lav{background:#3d2f0b;color:#ffcf6b}' +
+    '#nmfb .kv{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #2a2c5c;padding:10px 0;font-size:.95rem}#nmfb .kv span{color:#b9bccb}#nmfb .kv b{text-align:right;font-weight:600}' +
+    '#nmfb h5{margin:14px 0 6px;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:#9a9dc0}#nmfb .lv{display:flex;gap:12px;padding:7px 0;border-top:1px solid #23245a;font-size:.95rem}#nmfb .lv .d{flex:none;width:58px;color:#9a9dc0;font-variant-numeric:tabular-nums}' +
+    '#nmfb .upd{color:#8a8db0;font-size:.82rem;margin-top:10px}#nmfb .more{background:none;border:0;color:#8cc2ff;font:inherit;padding:8px 0;cursor:pointer}' +
+    '#nmpan .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;width:100%}#nmpan .chip{display:inline-flex;align-items:center;gap:4px;background:#1e3a5f;color:#d6e8ff;border-radius:99px;padding:4px 4px 4px 10px;font-size:.9rem}' +
+    '#nmpan .chip button{background:none;border:0;color:#d6e8ff;font-size:1.1rem;line-height:1;padding:2px 6px;cursor:pointer}' +
     '#nmtoast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 90px);transform:translateX(-50%);z-index:100000;background:#2b2c33;color:#fff;padding:10px 16px;border-radius:12px;font:15px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.4)}';
   function ensureCss() { if (!$('#nmfb-css')) { var st = document.createElement('style'); st.id = 'nmfb-css'; st.textContent = CSS; document.head.appendChild(st); } }
   function logoSrc() { var l = document.getElementById('logo-src'); return l ? l.getAttribute('src') : ''; }
@@ -132,7 +140,7 @@
   var FV = firebase.firestore.FieldValue, TS = firebase.firestore.Timestamp;
 
   var READY_RES, READY = new Promise(function (r) { READY_RES = r; });
-  var ME = null, UT = {}, UT_UNSUB = null, ME_UNSUB = null, registering = false, started = false;
+  var ME = null, UT = {}, UT_UNSUB = null, ME_UNSUB = null, registering = false, started = false, CLIENTE = false;
 
   /* ---------- collezioni vive: archivio locale + solo ciò che è cambiato ---------- */
   var LIVE = {};
@@ -184,7 +192,10 @@
     var docs = Object.keys(L.map).map(function (id) { var d = L.map[id]; return { id: id, exists: true, data: function () { return clone(d); }, metadata: { fromCache: false } }; });
     return { docs: docs, size: docs.length, empty: !docs.length };
   }
-  function emit(L) { var s = snapOf(L); L.subs.slice().forEach(function (x) { try { x.next(s); } catch (e) { console.error(e); } }); }
+  function emit(L) {
+    var s = snapOf(L); L.subs.slice().forEach(function (x) { try { x.next(s); } catch (e) { console.error(e); } });
+    if (L.name === 'barche' || L.name === 'lavori' || L.name === 'posti') schedulePortale();
+  }
   function docSnap(id, d) { return { id: id, exists: !!d, data: function () { return d ? clone(d) : undefined; } }; }
 
   // la scrittura parte subito sul dispositivo; il server conferma dopo (anche senza campo)
@@ -355,8 +366,10 @@
     $('#nm-goreg', o).onclick = showRegister; $('#nm-goreset', o).onclick = showReset;
   }
   function showRegister() {
-    var o = overlay('<h2>Crea il tuo account</h2><p>Dopo la registrazione un amministratore deve approvarti. Il primo che si registra diventa amministratore.</p>' +
-      '<form id="nm-reg"><label for="nm-nm">Nome (come ti vedranno i colleghi)</label><input id="nm-nm" type="text" autocomplete="given-name" required maxlength="40">' +
+    var o = overlay('<h2>Crea il tuo account</h2><p>Dopo la registrazione il cantiere deve approvarti: appena lo fa, puoi entrare.</p>' +
+      '<form id="nm-reg"><label>Chi sei?</label><label class="opt"><input type="radio" name="nm-tipo" value="staff" checked> Lavoro al cantiere</label>' +
+      '<label class="opt"><input type="radio" name="nm-tipo" value="cliente"> Sono un cliente</label>' +
+      '<label for="nm-nm">Nome e cognome</label><input id="nm-nm" type="text" autocomplete="name" required maxlength="60">' +
       '<label for="nm-em">Email</label><input id="nm-em" type="email" autocomplete="username" inputmode="email" required>' +
       '<label for="nm-pw">Password (almeno 6 caratteri)</label><input id="nm-pw" type="password" autocomplete="new-password" required minlength="6">' +
       '<button class="btn" type="submit">Crea account</button><div class="err" id="nm-err"></div></form><button class="lnk" id="nm-gologin">Ho già un account: accedi</button>');
@@ -364,18 +377,19 @@
     f.addEventListener('submit', function (e) {
       e.preventDefault(); busy(f, true); $('#nm-err').textContent = '';
       var nome = $('#nm-nm').value.trim(), email = $('#nm-em').value.trim(), pw = $('#nm-pw').value;
+      var tipo = (f.querySelector('input[name="nm-tipo"]:checked') || {}).value === 'cliente' ? 'cliente' : 'staff';
       registering = true;
       auth.createUserWithEmailAndPassword(email, pw).then(function (cr) {
-        return createProfile(cr.user, nome, email);
+        return createProfile(cr.user, nome, email, tipo);
       }).then(function () { registering = false; watchMe(auth.currentUser); }, function (er) { registering = false; busy(f, false); $('#nm-err').textContent = authErr(er); });
     });
     $('#nm-gologin', o).onclick = function () { showLogin(); };
   }
-  function createProfile(u, nome, email) {
+  function createProfile(u, nome, email, tipo) {
     var cfg = fs.collection('config').doc('inizializzato'), me = fs.collection('utenti').doc(u.uid);
     return cfg.get({ source: 'server' }).then(function (c) {
-      var base = { nome: nome, email: email, creato: nowISO(), modificato: nowISO() };
-      if (c.exists) return me.set(Object.assign(base, { stato: 'in_attesa', ruolo: 'base' }));
+      var base = { nome: nome, email: email, tipo: tipo === 'cliente' ? 'cliente' : 'staff', creato: nowISO(), modificato: nowISO() };
+      if (c.exists || tipo === 'cliente') return me.set(Object.assign(base, { stato: 'in_attesa', ruolo: 'base' }));
       var b = fs.batch();
       b.set(me, Object.assign(base, { stato: 'attivo', ruolo: 'admin' }));
       b.set(cfg, { da: u.uid, il: nowISO() });
@@ -420,6 +434,8 @@
         return;
       }
       var x = d.data(); x.uid = u.uid; x.email = x.email || u.email;
+      if (x.stato === 'attivo' && x.ruolo === 'cliente') { if (started) { location.reload(); return; } ME = x; showCliente(x); return; }
+      if (CLIENTE) { location.reload(); return; }
       if (x.stato === 'attivo') {
         var was = ME; ME = x;
         if (!started) { started = true; hideOverlay(); READY_RES(); afterStart(); }
@@ -443,7 +459,7 @@
 
   function afterStart() {
     UT_UNSUB = fs.collection('utenti').onSnapshot(function (s) {
-      var m = {}; s.docs.forEach(function (d) { m[d.id] = d.data(); }); UT = m; if ($('#nmpan')) renderPanel();
+      var m = {}; s.docs.forEach(function (d) { m[d.id] = d.data(); }); UT = m; if ($('#nmpan')) renderPanel(); schedulePortale();
     }, function () { });
     // il nome nella scheda lavoro
     var D = live('dipendenti');
@@ -483,20 +499,29 @@
     } else if (PAN === 'utenti' && ME.ruolo === 'admin') {
       var ids = Object.keys(UT), by = function (st) { return ids.filter(function (id) { return (UT[id].stato || '') === st; }).sort(function (a, b) { return String(UT[a].nome || '').localeCompare(String(UT[b].nome || ''), 'it'); }); };
       var olds = oldPeople();
+      var B = LIVE.barche ? LIVE.barche.map : {};
+      var bname = function (bid) { return B[bid] ? (B[bid].nome || 'Barca') : 'Barca eliminata'; };
       var row = function (id) {
-        var u = UT[id], self = id === ME.uid, a = '';
-        if (u.stato === 'in_attesa') a = '<button class="b pri" data-nm="ok" data-id="' + id + '">Approva</button><button class="b red" data-nm="no" data-id="' + id + '">Rifiuta</button>';
+        var u = UT[id], self = id === ME.uid, a = '', isCl = u.ruolo === 'cliente';
+        if (u.stato === 'in_attesa') a = '<button class="b pri" data-nm="ok" data-id="' + id + '">' + (u.tipo === 'cliente' ? 'Approva come cliente' : 'Approva') + '</button><button class="b red" data-nm="no" data-id="' + id + '">Rifiuta</button>';
         else if (u.stato === 'attivo') a = self ? '<span class="note" style="margin:0">Sei tu</span>' :
           '<select data-nm="ruolo" data-id="' + id + '">' + Object.keys(RUOLI).map(function (r) { return '<option value="' + r + '"' + (u.ruolo === r ? ' selected' : '') + '>' + RUOLI[r] + '</option>'; }).join('') + '</select>' +
           '<button class="b red" data-nm="block" data-id="' + id + '">Sospendi</button>';
         else a = '<button class="b" data-nm="ok" data-id="' + id + '">Riattiva</button>';
-        if (olds.length && u.stato !== 'bloccato') a += '<select data-nm="link" data-id="' + id + '"><option value="">Collega ai dati vecchi…</option>' + olds.map(function (o) { return '<option value="' + esc(o.id) + '">È ' + esc(o.nome) + '</option>'; }).join('') + '</select>';
-        return '<div class="u"><div class="nm">' + esc(u.nome || '(senza nome)') + (u.stato === 'attivo' ? '<span class="pill">' + esc(RUOLI[u.ruolo] || u.ruolo) + '</span>' : '') + '</div><div class="em">' + esc(u.email || '') + '</div><div class="acts">' + a + '</div></div>';
+        if (isCl && u.stato === 'attivo') {
+          var mine = u.barche || [], others = Object.keys(B).filter(function (b) { return mine.indexOf(b) < 0; }).sort(function (x, y) { return bname(x).localeCompare(bname(y), 'it'); });
+          a += '<div class="chips">' + (mine.length ? mine.map(function (b) { return '<span class="chip">' + esc(bname(b)) + '<button data-nm="unb" data-id="' + id + '" data-b="' + esc(b) + '" aria-label="Togli">×</button></span>'; }).join('') : '<span class="note" style="margin:0">Nessuna barca collegata</span>') + '</div>' +
+            '<select data-nm="addb" data-id="' + id + '"><option value="">+ Collega una sua barca…</option>' + others.map(function (b) { return '<option value="' + esc(b) + '">' + esc(bname(b) + (B[b].modello ? ' · ' + B[b].modello : '')) + '</option>'; }).join('') + '</select>';
+        }
+        if (olds.length && u.stato !== 'bloccato' && !isCl && u.tipo !== 'cliente') a += '<select data-nm="link" data-id="' + id + '"><option value="">Collega ai dati vecchi…</option>' + olds.map(function (o) { return '<option value="' + esc(o.id) + '">È ' + esc(o.nome) + '</option>'; }).join('') + '</select>';
+        return '<div class="u"><div class="nm">' + esc(u.nome || '(senza nome)') + (u.stato === 'attivo' ? '<span class="pill">' + esc(RUOLI[u.ruolo] || u.ruolo) + '</span>' : u.stato === 'in_attesa' ? '<span class="pill">' + (u.tipo === 'cliente' ? 'Cliente' : 'Lavora al cantiere') + '</span>' : '') + '</div><div class="em">' + esc(u.email || '') + '</div><div class="acts">' + a + '</div></div>';
       };
       var sec = function (t, list) { return list.length ? '<h4>' + t + ' (' + list.length + ')</h4><div class="grp">' + list.map(row).join('') + '</div>' : ''; };
       h = '<div class="top"><button class="back" data-nm="close">‹ Indietro</button><h3>Utenti e permessi</h3><span style="min-width:64px"></span></div>' +
-        sec('In attesa di approvazione', by('in_attesa')) + sec('Attivi', by('attivo')) + sec('Sospesi', by('bloccato')) +
-        '<p class="note"><b>Dipendente</b>: usa tutta l’app, ma non cancella dal programma. <b>Può cancellare</b>: anche le cancellazioni riservate. <b>Amministratore</b>: in più approva i colleghi e cambia i permessi.</p>' +
+        sec('In attesa di approvazione', by('in_attesa')) + sec('Cantiere', by('attivo').filter(function (id) { return UT[id].ruolo !== 'cliente'; })) +
+        sec('Clienti', by('attivo').filter(function (id) { return UT[id].ruolo === 'cliente'; })) + sec('Sospesi', by('bloccato')) +
+        '<p class="note"><b>Dipendente</b>: usa tutta l’app, ma non cancella dal programma. <b>Può cancellare</b>: anche le cancellazioni riservate. <b>Amministratore</b>: in più approva i colleghi e cambia i permessi. ' +
+        '<b>Cliente</b>: vede solo le barche che gli colleghi, con stato, posto e lavori eseguiti, senza ore né nomi dei dipendenti.</p>' +
         (olds.length ? '<p class="note"><b>Collega ai dati vecchi</b>: dopo aver ripristinato la copia presa da Claude, scegli chi era quella persona. Mansioni, ore e giornate confermate passano al nuovo account.</p>' : '') +
         '<p class="note">Per far entrare un collega mandagli il link dell’app: si registra da solo e compare qui sopra, in attesa.</p>';
     } else { closePanel(); return; }
@@ -508,14 +533,23 @@
     if (k === 'close') closePanel();
     else if (k === 'out') logout();
     else if (k === 'pw') auth.sendPasswordResetEmail(ME.email).then(function () { toast('Ti ho mandato l’email per cambiare la password.'); }, function (er) { toast(authErr(er)); });
-    else if (k === 'ok') setUser(id, { stato: 'attivo' }).then(function () { toast('Fatto: ' + (UT[id] && UT[id].nome || '') + ' può entrare.'); });
+    else if (k === 'ok') {
+      var u0 = UT[id] || {}, f0 = { stato: 'attivo' };
+      if (u0.stato === 'in_attesa' && u0.tipo === 'cliente') { f0.ruolo = 'cliente'; f0.barche = u0.barche || []; }
+      setUser(id, f0).then(function () { toast(f0.ruolo === 'cliente' ? 'Fatto: ora collega le sue barche qui sotto.' : 'Fatto: ' + (u0.nome || '') + ' può entrare.'); });
+    }
+    else if (k === 'unb') { var ub = (UT[id].barche || []).filter(function (b) { return b !== t.getAttribute('data-b'); }); setUser(id, { barche: ub }); }
     else if (k === 'no') { if (confirm('Rifiutare la richiesta di ' + (UT[id] && UT[id].nome || '') + '?')) setUser(id, { stato: 'bloccato' }); }
     else if (k === 'block') { if (confirm('Sospendere ' + (UT[id] && UT[id].nome || '') + '? Non potrà più entrare finché non lo riattivi.')) setUser(id, { stato: 'bloccato' }); }
   });
   document.addEventListener('change', function (e) {
     var t = e.target; if (!t.closest || !t.closest('#nmpan') || !t.getAttribute('data-nm')) return;
     var k = t.getAttribute('data-nm'), id = t.getAttribute('data-id');
-    if (k === 'ruolo') setUser(id, { ruolo: t.value }).then(function () { toast('Permessi aggiornati.'); });
+    if (k === 'ruolo') {
+      if ((t.value === 'cliente') !== (UT[id].ruolo === 'cliente') && !confirm(t.value === 'cliente' ? 'Diventa cliente: non vedrà più l’app del cantiere, solo le sue barche. Continuo?' : 'Non sarà più cliente: vedrà tutta l’app del cantiere. Continuo?')) { t.value = UT[id].ruolo; return; }
+      setUser(id, { ruolo: t.value }).then(function () { toast('Permessi aggiornati.'); });
+    }
+    else if (k === 'addb' && t.value) { var ab = (UT[id].barche || []).concat([t.value]); setUser(id, { barche: ab }).then(function () { toast('Barca collegata.'); }); }
     else if (k === 'link' && t.value) {
       var old = t.value, olds = oldPeople().filter(function (o) { return o.id === old; })[0];
       if (!confirm('Le mansioni, le ore e le giornate di ' + (olds ? olds.nome : old) + ' passano a ' + (UT[id] && UT[id].nome || '') + '. Continuo?')) { t.value = ''; return; }
@@ -544,6 +578,91 @@
       }
     }
     return n;
+  }
+
+  /* ---------- area cliente ---------- */
+  var CL = { unsubs: [], docs: {}, all: {} };
+  var MESI = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+  function dataCorta(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); if (!m) return ''; var y = +m[1], cy = new Date().getFullYear(); return (+m[3]) + ' ' + MESI[+m[2] - 1] + (y !== cy ? ' ’' + String(y).slice(2) : ''); }
+  function dataLunga(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? (+m[3]) + ' ' + MESI[+m[2] - 1] + ' ' + m[1] : ''; }
+  function quando(iso) { var t = new Date(iso); if (isNaN(t)) return ''; var p2 = function (n) { return (n < 10 ? '0' : '') + n; }; return t.getDate() + ' ' + MESI[t.getMonth()] + ' ' + t.getFullYear() + ' alle ' + p2(t.getHours()) + ':' + p2(t.getMinutes()); }
+  function showCliente(x) {
+    CLIENTE = true;
+    var ids = (x.barche || []).slice(0, 20);
+    CL.unsubs.forEach(function (f) { f(); }); CL.unsubs = []; CL.ids = ids;
+    ids.forEach(function (id) {
+      CL.unsubs.push(fs.collection('portale').doc(id).onSnapshot(function (d) { CL.docs[id] = d.exists ? d.data() : null; renderCliente(); },
+        function () { CL.docs[id] = null; renderCliente(); }));
+    });
+    renderCliente();
+  }
+  function renderCliente() {
+    if (!CLIENTE || !ME) return;
+    var h = '<h2>Ciao ' + esc(String(ME.nome || '').split(' ')[0]) + '</h2><p>La tua barca al cantiere Nautica Mare, sempre aggiornata.</p>';
+    if (!CL.ids.length) h += '<div class="card"><p style="margin:0">Il cantiere sta collegando la tua barca al tuo account. Appena fatto, la trovi qui.</p></div>';
+    CL.ids.forEach(function (id) {
+      var d = CL.docs[id];
+      if (d === undefined) { h += '<div class="card bc"><div class="spin" style="margin:10px auto"></div></div>'; return; }
+      if (!d) { h += '<div class="card bc"><p style="margin:0">Stiamo preparando i dati di questa barca: tra poco li vedi qui.</p></div>'; return; }
+      var st = d.stato || 'In rimessaggio', cls = st === 'In acqua' ? 'acqua' : st === 'In lavorazione' ? 'lav' : '';
+      var dove = d.porto ? 'Porto, posto ' + d.porto.posto : st === 'In acqua' ? 'In acqua' : st === 'Consegnata' ? 'Consegnata' : (d.posto ? 'Cantiere · ' + d.posto : 'Al cantiere');
+      var lav = d.lavori || [], open = CL.all[id], show = open ? lav : lav.slice(0, 8);
+      h += '<div class="card bc"><div class="bh"><div><div class="bn">' + esc(d.nome || 'Barca') + '</div><div class="bm">' + esc([d.modello, d.lunghezza ? String(d.lunghezza).replace('.', ',') + ' m' : ''].filter(Boolean).join(' · ')) + '</div></div>' +
+        '<span class="st ' + cls + '">' + esc(st) + '</span></div>' +
+        '<div class="kv" style="margin-top:12px"><span>Dove si trova</span><b>' + esc(dove) + '</b></div>' +
+        (d.porto && (d.porto.contratto || d.porto.fino) ? '<div class="kv"><span>Contratto del posto</span><b>' + esc([d.porto.contratto, d.porto.fino ? 'fino al ' + dataLunga(d.porto.fino) : ''].filter(Boolean).join(' · ')) + '</b></div>' : '') +
+        '<h5>Lavori eseguiti</h5>' +
+        (lav.length ? show.map(function (l) { return '<div class="lv"><span class="d">' + esc(dataCorta(l.data)) + '</span><span>' + esc(l.titolo) + '</span></div>'; }).join('') +
+          (lav.length > 8 ? '<button class="more" data-cl="more" data-id="' + esc(id) + '">' + (open ? 'Mostra meno' : 'Mostra tutti (' + lav.length + ')') + '</button>' : '')
+          : '<p style="margin:4px 0 0">Ancora nessun lavoro registrato.</p>') +
+        (d.aggiornato ? '<div class="upd">Aggiornato il ' + esc(quando(d.aggiornato)) + '</div>' : '') + '</div>';
+    });
+    h += '<button class="lnk" data-cl="pw">Cambia password</button><button class="lnk" data-cl="out">Esci</button>';
+    var o = $('#nmfb'), y = o ? o.scrollTop : 0;
+    o = overlay(h); if (o) o.scrollTop = y;
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest && e.target.closest('#nmfb [data-cl]'); if (!t) return;
+    var k = t.getAttribute('data-cl');
+    if (k === 'out') logout();
+    else if (k === 'pw') auth.sendPasswordResetEmail(ME.email).then(function () { toast('Ti ho mandato l’email per cambiare la password.'); }, function (er) { toast(authErr(er)); });
+    else if (k === 'more') { var id = t.getAttribute('data-id'); CL.all[id] = !CL.all[id]; renderCliente(); }
+  });
+
+  // Il cantiere prepara per ogni barca collegata a un cliente un riepilogo senza ore né nomi
+  var PT_T = null;
+  function schedulePortale() { if (!started || !ME || ME.ruolo === 'cliente') return; clearTimeout(PT_T); PT_T = setTimeout(syncPortale, 4000); }
+  function stable(x) {
+    if (Array.isArray(x)) return '[' + x.map(stable).join(',') + ']';
+    if (x && typeof x === 'object') return '{' + Object.keys(x).sort().filter(function (k) { return x[k] !== undefined; }).map(function (k) { return JSON.stringify(k) + ':' + stable(x[k]); }).join(',') + '}';
+    return JSON.stringify(x === undefined ? null : x);
+  }
+  function linkedBoats() {
+    var s = {}; Object.keys(UT).forEach(function (id) { var u = UT[id]; if (u.ruolo === 'cliente' && u.stato === 'attivo') (u.barche || []).forEach(function (b) { s[b] = 1; }); });
+    return Object.keys(s);
+  }
+  function portaleOf(bid) {
+    var b = (LIVE.barche ? LIVE.barche.map : {})[bid]; if (!b) return null;
+    var L = LIVE.lavori ? LIVE.lavori.map : {}, P = LIVE.posti ? LIVE.posti.map : {};
+    var lav = Object.keys(L).map(function (k) { return L[k]; }).filter(function (l) { return (l.barcaId === bid || (l.altreBarche || []).indexOf(bid) >= 0) && l.stato === 'fatto' && !l.annullata; })
+      .sort(function (a, c) { return String(c.data || '').localeCompare(String(a.data || '')) || String(c.creato || '').localeCompare(String(a.creato || '')); })
+      .slice(0, 100).map(function (l) { return { data: l.data || '', titolo: l.titolo || 'Lavoro' }; });
+    var pid = Object.keys(P).filter(function (k) { return P[k].barcaId === bid; })[0], p = pid ? P[pid] : null;
+    return { nome: b.nome || '', modello: b.modello || '', lunghezza: b.lunghezza || null, stato: b.stato || '', posto: b.posto || '',
+      porto: p ? { posto: pid, contratto: p.contratto || '', fino: p.fino || '' } : null, lavori: lav };
+  }
+  async function syncPortale() {
+    var ids = linkedBoats(); if (!ids.length) return;
+    var need = ['barche', 'lavori', 'posti', 'portale'];
+    for (var i = 0; i < need.length; i++) { var L = live(need[i]); await L.start; await whenReady(L, 15000); }
+    var cur = LIVE.portale.map;
+    ids.forEach(function (bid) {
+      var s = portaleOf(bid); if (!s) return;
+      var c = cur[bid] ? Object.assign({}, cur[bid]) : null; if (c) delete c.aggiornato;
+      if (c && stable(c) === stable(s)) return;
+      s.aggiornato = nowISO();
+      write('portale', bid, 'set', s).catch(function () { });
+    });
   }
 
   /* ---------- quello che vede l'app ---------- */
