@@ -377,6 +377,22 @@ button.row:active, .row .hit:active { opacity: .65; }
 .ic-circle.vio { background: var(--vio); } .dblock.vio { background: var(--vio-bg); color: var(--vio); }
 .pill.vio { background: var(--vio-bg); color: var(--vio); } .day i.vio { background: var(--vio); } .t-vio { color: var(--vio); }
 
+/* Meteo */
+.pill.met svg, .met-card svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
+.met-card { background: var(--card); border-radius: var(--r); padding: 4px 14px 12px; }
+.met-now { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.met-now .main { flex: 1; min-width: 0; display: flex; flex-direction: column; } .met-now .title { font-weight: 600; } .met-now .sub { color: var(--muted); font-size: .88rem; }
+.met-t { font-size: 2rem; font-weight: 700; min-width: 58px; font-variant-numeric: tabular-nums; }
+.met-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--ok); flex: none; vertical-align: 0; }
+.met-dot.soon { background: var(--soon); } .met-dot.late { background: var(--late); }
+.met-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.met-d { width: 74px; flex: none; font-weight: 600; } .met-x { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: .9rem; }
+.met-w { display: flex; flex-direction: column; align-items: flex-end; text-align: right; } .met-w small { color: var(--muted); font-size: .75rem; }
+.met-w.ok b { color: var(--ok); } .met-w.soon b { color: var(--soon); } .met-w.late b { color: var(--late); }
+.met-foot { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; font-size: .78rem; color: var(--muted); } .met-foot a { color: var(--accent); }
+.met-foot .met-dot { width: 8px; height: 8px; margin: 0 2px 0 6px; }
+.met-cal { display: flex; align-items: center; gap: 8px; margin: -4px 4px 10px; }
+
 /* Rifiuti */
 .rif-acts { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; } .rif-acts .btn { flex: 1 1 140px; }
 .rif-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; white-space: nowrap; }
@@ -574,6 +590,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     plan: svg('<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8 14l2 2 4-4"/>'),
     chart: svg('<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>'),
     cart: svg('<path d="M3 4.5h2.5l2.2 10.5h10.6l2-7.5H7"/><circle cx="9.5" cy="19" r="1.3"/><circle cx="17" cy="19" r="1.3"/>'),
+    wind: svg('<path d="M3 8.5h10.5a2.5 2.5 0 1 0-2.5-2.5"/><path d="M3 12.5h15.5a2.5 2.5 0 1 1-2.5 2.5"/><path d="M3 16.5h7"/>'),
     trash: svg('<path d="M4.5 6.5h15M9.5 6.5V4h5v2.5"/><path d="M6.5 6.5l1 13.5h9l1-13.5"/><path d="M10 10.5v6M14 10.5v6"/>'),
     restore: svg('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4.2h4.2"/><path d="M12 8.5V12l2.5 1.8"/>')
   };
@@ -632,7 +649,7 @@ button.row:active, .row .hit:active { opacity: .65; }
 
   /* ---------- Stato ---------- */
   var S = { posti: {}, richieste: [], db: null, status: 'loading', canWrite: true, writeUnknown: false, boats: [], lavori: [], lavoriAll: [], scadenze: [], got: {}, pendingBoat: null, user: null, myId: null, me: {}, isOwner: false, dip: {}, prof: {},
-    conf: {}, mag: [], mov: [], vari: [], modelli: [], ckBarca: {}, check: [], assets: null, opModelli: [], ops: [], mezzi: [], attr: [], prog: [], cariche: [], isEditor: false, battCfg: null, dl: undefined, bkInfo: null, rif: [], ritiri: [], rifCfg: null };
+    conf: {}, mag: [], mov: [], vari: [], modelli: [], ckBarca: {}, check: [], assets: null, opModelli: [], ops: [], mezzi: [], attr: [], prog: [], cariche: [], isEditor: false, battCfg: null, dl: undefined, bkInfo: null, rif: [], ritiri: [], rifCfg: null, meteoCfg: null };
   var V = { tab: 'home', boatId: null, q: '', lavFilter: 'aperti', showDone: false, exConfirm: false, calMonth: todayISO().slice(0, 7), calDay: todayISO(), feat: 0, boatLavAll: false, schedaDay: todayISO(), nomeDraft: null,
     boatView: null, resRange: 'anno', oreMonth: todayISO().slice(0, 7), oreOpen: null, magQ: '', magGroup: 'tipo', progDay: null, progView: 'ora', panPer: 'sett', panBy: 'persona', variDone: false, rifTab: 'deposito', rifEuro: false };
   var SHEET = { onDelete: null, foto: [], run: null };
@@ -845,8 +862,9 @@ button.row:active, .row .hit:active { opacity: .65; }
     var btn = (!v.fatto && S.canWrite) ? '<button type="button" class="chk" data-act="done-vari" data-id="' + esc(v.id) + '">' + I.check + 'Fatto</button>' : '';
     return '<div class="row"><button type="button" class="hit" data-act="edit-vari" data-id="' + esc(v.id) + '">' + dateBlock(v.data, lv) +
       '<span class="main"><span class="title">' + esc(TIPI_V[v.tipo] || 'Movimento') + (showBoat ? ' · ' + esc(b ? b.nome : 'Barca eliminata') : '') + '</span>' +
-      (sub.length ? '<span class="sub">' + sub.map(esc).join(' · ') + '</span>' : '') + status + '</span></button>' + btn + '</div>';
+      (sub.length ? '<span class="sub">' + sub.map(esc).join(' · ') + '</span>' : '') + status + (!v.fatto ? metWrap(metChip(v.data, v.ora)) : '') + '</span></button>' + btn + '</div>';
   }
+  function metWrap(chip) { return chip ? '<span class="status">' + chip + '</span>' : ''; }
   function runRow(c, showBoat) {
     var tot = (c.voci || []).length, ok = (c.voci || []).filter(function (x) { return x.ok; }).length, b = boatById(c.barcaId);
     var done = c.stato === 'completata';
@@ -889,7 +907,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     variOpen().filter(function (v) { return v.data <= t1; }).slice(0, 4).forEach(function (v) {
       var b = boatById(v.barcaId), lv = v.data < t0 ? 'late' : 'vio';
       cards.push(featCard(lv, I.updown, (TIPI_V[v.tipo] || 'Movimento') + ' · ' + (b ? b.nome : 'Barca eliminata'), b ? [b.modello, b.posto].filter(Boolean).join(' · ') : '',
-        '<div class="feat-status t-' + lv + '">' + esc(cap(variWhen(v))) + '</div>',
+        '<div class="feat-status t-' + lv + '">' + esc(cap(variWhen(v))) + '</div>' + metChip(v.data, v.ora),
         (S.canWrite ? '<button type="button" class="btn" data-act="done-vari" data-id="' + esc(v.id) + '">Segna fatto</button>' : '') + (b ? '<button type="button" class="btn sec" data-act="open-boat" data-id="' + esc(b.id) + '">Apri scheda</button>' : '')));
     });
     late.concat(soon).slice(0, 5).forEach(function (x) {
@@ -907,6 +925,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (V.feat >= cards.length) V.feat = 0;
     h += secH('In primo piano') + '<div class="feat" id="feat">' + cards.join('') + '</div>';
     if (cards.length > 1) h += '<div class="dots" id="dots">' + cards.map(function (_, i) { return '<i' + (i === V.feat ? ' class="on"' : '') + '></i>'; }).join('') + '</div>';
+    h += metHome();
 
     h += homeProgHtml();
     var lavOpen = S.lavori.filter(function (l) { return l.stato !== 'fatto'; });
@@ -1014,6 +1033,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var progIts = its.filter(function (it) { return it.k === 'p'; }).map(function (it) { return it.o; }).sort(progSort), rest = its.filter(function (it) { return it.k !== 'p'; });
     var sum = calSchedaSum(sel);
     h += secH(cap(fmtDayLong(sel)), S.canWrite ? 'add-menu' : '', '+ Aggiungi', ' data-date="' + sel + '"');
+    h += metCalLine(sel);
     if (sum) h += '<div class="lbl" style="margin:4px 4px 6px">Scheda lavoro</div>' + sum;
     if (progIts.length) h += '<div class="lbl" style="margin:14px 4px 6px">Programma</div><div class="group">' + progIts.map(function (x) { return progRow(x, progOf(sel), true); }).join('') + '</div>';
     if (rest.length) h += (sum || progIts.length ? '<div class="lbl" style="margin:14px 4px 6px">Lavori, vari e scadenze</div>' : '') +
@@ -3308,6 +3328,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (x.urgente && !x.fatto) pills += '<span class="pill late">Urgente</span> ';
     if (x.avvisare && !x.fatto) pills += '<span class="pill soon">Avvisare il cliente</span> ';
     if (!x.fatto) progWarn(x, list || []).forEach(function (t) { pills += '<span class="pill late">⚠ ' + esc(t) + '</span> '; });
+    if (!x.fatto && metNeeds(x)) pills += metChip(x.data, x.ora);
     var tb = sp ? '<span class="dblock hrs"><b class="sm">' + hmStr(sp.a) + '</b><small>' + (num(x.durata) > 0 ? hmStr(sp.b) : 'inizio') + '</small></span>' : '';
     var tick = S.canWrite ? '<button type="button" class="chk' + (x.fatto ? ' on' : '') + '" data-act="prog-tick" data-id="' + esc(x.id) + '" aria-pressed="' + !!x.fatto + '" aria-label="' + (x.fatto ? 'Segna come da fare' : 'Segna come fatto') + '">' + I.check + (x.fatto ? 'Fatto' : 'Fatto?') + '</button>' : '';
     return '<div class="row"><button type="button" class="hit" data-act="edit-prog" data-id="' + esc(x.id) + '">' + tb + '<span class="main"><span class="title' + (x.fatto ? ' strike' : '') + '">' + esc(x.testo || 'Da fare') + '</span>' +
@@ -3453,6 +3474,117 @@ button.row:active, .row .hit:active { opacity: .65; }
     return h;
   }
 
+  /* ---------- Meteo a Marina di San Vincenzo (dati MET Norway, licenza CC BY 4.0) ----------
+     Vento in nodi e km/h, raffiche col semaforo (soglie in impostazioni/meteo), pioggia e temperatura.
+     Una sola richiesta, conservata sul telefono fino alla scadenza indicata dal servizio. */
+  var MET_LAT = 43.0961, MET_LON = 10.5357, MET_KEY = 'nm-meteo-v1';
+  var MET = { ts: null, exp: 0, upd: 0, loading: false, at: 0, err: false };
+  var MET_SYM = { clearsky: 'Sereno', fair: 'Poco nuvoloso', partlycloudy: 'Parzialmente nuvoloso', cloudy: 'Nuvoloso', fog: 'Nebbia',
+    lightrain: 'Pioggia debole', rain: 'Pioggia', heavyrain: 'Pioggia forte', lightrainshowers: 'Qualche rovescio', rainshowers: 'Rovesci', heavyrainshowers: 'Rovesci forti',
+    lightrainandthunder: 'Pioggia e tuoni', rainandthunder: 'Temporale', heavyrainandthunder: 'Temporale forte', rainshowersandthunder: 'Rovesci e tuoni', lightrainshowersandthunder: 'Rovesci e tuoni', heavyrainshowersandthunder: 'Temporale forte',
+    lightsleet: 'Nevischio', sleet: 'Nevischio', heavysleet: 'Nevischio', lightsnow: 'Neve debole', snow: 'Neve', heavysnow: 'Neve forte', sleetshowers: 'Nevischio', snowshowers: 'Neve' };
+  var MET_DIR = [['Tramontana', 'N'], ['Grecale', 'NE'], ['Levante', 'E'], ['Scirocco', 'SE'], ['Ostro', 'S'], ['Libeccio', 'SO'], ['Ponente', 'O'], ['Maestrale', 'NO']];
+  function metCfg() { var c = S.meteoCfg || {}; return { giallo: num(c.giallo) || 10, rosso: num(c.rosso) || 18 }; }
+  function kn(ms) { return ms * 1.943844; }
+  function metDir(deg) { if (num(deg) == null) return null; return MET_DIR[Math.round(((deg % 360) + 360) % 360 / 45) % 8]; }
+  function metSym(code) { var k = String(code || '').replace(/_(day|night|polartwilight)$/, ''); return MET_SYM[k] || ''; }
+  function metLoad(force) {
+    if (!MET.ts) { try { var c = JSON.parse(localStorage.getItem(MET_KEY) || 'null'); if (c && c.ts) { MET.ts = c.ts; MET.exp = c.exp || 0; MET.upd = c.upd || 0; } } catch (e) { } }
+    if (MET.loading || typeof fetch !== 'function') return;
+    if (!force && MET.ts && Date.now() < MET.exp) return;
+    if (!force && Date.now() - MET.at < 10 * 60000) return; // dopo un errore non insistere
+    MET.loading = true; MET.at = Date.now();
+    fetch('https://api.met.no/weatherapi/locationforecast/2.0/complete?lat=' + MET_LAT + '&lon=' + MET_LON).then(function (r) {
+      if (!r.ok) throw new Error('http ' + r.status);
+      var exp = Date.parse(r.headers.get('Expires') || '');
+      return r.json().then(function (j) {
+        var ts = ((j.properties || {}).timeseries || []).map(function (x) {
+          var d = (x.data || {}), i = (d.instant || {}).details || {}, n1 = d.next_1_hours || {}, n6 = d.next_6_hours || {};
+          return { t: Date.parse(x.time), c: i.air_temperature, w: i.wind_speed, g: i.wind_speed_of_gust, d: i.wind_from_direction,
+            p1: n1.details ? n1.details.precipitation_amount : null, p6: n6.details ? n6.details.precipitation_amount : null, s: (n1.summary || n6.summary || {}).symbol_code || '' };
+        }).filter(function (x) { return isFinite(x.t); });
+        if (!ts.length) throw new Error('vuoto');
+        MET.ts = ts; MET.upd = Date.now(); MET.exp = isFinite(exp) && exp > Date.now() ? exp : Date.now() + 60 * 60000; MET.err = false;
+        try { localStorage.setItem(MET_KEY, JSON.stringify({ ts: ts, exp: MET.exp, upd: MET.upd })); } catch (e) { }
+      });
+    }).catch(function () { MET.err = true; }).then(function () { MET.loading = false; if (['home', 'vari', 'operazioni', 'programma', 'calendario'].indexOf(V.tab) >= 0) render(); });
+  }
+  function metLocalT(iso, hhmm) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); if (!m) return null; var h = /^(\d{1,2}):(\d{2})/.exec(hhmm || '') || [0, 12, 0]; return new Date(+m[1], +m[2] - 1, +m[3], +h[1], +h[2]).getTime(); }
+  function metGust(x) { return num(x.g) != null ? x.g : num(x.w) != null ? x.w : null; }
+  function metLevel(gMs) { var c = metCfg(), k = kn(gMs || 0); return k >= c.rosso ? 'late' : k >= c.giallo ? 'soon' : 'ok'; }
+  function metAt(iso, hhmm) { // la previsione più vicina a quell'ora (entro 3 ore)
+    if (!MET.ts) return null; var t = metLocalT(iso, hhmm); if (t == null) return null;
+    var best = null, bd = 1e15; MET.ts.forEach(function (x) { var d = Math.abs(x.t - t); if (d < bd) { bd = d; best = x; } });
+    return bd <= 3 * 3600000 ? best : null;
+  }
+  function metDay(iso, from, to) { // giornata di lavoro: dalle 7 alle 18
+    if (!MET.ts) return null; var a = metLocalT(iso, from || '07:00'), b = metLocalT(iso, to || '18:00'); if (a == null) return null;
+    var xs = MET.ts.filter(function (x) { return x.t >= a && x.t <= b; }); if (!xs.length) return null;
+    var o = { cMin: null, cMax: null, w: 0, g: 0, gx: null, rain: 0, s: '' }, mid = metLocalT(iso, '13:00'), bm = 1e15;
+    xs.forEach(function (x) {
+      if (num(x.c) != null) { o.cMin = o.cMin == null ? x.c : Math.min(o.cMin, x.c); o.cMax = o.cMax == null ? x.c : Math.max(o.cMax, x.c); }
+      if (num(x.w) != null) o.w = Math.max(o.w, x.w);
+      var g = metGust(x); if (g != null && g >= o.g) { o.g = g; o.gx = x; }
+      o.rain += num(x.p1) != null ? x.p1 : num(x.p6) != null ? x.p6 : 0;
+      if (Math.abs(x.t - mid) < bm) { bm = Math.abs(x.t - mid); o.s = x.s; }
+    });
+    o.d = o.gx ? o.gx.d : null;
+    return o;
+  }
+  function knTxt(ms) { return fmtNum(kn(ms), 0) + ' kn · ' + fmtNum(ms * 3.6, 0) + ' km/h'; }
+  function metWindLine(w, g, d) { var dir = metDir(d); return 'Vento ' + knTxt(w) + (num(g) != null ? ', raffiche ' + knTxt(g) : '') + (dir ? ' · ' + dir[0] + ' (' + dir[1] + ')' : ''); }
+  // la pastiglia col semaforo da mettere accanto a vari, alaggi, trasporti e lavori con i mezzi
+  function metChip(iso, hhmm) {
+    if (!iso || iso < todayISO()) return '';
+    metLoad();
+    var x = hhmm ? metAt(iso, hhmm) : null, dd = x ? null : metDay(iso);
+    var g = x ? metGust(x) : dd ? dd.g : null, d = x ? x.d : dd ? dd.d : null; if (g == null) return '';
+    var lv = metLevel(g), dir = metDir(d);
+    return '<span class="pill met ' + lv + '" title="Previsione MET Norway">' + I.wind + 'Raffiche ' + esc(knTxt(g)) + (dir ? ' · ' + esc(dir[0]) : '') + (x ? '' : ' (max di giornata)') + '</span>';
+  }
+  function metHome() {
+    metLoad();
+    if (!MET.ts) return MET.err && window.__NM_FB ? secH('Meteo · MSV') + '<div class="notice">Previsioni non disponibili adesso: serve internet. Riprovo da solo.</div>' : '';
+    var now = metAt(todayISO(), pad(new Date().getHours()) + ':' + pad(new Date().getMinutes())) || MET.ts[0];
+    var lvN = metLevel(metGust(now)), sym = metSym(now.s), h = secH('Meteo · MSV', S.canWrite && (S.isEditor || S.isOwner) ? 'met-cfg' : '', 'Soglie');
+    h += '<div class="met-card"><div class="met-now"><span class="met-t">' + (num(now.c) != null ? fmtNum(now.c, 0) + '°' : '–') + '</span><span class="main"><span class="title">' + esc(sym || 'Adesso') + '</span>' +
+      '<span class="sub">' + esc(metWindLine(now.w, now.g, now.d)) + '</span></span><span class="met-dot ' + lvN + '" aria-label="' + (lvN === 'late' ? 'vento forte' : lvN === 'soon' ? 'vento sostenuto' : 'vento debole') + '"></span></div>';
+    var rows = [];
+    for (var k = 0; k < 4; k++) {
+      var day = addDays(todayISO(), k), o = metDay(day); if (!o) continue;
+      var lv = metLevel(o.g), dir = metDir(o.d);
+      rows.push('<div class="met-row"><span class="met-d">' + esc(k === 0 ? 'Oggi' : k === 1 ? 'Domani' : cap(fmtDayLong(day).split(' ')[0])) + '</span>' +
+        '<span class="met-x"><span>' + esc(metSym(o.s) || '') + (o.rain >= 0.5 ? ' · ' + fmtNum(o.rain, 1) + ' mm' : '') + '</span><span class="cap">' + (o.cMin != null ? fmtNum(o.cMin, 0) + '°–' + fmtNum(o.cMax, 0) + '°' : '') + '</span></span>' +
+        '<span class="met-w ' + lv + '"><b>' + fmtNum(kn(o.g), 0) + ' kn</b><small>' + fmtNum(o.g * 3.6, 0) + ' km/h' + (dir ? ' · ' + dir[1] : '') + '</small></span></div>');
+    }
+    h += rows.join('') + '<div class="met-foot"><a href="https://www.windy.com/?waves,' + MET_LAT + ',' + MET_LON + ',11" target="_blank" rel="noopener">Mare e onde su Windy</a>' +
+      '<span>Raffiche: <i class="met-dot ok"></i> sotto ' + metCfg().giallo + ' kn <i class="met-dot soon"></i> da ' + metCfg().giallo + ' <i class="met-dot late"></i> da ' + metCfg().rosso + '</span>' +
+      '<span>Dati <a href="https://www.met.no/en" target="_blank" rel="noopener">MET Norway</a> (CC BY 4.0)' + (MET.upd ? ' · aggiornati alle ' + pad(new Date(MET.upd).getHours()) + ':' + pad(new Date(MET.upd).getMinutes()) : '') + '</span></div></div>';
+    return h;
+  }
+  function metCalLine(iso) {
+    if (iso < todayISO()) return ''; metLoad(); var o = metDay(iso); if (!o) return '';
+    var lv = metLevel(o.g);
+    return '<p class="cap met-cal"><span class="met-dot ' + lv + '"></span>' + esc([metSym(o.s), o.cMin != null ? fmtNum(o.cMin, 0) + '°–' + fmtNum(o.cMax, 0) + '°' : '', 'raffiche fino a ' + knTxt(o.g), o.rain >= 0.5 ? fmtNum(o.rain, 1) + ' mm di pioggia' : ''].filter(Boolean).join(' · ')) + '</p>';
+  }
+  function metNeeds(x) { // cose del programma per cui conta il vento
+    var t = String(x.testo || '').toLowerCase();
+    return /varo|alaggi|trasport|moviment|gru|travel|carrell|sposta|scaric|caric/.test(t) || (x.mezzi || []).some(function (m) { return /gru|travel|carrell|muletto|zenti/i.test(m); });
+  }
+  function metCfgSheet() {
+    var c = metCfg();
+    openSheet({
+      title: 'Soglie del vento', submitLabel: 'Salva',
+      body: '<p class="cap" style="margin:0 2px 10px">Valgono per le raffiche previste: il semaforo compare in Home, nei vari e alaggi, nei servizi e nel programma.</p>' +
+        '<div class="grid2">' + field(lab('f-mg', 'Giallo da (nodi)'), inp('f-mg', String(c.giallo), 'type="text" inputmode="decimal"')) + field(lab('f-mr', 'Rosso da (nodi)'), inp('f-mr', String(c.rosso), 'type="text" inputmode="decimal"')) + '</div>',
+      onSubmit: async function (f) {
+        var g = parseDec(val(f, 'f-mg')), r = parseDec(val(f, 'f-mr'));
+        if (!(g > 0 && r > g)) { formErr('Il rosso deve essere più alto del giallo, per esempio 10 e 18.'); return false; }
+        var ref = S.db.collection('impostazioni').doc('meteo'); return w(function () { return ref.set({ giallo: g, rosso: r, modificato: new Date().toISOString() }); });
+      }
+    });
+  }
+
   /* ---------- Batterie delle barche ferme ---------- */
   function battDays() { var g = S.battCfg && num(S.battCfg.giorni); return g && g > 0 ? g : 30; }
   function lastCarica(bid) { return S.cariche.filter(function (c) { return c.barcaId === bid; }).sort(function (a, c) { return String(c.data || '').localeCompare(String(a.data || '')) || String(c.creato || '').localeCompare(String(a.creato || '')); })[0] || null; }
@@ -3533,7 +3665,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   function rifCfg() { return S.rifCfg || {}; }
   function rifTipi() { var t = rifCfg().tipi; return Array.isArray(t) && t.length ? t : RIF_TIPI0; }
   function rifTipo(id) { return rifTipi().find(function (t) { return t.id === id; }) || null; }
-  function rifDitte() { var d = rifCfg().ditte || {}; return { d1: d.d1 || 'Ditta dei rifiuti', olio: d.olio || 'Ditta dell’olio' }; }
+  function rifDitte() { var d = rifCfg().ditte || {}; return { d1: d.d1 || 'Erre Servizi', olio: d.olio || 'Ditta dell’olio' }; }
   function rifDittaNome(k) { return rifDitte()[k] || k || ''; }
   function rifPer(t) { return /\*\s*$/.test(String(t && t.cer || '')); }
   function rifUn(u, n) { var x = RIF_UNITA[u] || [u, u]; return n === 1 ? x[0] : x[1]; }
@@ -3755,7 +3887,7 @@ button.row:active, .row .hit:active { opacity: .65; }
         '<p class="cap" style="margin-top:10px">Le stime dei kg servono solo quando segnate a pezzi, litri o sacchetti: al ritiro valgono i kg pesati.</p>',
       onSubmit: async function (f) {
         var ref = S.db.collection('impostazioni').doc('rifiuti');
-        return w(function () { return ref.set({ tipi: rifTipi(), ditte: { d1: val(f, 'f-cd1') || 'Ditta dei rifiuti', olio: val(f, 'f-cdo') || 'Ditta dell’olio' }, modificato: new Date().toISOString() }); });
+        return w(function () { return ref.set({ tipi: rifTipi(), ditte: { d1: val(f, 'f-cd1') || 'Erre Servizi', olio: val(f, 'f-cdo') || 'Ditta dell’olio' }, modificato: new Date().toISOString() }); });
       }
     });
   }
@@ -4057,7 +4189,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var tm = done ? '<span class="amount">' + fmtDur(h) + '</span>' : (h > 0 ? '<span class="pill">' + fmtDur(h) + '</span>' : '<span class="pill">Aperto</span>');
     return '<button type="button" class="row" data-act="open-op" data-id="' + esc(o.id) + '"><span class="ic-circle' + (done ? ' ok' : '') + '">' + I.list + '</span><span class="main"><span class="title">' + esc(o.nome || 'Servizio') + (o.variante ? ' · ' + esc(o.variante) : '') + '</span>' +
       '<span class="sub">' + sub.map(esc).join(' · ') + '</span>' + (v ? '<span class="status ' + (v.c === 'acc' ? '' : v.c) + '"' + (v.c === 'acc' ? ' style="color:var(--accent)"' : '') + '>' + esc(v.t) + '</span>' : '') +
-      (!done && pr.tot ? '<span class="progress" style="display:block;margin-top:6px"><i style="width:' + Math.round(pr.ok * 100 / pr.tot) + '%"></i></span>' : '') + '</span><span class="side">' + tm + '</span></button>';
+      (!done && pr.tot ? '<span class="progress" style="display:block;margin-top:6px"><i style="width:' + Math.round(pr.ok * 100 / pr.tot) + '%"></i></span>' : '') + (!done ? metWrap(metChip(o.data, o.ora)) : '') + '</span><span class="side">' + tm + '</span></button>';
   }
   function viewOperazioni() {
     var h = '', open = S.ops.filter(function (o) { return !opDone(o); }).sort(function (a, b) { return String(a.data).localeCompare(String(b.data)); });
@@ -5597,6 +5729,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       case 'rif-cfg': if (S.db) rifCfgSheet(); break;
       case 'rif-tipo': if (S.db) rifTipoSheet(id || ''); break;
       case 'rif-csv': rifCsv(); break;
+      case 'met-cfg': if (S.db) metCfgSheet(); break;
       case 'new-attr': if (S.canWrite) attrSheet(null, t.getAttribute('data-boat') || V.boatId); break;
       case 'edit-attr': x = S.attr.find(function (a) { return a.id === id; }); if (x && S.canWrite) attrSheet(x); break;
       case 'new-lav': lavSheet(null, t.getAttribute('data-boat') || V.boatId, t.getAttribute('data-date')); break;
@@ -5688,9 +5821,9 @@ button.row:active, .row .hit:active { opacity: .65; }
     sub('conferme', function (x) { S.conf = toMap(x); });
     db.collection('impostazioni').onSnapshot(function (snap) {
       var m = null, b = null;
-      snap.docs.forEach(function (d) { if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); else if (d.id === 'rifiuti') S.rifCfg = d.data(); });
+      snap.docs.forEach(function (d) { if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); else if (d.id === 'rifiuti') S.rifCfg = d.data(); else if (d.id === 'meteo') S.meteoCfg = d.data(); });
       var mc = m !== S.mapCfg; S.mapCfg = m; S.bkInfo = b;
-      if ((V.tab === 'mappa' && mc) || V.tab === 'backup' || V.tab === 'batterie' || V.tab === 'rifiuti') render();
+      if ((V.tab === 'mappa' && mc) || V.tab === 'backup' || V.tab === 'batterie' || V.tab === 'rifiuti' || V.tab === 'home') render();
     }, function () { });
     sub('magazzino', function (x) { S.mag = x; });
     sub('movimenti', function (x) { S.mov = x; });
