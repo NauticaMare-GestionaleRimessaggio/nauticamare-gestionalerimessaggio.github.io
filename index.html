@@ -598,7 +598,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     trash: svg('<path d="M4.5 6.5h15M9.5 6.5V4h5v2.5"/><path d="M6.5 6.5l1 13.5h9l1-13.5"/><path d="M10 10.5v6M14 10.5v6"/>'),
     restore: svg('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4.2h4.2"/><path d="M12 8.5V12l2.5 1.8"/>')
   };
-  var ALTRO = ['altro', 'programma', 'pannello', 'batterie', 'scadenze', 'vari', 'magazzino', 'preventivi', 'rifiuti', 'scadcantiere', 'ore', 'operazioni', 'backup'];
+  var ALTRO = ['altro', 'programma', 'pannello', 'batterie', 'scadenze', 'vari', 'magazzino', 'preventivi', 'rifiuti', 'scadcantiere', 'assenze', 'ore', 'operazioni', 'backup'];
   var LOGO_SRC = document.getElementById('logo-src').getAttribute('src');
   var LOGO_IMG = document.createElement('img'); LOGO_IMG.className = 'logo'; LOGO_IMG.alt = 'Nautica Mare'; LOGO_IMG.src = document.getElementById('scritta-src').getAttribute('src');
   var splashT0 = Date.now();
@@ -653,7 +653,7 @@ button.row:active, .row .hit:active { opacity: .65; }
 
   /* ---------- Stato ---------- */
   var S = { posti: {}, richieste: [], db: null, status: 'loading', canWrite: true, writeUnknown: false, boats: [], lavori: [], lavoriAll: [], scadenze: [], got: {}, pendingBoat: null, user: null, myId: null, me: {}, isOwner: false, dip: {}, prof: {},
-    conf: {}, mag: [], mov: [], vari: [], modelli: [], ckBarca: {}, check: [], assets: null, opModelli: [], ops: [], mezzi: [], attr: [], prog: [], cariche: [], isEditor: false, battCfg: null, dl: undefined, bkInfo: null, rif: [], ritiri: [], rifCfg: null, meteoCfg: null, scadC: [], prev: [] };
+    conf: {}, mag: [], mov: [], vari: [], modelli: [], ckBarca: {}, check: [], assets: null, opModelli: [], ops: [], mezzi: [], attr: [], prog: [], cariche: [], isEditor: false, battCfg: null, dl: undefined, bkInfo: null, rif: [], ritiri: [], rifCfg: null, meteoCfg: null, scadC: [], prev: [], assenze: [] };
   var V = { tab: 'home', boatId: null, q: '', lavFilter: 'aperti', showDone: false, exConfirm: false, calMonth: todayISO().slice(0, 7), calDay: todayISO(), feat: 0, boatLavAll: false, schedaDay: todayISO(), nomeDraft: null,
     boatView: null, resRange: 'anno', oreMonth: todayISO().slice(0, 7), oreOpen: null, magQ: '', magGroup: 'tipo', progDay: null, progView: 'ora', panPer: 'sett', panBy: 'persona', variDone: false, rifTab: 'deposito', rifEuro: false, scShowDone: false, prevFilter: 'aperti' };
   var SHEET = { onDelete: null, foto: [], run: null };
@@ -919,6 +919,12 @@ button.row:active, .row .hit:active { opacity: .65; }
         (S.canWrite ? '<button type="button" class="btn" data-act="done-scad" data-id="' + esc(x.s.id) + '">Segna come fatta</button>' : '') +
         (x.i.boat ? '<button type="button" class="btn sec" data-act="open-boat" data-id="' + esc(x.i.boat.id) + '">Apri scheda</button>' : '')));
     });
+    if (assAdmin() && assPending().length) { var ap = assPending();
+      cards.push(featCard('soon', I.cal, ap.length === 1 ? 'Una richiesta di ferie o permesso' : ap.length + ' richieste di ferie o permessi', ap.slice(0, 3).map(function (a) { return nameOf(a.utente) + ' · ' + assWhen(a); }).join(', '), '', '<button type="button" class="btn" data-act="tab" data-tab="assenze">Vedi e approva</button>')); }
+    (S.assenze || []).filter(function (a) { return a.utente === S.myId && a.stato !== 'richiesta' && a.decisaDa && a.decisaDa !== S.myId && a.decisaIl && a.decisaIl >= addDays(t0, -3); }).slice(0, 2).forEach(function (a) {
+      var okA = a.stato === 'approvata';
+      cards.push(featCard(okA ? 'ok' : 'late', I.cal, assTipo(a.tipo) + (okA ? ' approvata' : ' rifiutata'), assWhen(a), '', '<button type="button" class="btn sec" data-act="tab" data-tab="assenze">Ferie e permessi</button>'));
+    });
     scOpen().filter(function (x) { return x.i.level !== 'ok'; }).slice(0, 3).forEach(function (x) {
       cards.push(featCard(x.i.level, I.alarm, (x.s.tipo || 'Scadenza') + ' · ' + (x.s.rif || ''), scGruppo(x.s.gruppo), '<div class="feat-status t-' + x.i.level + '">' + esc(x.i.text) + '</div>',
         (S.canWrite ? '<button type="button" class="btn" data-act="sc-done" data-id="' + esc(x.s.id) + '">Segna come fatta</button>' : '') + '<button type="button" class="btn sec" data-act="tab" data-tab="scadcantiere">Scadenze del cantiere</button>'));
@@ -1043,6 +1049,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var sum = calSchedaSum(sel);
     h += secH(cap(fmtDayLong(sel)), S.canWrite ? 'add-menu' : '', '+ Aggiungi', ' data-date="' + sel + '"');
     h += metCalLine(sel);
+    var assC = assOggiTxt(sel); if (assC) h += '<p class="cap" style="margin:-4px 4px 10px">Assenti: ' + esc(assC) + '</p>';
     if (sum) h += '<div class="lbl" style="margin:4px 4px 6px">Scheda lavoro</div>' + sum;
     if (progIts.length) h += '<div class="lbl" style="margin:14px 4px 6px">Programma</div><div class="group">' + progIts.map(function (x) { return progRow(x, progOf(sel), true); }).join('') + '</div>';
     if (rest.length) h += (sum || progIts.length ? '<div class="lbl" style="margin:14px 4px 6px">Lavori, vari e scadenze</div>' : '') +
@@ -3323,6 +3330,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       progPers(x).forEach(function (id) { if (progPers(y).indexOf(id) >= 0) { var t = nameOf(id) + ' è già su un altro lavoro'; if (w.indexOf(t) < 0) w.push(t); } });
     });
     (x.materiali || []).forEach(function (r) { if (!r.articoloId) return; st = st || stockMap(); if ((st[r.articoloId] || 0) < num(r.qta)) w.push('mancano ' + r.nome); });
+    if (x.data) { var ass = assOn(x.data); progPers(x).forEach(function (id) { var a = ass.find(function (q) { return q.utente === id; }); if (a) w.push(nameOf(id) + ' è assente' + (a.tipo === 'permesso' && a.dalle ? ' (' + a.dalle + '–' + (a.alle || '') + ')' : '')); }); }
     return w;
   }
   function progLinkTxt(x) {
@@ -3371,6 +3379,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     h += '<div class="chips" role="group" aria-label="Giorno"><button type="button" data-act="prog-go" data-d="' + todayISO() + '" aria-pressed="' + (d === todayISO()) + '">Oggi</button><button type="button" data-act="prog-go" data-d="' + addDays(todayISO(), 1) + '" aria-pressed="' + (d === addDays(todayISO(), 1)) + '">Domani</button>' +
       '</div><div class="chips" role="group" aria-label="Vista" style="margin-top:8px"><button type="button" data-act="prog-view" data-v="ora" aria-pressed="' + byOra + '">Per orario</button><button type="button" data-act="prog-view" data-v="persona" aria-pressed="' + !byOra + '">Per persona</button></div>';
     h += progSummary(list);
+    var assT = assOggiTxt(d); if (assT) h += '<div class="notice" style="margin-top:10px">Assenti: ' + esc(assT) + '</div>';
     if (left.length) h += secH('Rimasti dai giorni scorsi (' + left.length + ')', S.canWrite ? 'prog-bring' : '', 'Porta tutti a oggi') + '<div class="group">' + left.sort(progSort).map(function (x) { return progRow(x, left, true); }).join('') + '</div>';
     if (byOra) {
       var withT = list.filter(function (x) { return hm(x.ora) != null; }).sort(progSort), noT = list.filter(function (x) { return hm(x.ora) == null; }).sort(progSort);
@@ -3485,6 +3494,113 @@ button.row:active, .row .hit:active { opacity: .65; }
     h += mine.length ? '<div class="group">' + mine.sort(progSort).slice(0, 6).map(function (x) { return progRow(x, all, true); }).join('') + '</div>' : '<div class="notice">Niente in programma per te oggi.</div>';
     if (tom) h += '<p class="cap" style="margin:8px 2px 0">Domani: ' + tom + (tom === 1 ? ' cosa' : ' cose') + ' per te o per la squadra.</p>';
     return h;
+  }
+
+  /* ---------- Ferie e permessi ----------
+     Il dipendente chiede dal telefono, gli amministratori approvano o rifiutano. La malattia si comunica e basta.
+     Tutti vedono chi è assente, ma il motivo e le note li vedono solo la persona e gli amministratori. */
+  var ASS_TIPI = [['ferie', 'Ferie'], ['permesso', 'Permesso a ore'], ['malattia', 'Malattia']];
+  function assTipo(k) { var x = ASS_TIPI.find(function (t) { return t[0] === k; }); return x ? x[1] : 'Assenza'; }
+  function assAdmin() { return !!S.isOwner; }
+  function assCanSee(a) { return assAdmin() || a.utente === S.myId; }
+  function assDays(a) { return a.tipo === 'permesso' ? [a.giorno] : (function () { var out = [], d = a.dal; if (!d) return out; var end = a.al || a.dal; var n = 0; while (d <= end && n < 400) { out.push(d); d = addDays(d, 1); n++; } return out; })(); }
+  function assOn(day) { return (S.assenze || []).filter(function (a) { return a.stato === 'approvata' && assDays(a).indexOf(day) >= 0; }); }
+  function assWhen(a) {
+    if (a.tipo === 'permesso') return fmtDate(a.giorno) + (a.dalle ? ', ' + a.dalle + '–' + (a.alle || '') : '') + (num(a.ore) ? ' (' + fmtH(a.ore) + ')' : '');
+    return a.al && a.al !== a.dal ? 'dal ' + fmtDate(a.dal) + ' al ' + fmtDate(a.al) : fmtDate(a.dal);
+  }
+  function assLabel(a) { return assCanSee(a) ? assTipo(a.tipo) : (a.tipo === 'permesso' ? 'Assente per qualche ora' : 'Assente'); }
+  function assOggiTxt(day) { // «Paolo (tutto il giorno), Gabriele (14:00–18:00)»
+    return assOn(day).map(function (a) { return nameOf(a.utente) + (a.tipo === 'permesso' ? ' (' + (a.dalle ? a.dalle + '–' + (a.alle || '') : 'qualche ora') + ')' : ''); }).join(', ');
+  }
+  function assPill(a) { var c = { richiesta: 'soon', approvata: 'ok', rifiutata: 'late' }[a.stato] || ''; var t = a.tipo === 'malattia' && a.stato === 'approvata' ? 'Comunicata' : ({ richiesta: 'Da approvare', approvata: 'Approvata', rifiutata: 'Rifiutata' }[a.stato] || ''); return '<span class="pill ' + c + '">' + t + '</span>'; }
+  function assRow(a, withActs) {
+    var sub = [assWhen(a)]; if (assCanSee(a) && a.note) sub.push(a.note);
+    if (a.stato !== 'richiesta' && a.decisaDa && assCanSee(a) && a.tipo !== 'malattia') sub.push((a.stato === 'approvata' ? 'approvata da ' : 'rifiutata da ') + nameOf(a.decisaDa));
+    var acts = withActs && assAdmin() && a.stato === 'richiesta' ? '<button type="button" class="chk" data-act="ass-ok" data-id="' + esc(a.id) + '">' + I.check + 'Approva</button>' : '';
+    return '<div class="row"><button type="button" class="hit" data-act="ass-edit" data-id="' + esc(a.id) + '">' + avatar(a.utente) + '<span class="main"><span class="title">' + esc(nameOf(a.utente)) + ' · ' + esc(assLabel(a)) + '</span><span class="sub">' + esc(sub.join(' · ')) + '</span><span class="status">' + assPill(a) + '</span></span></button>' + acts + '</div>';
+  }
+  function assPending() { return (S.assenze || []).filter(function (a) { return a.stato === 'richiesta'; }); }
+  function viewAssenze() {
+    var t = todayISO(), all = (S.assenze || []).slice(), h = '';
+    var oggi = assOggiTxt(t);
+    h += '<div class="group pan" style="margin-top:12px"><div class="kv-row"><span class="k">Assenti oggi</span><span class="v">' + esc(oggi || 'nessuno') + '</span></div><div class="kv-row"><span class="k">Domani</span><span class="v">' + esc(assOggiTxt(addDays(t, 1)) || 'nessuno') + '</span></div></div>';
+    if (S.myId && S.canWrite) h += '<div class="rif-acts"><button type="button" class="btn" data-act="ass-new">' + I.plus + 'Chiedi ferie o permesso</button></div>';
+    var pend = assPending().sort(function (a, b) { return String(a.dal || a.giorno).localeCompare(String(b.dal || b.giorno)); });
+    if (assAdmin() && pend.length) h += secH('Da approvare (' + pend.length + ')') + '<div class="group">' + pend.map(function (a) { return assRow(a, true); }).join('') + '</div>';
+    var mine = all.filter(function (a) { return a.utente === S.myId && (assDays(a).slice(-1)[0] || '') >= addDays(t, -60); }).sort(function (a, b) { return String(b.dal || b.giorno).localeCompare(String(a.dal || a.giorno)); });
+    if (mine.length) h += secH('Le mie richieste') + '<div class="group">' + mine.map(function (a) { return assRow(a, false); }).join('') + '</div>';
+    var next = all.filter(function (a) { return a.stato === 'approvata' && (assDays(a).slice(-1)[0] || '') >= t; }).sort(function (a, b) { return String(a.dal || a.giorno).localeCompare(String(b.dal || b.giorno)); });
+    h += secH('Prossime assenze' + (next.length ? ' (' + next.length + ')' : '')) + (next.length ? '<div class="group">' + next.map(function (a) { return assRow(a, false); }).join('') + '</div>' : '<div class="notice">Nessuna assenza in programma.</div>');
+    h += '<p class="cap" style="margin:12px 2px 0">Tutti vedono chi è assente; il motivo e le note li vedono solo la persona interessata e gli amministratori. Le richieste le approvano gli amministratori; la malattia si comunica e basta.</p>';
+    return h;
+  }
+  function assSheet(a) {
+    var isNew = !a, admin = assAdmin(); a = a || { tipo: 'ferie', utente: S.myId, dal: addDays(todayISO(), 1), al: '', giorno: addDays(todayISO(), 1), dalle: '', alle: '' };
+    var own = a.utente === S.myId, canEdit = isNew || admin || (own && a.stato === 'richiesta');
+    if (!isNew && !assCanSee(a)) { toast(nameOf(a.utente) + ' è assente ' + assWhen(a)); return; }
+    var people = progPeople();
+    openSheet({
+      title: isNew ? 'Ferie o permesso' : assTipo(a.tipo) + ' · ' + nameOf(a.utente), submitLabel: canEdit ? 'Salva' : 'Chiudi',
+      deleteLabel: own && a.stato === 'richiesta' ? 'Ritira la richiesta' : 'Elimina', deleteText: 'La togli dall’elenco delle assenze.',
+      onDelete: !isNew && (admin || (own && a.stato === 'richiesta')) ? async function () { if (await delSeq([S.db.collection('assenze').doc(a.id)])) { closeSheet(); toast('Tolta'); } } : null,
+      body: (admin ? field(lab('f-au', 'Per chi'), '<select id="f-au"' + (canEdit ? '' : ' disabled') + '>' + people.map(function (id) { return '<option value="' + esc(id) + '"' + (id === a.utente ? ' selected' : '') + '>' + esc(id === S.myId ? 'Io · ' + nameOf(id) : nameOf(id)) + '</option>'; }).join('') + '</select>') : '') +
+        field(lab('f-at', 'Che cosa'), '<select id="f-at"' + (canEdit ? '' : ' disabled') + '>' + opts(ASS_TIPI, a.tipo) + '</select>') +
+        '<div class="grid2" id="f-aGg">' + field(lab('f-ad', 'Dal'), inp('f-ad', a.dal, 'type="date"' + (canEdit ? '' : ' disabled'))) + field(lab('f-aa', 'Al (compreso)'), inp('f-aa', a.al, 'type="date"' + (canEdit ? '' : ' disabled'))) + '</div>' +
+        '<div id="f-aPm">' + field(lab('f-ag', 'Giorno'), inp('f-ag', a.giorno, 'type="date"' + (canEdit ? '' : ' disabled'))) +
+        '<div class="grid2">' + field(lab('f-a1', 'Dalle'), inp('f-a1', a.dalle, 'type="time" step="900"' + (canEdit ? '' : ' disabled'))) + field(lab('f-a2', 'Alle'), inp('f-a2', a.alle, 'type="time" step="900"' + (canEdit ? '' : ' disabled'))) + '</div></div>' +
+        field(lab('f-an', 'Note (le vedono solo gli amministratori)'), inp('f-an', a.note, 'type="text" placeholder="facoltative"' + (canEdit ? '' : ' disabled'))) +
+        (!isNew ? '<div class="notice">' + assPill(a) + (a.decisaDa ? ' ' + esc((a.stato === 'approvata' ? 'da ' : 'da ') + nameOf(a.decisaDa) + (a.decisaIl ? ' il ' + fmtDate(a.decisaIl) : '')) : '') + '</div>' : '') +
+        (!isNew && admin && a.stato !== 'rifiutata' && a.tipo !== 'malattia' ? '<button type="button" class="btn sec self-start" data-act="ass-no" data-id="' + esc(a.id) + '" style="color:var(--late)">Rifiuta</button>' : '') +
+        (!isNew && admin && a.stato === 'richiesta' ? '<button type="button" class="btn self-start" data-act="ass-ok" data-id="' + esc(a.id) + '">' + I.check + 'Approva</button>' : ''),
+      onOpen: function (f) {
+        var ts = f.querySelector('#f-at');
+        function upd() { var pm = ts.value === 'permesso'; $('#f-aGg').hidden = pm; $('#f-aPm').hidden = !pm; }
+        ts.addEventListener('change', upd); upd();
+      },
+      onSubmit: async function (f) {
+        if (!canEdit) return true;
+        var now = new Date().toISOString(), tipo = val(f, 'f-at') || 'ferie', uid = admin ? (val(f, 'f-au') || S.myId) : (a.utente || S.myId);
+        var data = { utente: uid, tipo: tipo, note: val(f, 'f-an'), modificato: now };
+        if (tipo === 'permesso') {
+          data.giorno = val(f, 'f-ag'); data.dalle = val(f, 'f-a1'); data.alle = val(f, 'f-a2'); data.dal = data.giorno; data.al = data.giorno;
+          if (!data.giorno) { formErr('Scegli il giorno.'); return false; }
+          var m1 = hm(data.dalle), m2 = hm(data.alle);
+          if (m1 == null || m2 == null || m2 <= m1) { formErr('Scrivi da che ora a che ora, per esempio 14:00 e 18:00.'); return false; }
+          data.ore = Math.round((m2 - m1) / 60 * 100) / 100;
+        } else {
+          data.dal = val(f, 'f-ad'); data.al = val(f, 'f-aa') || data.dal; data.giorno = ''; data.dalle = ''; data.alle = ''; data.ore = null;
+          if (!data.dal) { formErr('Scegli il primo giorno.'); return false; }
+          if (data.al < data.dal) { formErr('L’ultimo giorno viene prima del primo.'); return false; }
+        }
+        if (isNew) {
+          data.creato = now; data.richiestaDa = S.myId || '';
+          // la malattia si comunica; quello che inserisce un amministratore è già approvato
+          if (tipo === 'malattia' || admin) { data.stato = 'approvata'; data.decisaDa = S.myId || ''; data.decisaIl = todayISO(); } else data.stato = 'richiesta';
+          var ref = S.db.collection('assenze').doc(); if (!(await w(function () { return ref.set(data); }))) return false;
+          toast(data.stato === 'richiesta' ? 'Richiesta inviata: la approva un amministratore' : 'Segnata');
+        } else {
+          if (!admin && a.stato === 'richiesta') data.stato = 'richiesta';
+          var r2 = S.db.collection('assenze').doc(a.id); if (!(await w(function () { return r2.update(data); }))) return false;
+          toast('Aggiornata');
+        }
+        return true;
+      }
+    });
+  }
+  async function assDecide(id, ok) {
+    var a = (S.assenze || []).find(function (x) { return x.id === id; }); if (!a || !assAdmin()) return;
+    var ref = S.db.collection('assenze').doc(id);
+    if (await w(function () { return ref.update({ stato: ok ? 'approvata' : 'rifiutata', decisaDa: S.myId || '', decisaIl: todayISO(), modificato: new Date().toISOString() }); })) { closeSheet(); toast(ok ? 'Approvata' : 'Rifiutata'); }
+  }
+  function assOreHtml(key) { // nelle Ore del mese: assenze del mese per persona
+    var list = (S.assenze || []).filter(function (a) { return a.stato === 'approvata' && assDays(a).some(function (d) { return d.slice(0, 7) === key; }); });
+    if (!list.length) return '';
+    var by = {}; list.forEach(function (a) { (by[a.utente] = by[a.utente] || []).push(a); });
+    return secH('Assenze del mese') + '<div class="group">' + Object.keys(by).sort(byPerson).map(function (uid) {
+      var items = by[uid].sort(function (a, b) { return String(a.dal).localeCompare(String(b.dal)); });
+      return '<div class="row">' + avatar(uid) + '<span class="main"><span class="title">' + esc(nameOf(uid)) + '</span>' + items.map(function (a) { return '<span class="sub">' + esc(assLabel(a) + ' · ' + assWhen(a)) + '</span>'; }).join('') + '</span></div>';
+    }).join('') + '</div>';
   }
 
   /* ---------- Preventivi: in ore e ricambi, con la foto di quello dell'ufficio ----------
@@ -4604,6 +4720,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       ['magazzino', I.box, 'soon', 'Magazzino', 'Ricambi, materiali e scorte', low ? '<span class="pill soon">' + low + ' da riordinare</span>' : ''],
       ['preventivi', I.doc, 'acc', 'Preventivi', 'In ore e ricambi, con la foto di quello dell’ufficio', (function () { var n = (S.prev || []).filter(function (p) { return p.stato === 'bozza' || p.stato === 'inviato'; }).length; return n ? '<span class="pill acc">' + n + ' in attesa</span>' : ''; })()],
       ['rifiuti', I.trash, 'late', 'Rifiuti', 'Cosa produciamo, deposito, ritiri della ditta e registro', rifDepKg() > 0 ? '<span class="pill">≈ ' + fmtNum(rifDepKg(), 0) + ' kg in deposito</span>' : ''],
+      ['assenze', I.cal, 'vio', 'Ferie e permessi', 'Richieste, approvazioni e chi è assente', assAdmin() && assPending().length ? '<span class="pill soon">' + assPending().length + ' da approvare</span>' : assOn(todayISO()).length ? '<span class="pill">' + assOn(todayISO()).length + ' assenti oggi</span>' : ''],
       ['ore', I.hours, 'ok', 'Ore del mese', 'Ore di ogni dipendente e giornate confermate', ''],
       ['operazioni', I.list, '', 'Servizi di cantiere', 'Trasporti, alaggi, movimentazioni, vari, lavaggi: passaggi e tempi', runs ? '<span class="pill acc">' + runs + ' in corso</span>' : ''],
       ['scadenze', I.alarm, 'late', 'Scadenze', 'Tagliandi, assicurazioni, contratti', late ? '<span class="pill late">' + late + ' scadute</span>' : ''],
@@ -4625,7 +4742,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     ['barche', 'Barche'], ['lavori', 'Lavorazioni e mansioni'], ['scadenze', 'Scadenze'], ['vari', 'Vari e alaggi'],
     ['magazzino', 'Ricambi del magazzino'], ['movimenti', 'Carichi e scarichi di magazzino'], ['operazioni', 'Servizi di cantiere'],
     ['opModelli', 'Gruppi dei servizi'], ['mezzi', 'Mezzi e carrelli'], ['conferme', 'Giornate confermate'],
-    ['dipendenti', 'Nomi dei dipendenti'], ['impostazioni', 'Misure della mappa'], ['posti', 'Posti al porto'], ['attrezzatura', 'Attrezzatura di bordo'], ['programma', 'Programma dei lavori'], ['cariche', 'Cariche delle batterie'], ['richieste', 'Richieste di chi cerca una barca'], ['rifiuti', 'Rifiuti segnati'], ['ritiri', 'Ritiri dei rifiuti'], ['scadCantiere', 'Scadenze del cantiere'], ['preventivi', 'Preventivi'],
+    ['dipendenti', 'Nomi dei dipendenti'], ['impostazioni', 'Misure della mappa'], ['posti', 'Posti al porto'], ['attrezzatura', 'Attrezzatura di bordo'], ['programma', 'Programma dei lavori'], ['cariche', 'Cariche delle batterie'], ['richieste', 'Richieste di chi cerca una barca'], ['rifiuti', 'Rifiuti segnati'], ['ritiri', 'Ritiri dei rifiuti'], ['scadCantiere', 'Scadenze del cantiere'], ['preventivi', 'Preventivi'], ['assenze', 'Ferie e permessi'],
     ['checklist', 'Vecchie checklist'], ['checkBarca', 'Vecchie liste per barca'], ['modelli', 'Vecchi modelli di checklist']
   ];
   var BK_OLD = ['checklist', 'checkBarca', 'modelli'];
@@ -4641,7 +4758,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       operazioni: S.ops.length, opModelli: S.opModelli.length, mezzi: S.mezzi.length, conferme: Object.keys(S.conf).length, dipendenti: Object.keys(S.dip).length,
       impostazioni: S.mapCfg ? 1 : 0, checklist: S.check.length, checkBarca: Object.keys(S.ckBarca).length, modelli: S.modelli.length,
       posti: Object.keys(S.posti || {}).length, attrezzatura: (S.attr || []).length, programma: (S.prog || []).length,
-      cariche: (S.cariche || []).length, richieste: (S.richieste || []).length, rifiuti: (S.rif || []).length, ritiri: (S.ritiri || []).length, scadCantiere: (S.scadC || []).length, preventivi: (S.prev || []).length
+      cariche: (S.cariche || []).length, richieste: (S.richieste || []).length, rifiuti: (S.rif || []).length, ritiri: (S.ritiri || []).length, scadCantiere: (S.scadC || []).length, preventivi: (S.prev || []).length, assenze: (S.assenze || []).length
     };
   }
   async function bkGet(name) {
@@ -4870,7 +4987,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     });
     order.sort(byPerson);
     var h = '<div class="cal-nav"><button type="button" class="icon-btn blue" data-act="ore-prev" aria-label="Mese precedente">' + I.left + '</button><h2>' + monthLabel(key) + '</h2><button type="button" class="icon-btn blue" data-act="ore-next" aria-label="Mese successivo">' + I.right + '</button></div>';
-    if (!order.length) return h + '<div class="notice" style="margin-top:12px">Nessuna ora segnata in questo mese. Le ore arrivano dalla Scheda lavoro.</div>';
+    if (!order.length) return h + '<div class="notice" style="margin-top:12px">Nessuna ora segnata in questo mese. Le ore arrivano dalla Scheda lavoro.</div>' + assOreHtml(key);
     h += '<div class="day-sum"><div><span class="big">' + fmtNum(all, 2) + ' <small>h</small></span><span class="cap">Totale squadra · ' + order.length + (order.length === 1 ? ' persona' : ' persone') + '</span></div></div>';
     h += secH('Dipendenti') + '<div class="group">';
     order.forEach(function (uid) {
@@ -4883,7 +5000,7 @@ button.row:active, .row .hit:active { opacity: .65; }
           '<span class="side" style="flex-direction:row;align-items:center;gap:8px">' + (cf ? '<span class="pill ok">Confermata</span>' : '<span class="pill soon">Da confermare</span>') + '<span class="amount">' + fmtH(p.days[d]) + '</span></span></button>';
       });
     });
-    return h + '</div>';
+    return h + '</div>' + assOreHtml(key);
   }
 
   function viewChecklist() {
@@ -4962,11 +5079,11 @@ button.row:active, .row .hit:active { opacity: .65; }
         (S.canWrite && S.status === 'ready' && M.area !== 'porto' ? '<button type="button" class="icon-btn" data-act="m-cfg" aria-label="Misure del cantiere">' + I.ruler + '</button>' : '') + '</div>';
       return;
     }
-    var titles = { home: 'Nautica Mare', scheda: 'Scheda lavoro', scadenze: 'Scadenze', calendario: 'Calendario', barche: 'Barche', lavori: 'Lavorazioni da fare', altro: 'Altro', vari: 'Vari e alaggi', magazzino: 'Magazzino', preventivi: 'Preventivi', rifiuti: 'Rifiuti', scadcantiere: 'Scadenze del cantiere', ore: 'Ore del mese', checklist: 'Checklist', operazioni: 'Servizi di cantiere', backup: 'Copia dei dati', programma: 'Programma', pannello: 'Pannello', batterie: 'Batterie' };
+    var titles = { home: 'Nautica Mare', scheda: 'Scheda lavoro', scadenze: 'Scadenze', calendario: 'Calendario', barche: 'Barche', lavori: 'Lavorazioni da fare', altro: 'Altro', vari: 'Vari e alaggi', magazzino: 'Magazzino', preventivi: 'Preventivi', assenze: 'Ferie e permessi', rifiuti: 'Rifiuti', scadcantiere: 'Scadenze del cantiere', ore: 'Ore del mese', checklist: 'Checklist', operazioni: 'Servizi di cantiere', backup: 'Copia dei dati', programma: 'Programma', pannello: 'Pannello', batterie: 'Batterie' };
     var late = S.status === 'ready' ? lateCount() : 0;
     var left = V.tab === 'home' ? '<button type="button" class="icon-btn" data-act="tab" data-tab="scadenze" aria-label="Scadenze scadute: ' + late + '">' + I.bell + (late ? '<span class="dot">' + late + '</span>' : '') + '</button>'
       : (ALTRO.indexOf(V.tab) > 0 ? '<button type="button" class="icon-btn blue" data-act="tab" data-tab="altro" aria-label="Torna ad Altro">' + I.back + '</button>' : '');
-    var addAct = ({ scheda: S.myId ? 'new-entry' : '', lavori: 'new-lav', vari: 'new-vari', magazzino: 'new-mag', checklist: 'new-modello', operazioni: 'new-op', ore: '', backup: '', programma: 'new-prog', pannello: '', batterie: '', rifiuti: 'rif-new', scadcantiere: 'sc-new', preventivi: 'prev-new' })[V.tab];
+    var addAct = ({ scheda: S.myId ? 'new-entry' : '', lavori: 'new-lav', vari: 'new-vari', magazzino: 'new-mag', checklist: 'new-modello', operazioni: 'new-op', ore: '', backup: '', programma: 'new-prog', pannello: '', batterie: '', rifiuti: 'rif-new', scadcantiere: 'sc-new', preventivi: 'prev-new', assenze: S.myId ? 'ass-new' : '' })[V.tab];
     if (addAct == null) addAct = 'add-menu';
     var ro = S.status === 'ready' && !S.canWrite ? ' · sola lettura' : '';
     t.innerHTML = '<div class="l">' + left + '</div><h1' + (V.tab === 'home' ? ' id="logo-slot"' : '') + '>' + (V.tab === 'home' ? '' : titles[V.tab] + ro) + '</h1>' +
@@ -4999,7 +5116,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var html;
     if (S.status === 'absent') html = '<div class="notice" style="margin-top:14px">I dati del registro si aprono solo da Claude, con il tuo account. Apri il link della pagina da claude.ai o dall’app Claude per vedere e salvare barche, lavori e scadenze.</div>';
     else if (S.status === 'loading') html = '<div class="notice" style="margin-top:14px">Carico barche, lavori e scadenze…</div>';
-    else html = ({ programma: viewProgramma, pannello: viewPannello, batterie: viewBatterie, mappa: viewMappa, altro: viewAltro, backup: viewBackup, vari: viewVari, magazzino: viewMagazzino, preventivi: viewPreventivi, rifiuti: viewRifiuti, scadcantiere: viewScadCantiere, ore: viewOre, checklist: viewChecklist, operazioni: viewOperazioni, home: viewHome, scheda: viewScheda, scadenze: viewScadenze, calendario: viewCalendario, lavori: viewLavori, barche: function () { return V.boatId ? viewBoat() : viewBarche(); } })[V.tab]();
+    else html = ({ programma: viewProgramma, pannello: viewPannello, batterie: viewBatterie, mappa: viewMappa, altro: viewAltro, backup: viewBackup, vari: viewVari, magazzino: viewMagazzino, preventivi: viewPreventivi, assenze: viewAssenze, rifiuti: viewRifiuti, scadcantiere: viewScadCantiere, ore: viewOre, checklist: viewChecklist, operazioni: viewOperazioni, home: viewHome, scheda: viewScheda, scadenze: viewScadenze, calendario: viewCalendario, lavori: viewLavori, barche: function () { return V.boatId ? viewBoat() : viewBarche(); } })[V.tab]();
     $('#view').innerHTML = html;
     renderTop(); renderTabs(); bindFeat();
     if (V.tab === 'mappa' && S.status === 'ready') { if (M.area === 'porto') { M.mounted = null; Porto.mount(); } else { M.mounted = M.mode; mapMount(); } } else M.mounted = null;
@@ -5934,6 +6051,10 @@ button.row:active, .row .hit:active { opacity: .65; }
       case 'prev-new': if (S.db && S.canWrite) { if (!S.boats.length) toast('Prima aggiungi una barca', true); else prevSheet(null, t.getAttribute('data-boat') || (V.boatId || '')); } break;
       case 'prev-edit': x = (S.prev || []).find(function (q) { return q.id === id; }); if (x && S.canWrite) prevSheet(x); break;
       case 'prev-filter': V.prevFilter = t.getAttribute('data-f'); render(); break;
+      case 'ass-new': if (S.db && S.canWrite && S.myId) assSheet(null); break;
+      case 'ass-edit': x = (S.assenze || []).find(function (q) { return q.id === id; }); if (x) assSheet(x); break;
+      case 'ass-ok': assDecide(id, true); break;
+      case 'ass-no': if (confirm('Rifiutare la richiesta?')) assDecide(id, false); break;
       case 'new-attr': if (S.canWrite) attrSheet(null, t.getAttribute('data-boat') || V.boatId); break;
       case 'edit-attr': x = S.attr.find(function (a) { return a.id === id; }); if (x && S.canWrite) attrSheet(x); break;
       case 'new-lav': lavSheet(null, t.getAttribute('data-boat') || V.boatId, t.getAttribute('data-date')); break;
@@ -6047,6 +6168,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     sub('ritiri', function (x) { S.ritiri = x; });
     sub('scadCantiere', function (x) { S.scadC = x; });
     sub('preventivi', function (x) { S.prev = x; });
+    sub('assenze', function (x) { S.assenze = x; });
     CLD().use('assets').then(function (a) { S.assets = a || null; if (a) render(); }, function () { });
     CLD().use('downloads').then(function (d) { S.dl = d || null; if (V.tab === 'backup') render(); }, function () { S.dl = null; if (V.tab === 'backup') render(); });
     try {
