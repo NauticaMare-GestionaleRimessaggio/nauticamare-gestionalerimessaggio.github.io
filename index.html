@@ -243,7 +243,8 @@ button.row:active, .row .hit:active { opacity: .65; }
 .day .n { font-size: .78rem; line-height: 1; margin-bottom: 3px; font-variant-numeric: tabular-nums; }
 .day i { display: block; height: 5px; border-radius: 1px; background: var(--accent); }
 .day i.late { background: var(--late); } .day i.soon { background: var(--soon); } .day i.ok { background: var(--ok); }
-.day i.grey { background: var(--dim); }
+.day i.grey { background: var(--dim); } .day i.teal { background: #3BC0C9; }
+.sd-sum .row .pill { margin-left: 0; }
 .day i.stripe { background: repeating-linear-gradient(135deg, var(--accent) 0 3px, transparent 3px 5px); }
 .day .more { position: absolute; right: 3px; bottom: 2px; font-size: .62rem; font-weight: 600; color: var(--accent); }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: .78rem; color: var(--muted); }
@@ -982,6 +983,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     });
     S.vari.forEach(function (v) { add(v.fatto ? (v.fattoIl || v.data) : v.data, { k: 'v', cls: v.fatto ? 'grey' : 'vio', o: v }); });
     S.lavori.forEach(function (l) { add(l.data, { k: 'l', cls: l.stato === 'fatto' ? '' : l.stato === 'in_corso' ? 'stripe' : 'grey', o: l }); });
+    (S.prog || []).forEach(function (x) { add(x.data, { k: 'p', cls: x.fatto ? 'grey' : 'teal', o: x }); });
     return m;
   }
   function viewCalendario() {
@@ -999,13 +1001,32 @@ button.row:active, .row .hit:active { opacity: .65; }
         items.slice(0, 4).map(function (it) { return '<i class="' + it.cls + '"></i>'; }).join('') + (items.length > 4 ? '<span class="more">+' + (items.length - 4) + '</span>' : '') + '</button>';
     }
     h += '</div>';
-    h += '<div class="legend"><span><i style="background:var(--accent)"></i>Lavoro fatto</span><span><i style="background:repeating-linear-gradient(135deg,var(--accent) 0 3px,transparent 3px 5px)"></i>In corso</span><span><i style="background:var(--dim)"></i>Da fare o completata</span><span><i style="background:var(--vio)"></i>Varo o alaggio</span><span><i style="background:var(--late)"></i><i style="background:var(--soon)"></i><i style="background:var(--ok)"></i>Scadenza</span></div>';
+    h += '<div class="legend"><span><i style="background:var(--accent)"></i>Lavoro fatto</span><span><i style="background:repeating-linear-gradient(135deg,var(--accent) 0 3px,transparent 3px 5px)"></i>In corso</span><span><i style="background:var(--dim)"></i>Da fare o completata</span><span><i style="background:#3BC0C9"></i>Programma</span><span><i style="background:var(--vio)"></i>Varo o alaggio</span><span><i style="background:var(--late)"></i><i style="background:var(--soon)"></i><i style="background:var(--ok)"></i>Scadenza</span></div>';
 
     var sel = V.calDay, its = calMap(sel, sel)[sel] || [];
+    var progIts = its.filter(function (it) { return it.k === 'p'; }).map(function (it) { return it.o; }).sort(progSort), rest = its.filter(function (it) { return it.k !== 'p'; });
+    var sum = calSchedaSum(sel);
     h += secH(cap(fmtDayLong(sel)), S.canWrite ? 'add-menu' : '', '+ Aggiungi', ' data-date="' + sel + '"');
-    h += its.length ? '<div class="group">' + its.map(function (it) { return it.k === 's' ? scadRow({ s: it.o, i: scadInfo(it.o) }, true) : it.k === 'v' ? variRow(it.o, true) : lavRow(it.o, true); }).join('') + '</div>'
-      : '<div class="notice">Niente in programma per questo giorno.</div>';
+    if (sum) h += '<div class="lbl" style="margin:4px 4px 6px">Scheda lavoro</div>' + sum;
+    if (progIts.length) h += '<div class="lbl" style="margin:14px 4px 6px">Programma</div><div class="group">' + progIts.map(function (x) { return progRow(x, progOf(sel), true); }).join('') + '</div>';
+    if (rest.length) h += (sum || progIts.length ? '<div class="lbl" style="margin:14px 4px 6px">Lavori, vari e scadenze</div>' : '') +
+      '<div class="group">' + rest.map(function (it) { return it.k === 's' ? scadRow({ s: it.o, i: scadInfo(it.o) }, true) : it.k === 'v' ? variRow(it.o, true) : lavRow(it.o, true); }).join('') + '</div>';
+    if (!its.length) h += '<div class="notice">Niente in programma per questo giorno.</div>';
     return h;
+  }
+  // riepilogo della scheda lavoro del giorno: una riga per persona con ore e conferma
+  function calSchedaSum(day) {
+    var per = {};
+    entriesOn(day).forEach(function (l) { var p = per[l.utente] = per[l.utente] || { n: 0, h: 0 }; p.n++; p.h += num(l.oreLavoro) || 0; });
+    var ids = Object.keys(per).sort(byPerson); if (!ids.length) return '';
+    var tot = 0; ids.forEach(function (id) { tot += per[id].h; });
+    return '<div class="group sd-sum">' + ids.map(function (id) {
+      var p = per[id], ok = isConfirmed(id, day);
+      return '<button type="button" class="row" data-act="go-scheda" data-d="' + day + '">' + avatar(id) + '<span class="main"><span class="title">' + esc(nameOf(id)) + '</span>' +
+        '<span class="sub">' + p.n + (p.n === 1 ? ' mansione' : ' mansioni') + ' · ' + fmtH(p.h) + '</span>' +
+        '<span class="status"><span class="pill ' + (ok ? 'ok' : 'soon') + '">' + (ok ? 'Giornata confermata' : 'Da confermare') + '</span></span></span>' +
+        '<span style="color:var(--dim);width:18px;flex:none">' + I.right + '</span></button>';
+    }).join('') + (ids.length > 1 ? '<div class="kv-row" style="padding:10px 14px"><span class="k">Totale squadra</span><span class="v">' + fmtH(tot) + '</span></div>' : '') + '</div>';
   }
 
   function boatListHtml() {
