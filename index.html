@@ -377,6 +377,12 @@ button.row:active, .row .hit:active { opacity: .65; }
 .ic-circle.vio { background: var(--vio); } .dblock.vio { background: var(--vio-bg); color: var(--vio); }
 .pill.vio { background: var(--vio-bg); color: var(--vio); } .day i.vio { background: var(--vio); } .t-vio { color: var(--vio); }
 
+/* Rifiuti */
+.rif-acts { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; } .rif-acts .btn { flex: 1 1 140px; }
+.rif-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; white-space: nowrap; }
+.ck.rit-row input.rit-kg { width: 76px; height: 42px; flex: none; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card-2); color: var(--ink); font-size: 16px; text-align: right; accent-color: auto; }
+.rit-q { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; } .rit-q small { color: var(--muted); font-size: .75rem; }
+
 /* Ricambi nelle mansioni */
 .rc-box { display: flex; flex-direction: column; gap: 8px; }
 .rc-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 40px; gap: 8px; align-items: center; }
@@ -568,9 +574,10 @@ button.row:active, .row .hit:active { opacity: .65; }
     plan: svg('<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8 14l2 2 4-4"/>'),
     chart: svg('<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>'),
     cart: svg('<path d="M3 4.5h2.5l2.2 10.5h10.6l2-7.5H7"/><circle cx="9.5" cy="19" r="1.3"/><circle cx="17" cy="19" r="1.3"/>'),
+    trash: svg('<path d="M4.5 6.5h15M9.5 6.5V4h5v2.5"/><path d="M6.5 6.5l1 13.5h9l1-13.5"/><path d="M10 10.5v6M14 10.5v6"/>'),
     restore: svg('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4.2h4.2"/><path d="M12 8.5V12l2.5 1.8"/>')
   };
-  var ALTRO = ['altro', 'programma', 'pannello', 'batterie', 'scadenze', 'vari', 'magazzino', 'ore', 'operazioni', 'backup'];
+  var ALTRO = ['altro', 'programma', 'pannello', 'batterie', 'scadenze', 'vari', 'magazzino', 'rifiuti', 'ore', 'operazioni', 'backup'];
   var LOGO_SRC = document.getElementById('logo-src').getAttribute('src');
   var LOGO_IMG = document.createElement('img'); LOGO_IMG.className = 'logo'; LOGO_IMG.alt = 'Nautica Mare'; LOGO_IMG.src = document.getElementById('scritta-src').getAttribute('src');
   var splashT0 = Date.now();
@@ -625,9 +632,9 @@ button.row:active, .row .hit:active { opacity: .65; }
 
   /* ---------- Stato ---------- */
   var S = { posti: {}, richieste: [], db: null, status: 'loading', canWrite: true, writeUnknown: false, boats: [], lavori: [], lavoriAll: [], scadenze: [], got: {}, pendingBoat: null, user: null, myId: null, me: {}, isOwner: false, dip: {}, prof: {},
-    conf: {}, mag: [], mov: [], vari: [], modelli: [], ckBarca: {}, check: [], assets: null, opModelli: [], ops: [], mezzi: [], attr: [], prog: [], cariche: [], isEditor: false, battCfg: null, dl: undefined, bkInfo: null };
+    conf: {}, mag: [], mov: [], vari: [], modelli: [], ckBarca: {}, check: [], assets: null, opModelli: [], ops: [], mezzi: [], attr: [], prog: [], cariche: [], isEditor: false, battCfg: null, dl: undefined, bkInfo: null, rif: [], ritiri: [], rifCfg: null };
   var V = { tab: 'home', boatId: null, q: '', lavFilter: 'aperti', showDone: false, exConfirm: false, calMonth: todayISO().slice(0, 7), calDay: todayISO(), feat: 0, boatLavAll: false, schedaDay: todayISO(), nomeDraft: null,
-    boatView: null, resRange: 'anno', oreMonth: todayISO().slice(0, 7), oreOpen: null, magQ: '', magGroup: 'tipo', progDay: null, progView: 'ora', panPer: 'sett', panBy: 'persona', variDone: false };
+    boatView: null, resRange: 'anno', oreMonth: todayISO().slice(0, 7), oreOpen: null, magQ: '', magGroup: 'tipo', progDay: null, progView: 'ora', panPer: 'sett', panBy: 'persona', variDone: false, rifTab: 'deposito', rifEuro: false };
   var SHEET = { onDelete: null, foto: [], run: null };
   function CLD() { return window.__NM_DEMO || window.__NM_FB || window.claude; } // prova: dati sul dispositivo · sito proprio: Firebase · altrimenti Claude
   function blobSrc(id) { return window.__NM_FB ? window.__NM_FB.photoSrc(id) : '/_blob/' + id; }
@@ -3505,6 +3512,341 @@ button.row:active, .row .hit:active { opacity: .65; }
     });
   }
 
+  /* ---------- Rifiuti: cosa si produce, deposito per contenitore, ritiri della ditta, registro ----------
+     Tipi presi dalla lista della ditta (CER, contenitore, costo al kg) + olio esausto, ritirato da un'altra ditta.
+     Si segna a pezzi, litri o sacchetti (con una stima dei kg) oppure direttamente in kg; al ritiro valgono i kg pesati. */
+  var RIF_TIPI0 = [
+    { id: 'toner', nome: 'Toner esausti', cer: '08 03 18', cont: 'Eco box', unita: 'pz', kgU: 1, euro: 0.95, ditta: 'd1' },
+    { id: 'contenitori', nome: 'Contenitori vuoti di sostanze pericolose', cer: '15 01 10*', cont: 'Big bag R', unita: 'pz', kgU: 0.5, euro: 1.25, ditta: 'd1', es: 'latte di antivegetativa, barattoli di vernice, taniche' },
+    { id: 'spray', nome: 'Bombolette spray', cer: '15 01 11*', cont: 'Big bag R', unita: 'pz', kgU: 0.25, euro: 3.2, ditta: 'd1' },
+    { id: 'filtri-aria', nome: 'Filtri aria', cer: '15 02 02*', cont: 'Big bag R', unita: 'pz', kgU: 0.5, euro: 1.3, ditta: 'd1' },
+    { id: 'stracci', nome: 'Carta e stracci sporchi', cer: '15 02 02*', cont: 'Big bag R', unita: 'sacchetto', kgU: 2, euro: 1.3, ditta: 'd1', es: 'stracci, carta assorbente, panni sporchi d’olio o vernice' },
+    { id: 'filtri-olio', nome: 'Filtri olio e gasolio', cer: '16 01 07*', cont: 'Fusto ermetico filtri', unita: 'pz', kgU: 0.7, euro: 0.6, ditta: 'd1' },
+    { id: 'antigelo', nome: 'Liquidi antigelo', cer: '16 01 14*', cont: 'Fusto ermetico antigelo', unita: 'l', kgU: 1.1, euro: 0.95, ditta: 'd1' },
+    { id: 'candele', nome: 'Candele', cer: '16 01 22', cont: 'Fustino ermetico', unita: 'pz', kgU: 0.05, euro: 0.55, ditta: 'd1' },
+    { id: 'estintori', nome: 'Estintori a polvere', cer: '16 05 05', cont: 'Big bag', unita: 'pz', kgU: 3, euro: 0.95, ditta: 'd1' },
+    { id: 'batterie', nome: 'Batterie al piombo', cer: '16 06 01*', cont: 'Batterie', unita: 'pz', kgU: 22, euro: null, dare: true, ditta: 'd1' },
+    { id: 'zinco', nome: 'Zinco (anodi)', cer: '17 04 04', cont: 'Zinco', unita: 'pz', kgU: 1, euro: null, dare: true, ditta: 'd1', es: 'anodi sostituiti' },
+    { id: 'olio', nome: 'Olio motore esausto', cer: '13 02 05*', cont: 'Cisternetta olio', unita: 'l', kgU: 0.9, euro: null, ditta: 'olio' }
+  ];
+  var RIF_UNITA = { pz: ['pezzo', 'pezzi'], l: ['litro', 'litri'], sacchetto: ['sacchetto', 'sacchetti'], kg: ['kg', 'kg'] };
+  function rifCfg() { return S.rifCfg || {}; }
+  function rifTipi() { var t = rifCfg().tipi; return Array.isArray(t) && t.length ? t : RIF_TIPI0; }
+  function rifTipo(id) { return rifTipi().find(function (t) { return t.id === id; }) || null; }
+  function rifDitte() { var d = rifCfg().ditte || {}; return { d1: d.d1 || 'Ditta dei rifiuti', olio: d.olio || 'Ditta dell’olio' }; }
+  function rifDittaNome(k) { return rifDitte()[k] || k || ''; }
+  function rifPer(t) { return /\*\s*$/.test(String(t && t.cer || '')); }
+  function rifUn(u, n) { var x = RIF_UNITA[u] || [u, u]; return n === 1 ? x[0] : x[1]; }
+  function rifKg(t, q, u) { q = num(q); if (q == null) return null; if (u === 'kg' || !t) return q; return Math.round(q * (num(t.kgU) || 0) * 100) / 100; }
+  function rifOpen() { return (S.rif || []).filter(function (r) { return !r.ritiroId; }); }
+  function rifDep() { // deposito per tipo, dall'ultimo ritiro
+    var m = {};
+    rifOpen().forEach(function (r) { var d = m[r.tipo] = m[r.tipo] || { kg: 0, q: {}, dal: r.data, n: 0 }; d.kg += num(r.kg) || 0; d.n++; var u = r.unita || 'kg'; d.q[u] = (d.q[u] || 0) + (num(r.q) || 0); if (r.data && r.data < d.dal) d.dal = r.data; });
+    return m;
+  }
+  function rifDepKg() { var t = 0; rifOpen().forEach(function (r) { t += num(r.kg) || 0; }); return t; }
+  function rifQtyTxt(q) { return Object.keys(q).filter(function (u) { return u !== 'kg' && q[u]; }).map(function (u) { return fmtNum(q[u], 1) + ' ' + rifUn(u, q[u]); }).join(' + '); }
+  function rifEuroTxt(t, kg) { if (!t) return ''; if (t.dare) return 'la ditta paga'; return num(t.euro) != null ? fmtEuro(kg * t.euro) : ''; }
+  function rifTipoOpts(cur) {
+    var by = {}, order = [];
+    rifTipi().forEach(function (t) { if (!by[t.cont]) { by[t.cont] = []; order.push(t.cont); } by[t.cont].push(t); });
+    return order.map(function (c) { return '<optgroup label="' + esc(c) + '">' + by[c].map(function (t) { return '<option value="' + esc(t.id) + '"' + (t.id === cur ? ' selected' : '') + '>' + esc(t.nome + ' · ' + t.cer) + '</option>'; }).join('') + '</optgroup>'; }).join('');
+  }
+
+  function viewRifiuti() {
+    var tab = V.rifTab || 'deposito', euro = !!V.rifEuro, h = '';
+    h += '<div class="rif-acts">' + (S.canWrite ? '<button type="button" class="btn" data-act="rif-new">' + I.plus + 'Segna rifiuto</button><button type="button" class="btn sec" data-act="rif-ritiro">' + I.updown + 'Ritiro ditta</button>' : '') + '</div>';
+    h += '<div class="chips" role="group" aria-label="Vista">' + [['deposito', 'Deposito'], ['ritiri', 'Ritiri'], ['registro', 'Registro']].map(function (c) { return '<button type="button" data-act="rif-tab" data-v="' + c[0] + '" aria-pressed="' + (tab === c[0]) + '">' + c[1] + '</button>'; }).join('') +
+      '<button type="button" data-act="rif-euro" aria-pressed="' + euro + '">' + (euro ? 'Nascondi costi' : '€ Costi') + '</button></div>';
+    if (tab === 'deposito') h += rifViewDeposito(euro);
+    else if (tab === 'ritiri') h += rifViewRitiri(euro);
+    else h += rifViewRegistro();
+    if (S.canWrite && (S.isEditor || S.isOwner)) h += '<p class="cap" style="margin:14px 2px 0">Tipi, contenitori, stime dei kg e nomi delle ditte: <button type="button" class="link" data-act="rif-cfg">Impostazioni rifiuti</button></p>';
+    return h;
+  }
+  function rifViewDeposito(euro) {
+    var dep = rifDep(), by = {}, order = [], h = '', tot = 0, totE = 0;
+    rifTipi().forEach(function (t) { if (!by[t.cont]) { by[t.cont] = []; order.push(t.cont); } by[t.cont].push(t); });
+    Object.keys(dep).forEach(function (k) { tot += dep[k].kg; var t = rifTipo(k); if (t && !t.dare && num(t.euro) != null) totE += dep[k].kg * t.euro; });
+    h += '<div class="group pan" style="margin-top:12px"><div class="kv-row"><span class="k">In deposito dall’ultimo ritiro</span><span class="v">≈ ' + fmtNum(tot, 1) + ' kg</span></div>' +
+      (euro ? '<div class="kv-row"><span class="k">Costo stimato di smaltimento</span><span class="v">' + fmtEuro(totE) + '</span></div>' : '') + '</div>';
+    order.forEach(function (c) {
+      var kg = 0; by[c].forEach(function (t) { kg += dep[t.id] ? dep[t.id].kg : 0; });
+      h += secH(c + (kg ? ' · ≈ ' + fmtNum(kg, 1) + ' kg' : ''));
+      h += '<div class="group">' + by[c].map(function (t) {
+        var d = dep[t.id], qt = d ? rifQtyTxt(d.q) : '';
+        var sub = [t.cer + (rifPer(t) ? ' · pericoloso' : '')];
+        if (d) sub.push((qt ? qt + ' · ' : '') + 'dal ' + fmtDate(d.dal));
+        var side = d ? '<b>≈ ' + fmtNum(d.kg, 1) + ' kg</b>' : '<span class="cap">vuoto</span>';
+        if (euro) { var et = rifEuroTxt(t, d ? d.kg : 0); if (et) side += '<span class="cap">' + esc(t.dare ? et : (d ? et : fmtEuro(t.euro) + '/kg')) + '</span>'; }
+        return '<button type="button" class="row" data-act="rif-new" data-tipo="' + esc(t.id) + '"' + (S.canWrite ? '' : ' disabled') + '><span class="main"><span class="title">' + esc(t.nome) + '</span><span class="sub">' + esc(sub.join(' · ')) + '</span>' +
+          (rifPer(t) || t.dare ? '<span class="status">' + (rifPer(t) ? '<span class="pill soon">Pericoloso</span> ' : '') + (t.dare ? '<span class="pill ok">La ditta paga</span>' : '') + '</span>' : '') + '</span>' +
+          '<span class="side rif-side">' + side + '</span></button>';
+      }).join('') + '</div>';
+    });
+    var last = (S.rif || []).slice().sort(function (a, b) { return String(b.data || '').localeCompare(String(a.data || '')) || String(b.creato || '').localeCompare(String(a.creato || '')); }).slice(0, 12);
+    if (last.length) h += secH('Ultimi segnati') + '<div class="group">' + last.map(rifRow).join('') + '</div>';
+    else h += '<p class="cap" style="margin:12px 2px 0">Tocca un rifiuto per segnarlo: a pezzi, litri o sacchetti (l’app stima i kg) oppure direttamente in kg.</p>';
+    return h;
+  }
+  function rifRow(r) {
+    var t = rifTipo(r.tipo), b = r.barcaId ? boatById(r.barcaId) : null, u = r.unita || 'kg';
+    var sub = [fmtDate(r.data), (u === 'kg' ? '' : fmtNum(r.q, 1) + ' ' + rifUn(u, num(r.q)) + ' · ') + '≈ ' + fmtNum(r.kg || 0, 1) + ' kg'];
+    if (b) sub.push(b.nome || 'Barca'); if (r.utente) sub.push(nameOf(r.utente)); if (r.ritiroId) sub.push('ritirato');
+    return '<button type="button" class="row" data-act="rif-edit" data-id="' + esc(r.id) + '"><span class="main"><span class="title">' + esc(t ? t.nome : r.tipo) + '</span><span class="sub">' + esc(sub.join(' · ')) + '</span>' + (r.note ? '<span class="sub">' + esc(r.note) + '</span>' : '') + '</span></button>';
+  }
+  function rifViewRitiri(euro) {
+    var list = (S.ritiri || []).slice().sort(function (a, b) { return String(b.data || '').localeCompare(String(a.data || '')); });
+    if (!list.length) return '<div class="notice" style="margin-top:12px">Nessun ritiro segnato. Quando passa la ditta tocca «Ritiro ditta»: scegli cosa prende, scrivi il numero del formulario e i kg pesati.</div>';
+    return secH('Ritiri (' + list.length + ')') + '<div class="group">' + list.map(function (x) {
+      var kg = 0, e = 0, dare = 0; (x.righe || []).forEach(function (r) { kg += num(r.kg) || 0; var t = rifTipo(r.tipo); if (t && t.dare) dare += num(r.kg) || 0; else if (t && num(t.euro) != null) e += (num(r.kg) || 0) * t.euro; });
+      var sub = [(x.fir ? 'Formulario ' + x.fir : 'Formulario da scrivere'), fmtNum(kg, 1) + ' kg', (x.righe || []).length + ((x.righe || []).length === 1 ? ' tipo' : ' tipi')];
+      if (euro) { if (e) sub.push('≈ ' + fmtEuro(e)); if (dare) sub.push(fmtNum(dare, 1) + ' kg pagati dalla ditta'); }
+      return '<button type="button" class="row" data-act="rif-rit-edit" data-id="' + esc(x.id) + '"><span class="dblock"><b>' + esc(String(+String(x.data || '').slice(8, 10) || '')) + '</b><small>' + esc((MESI[+String(x.data || '').slice(5, 7) - 1] || '').toUpperCase()) + '</small></span><span class="main"><span class="title">' + esc(rifDittaNome(x.ditta)) + '</span><span class="sub">' + esc(sub.join(' · ')) + '</span>' +
+        (x.fir ? '' : '<span class="status"><span class="pill soon">Manca il numero del formulario</span></span>') + '</span></button>';
+    }).join('') + '</div>';
+  }
+  function rifMovimenti(tipo) { // carichi (segnati) e scarichi (ritiri) di un tipo, in ordine di data
+    var out = [];
+    (S.rif || []).forEach(function (r) { if (r.tipo === tipo) out.push({ k: 'c', data: r.data || '', kg: num(r.kg) || 0, q: r.q, u: r.unita, r: r }); });
+    (S.ritiri || []).forEach(function (x) { (x.righe || []).forEach(function (rr) { if (rr.tipo === tipo) out.push({ k: 's', data: x.data || '', kg: num(rr.kg) || 0, x: x }); }); });
+    return out.sort(function (a, b) { return a.data.localeCompare(b.data) || (a.k === 'c' ? -1 : 1); });
+  }
+  function rifViewRegistro() {
+    var h = '<p class="context" style="margin-top:12px">Per ogni codice CER: i carichi (quello che avete prodotto, in kg stimati) e gli scarichi (i ritiri, con i kg pesati e il formulario). Sono i dati da riportare nel registro di carico e scarico sul RENTRI.</p>';
+    h += '<div class="rif-acts"><button type="button" class="btn sec" data-act="rif-csv">' + I.dl + 'Scarica il registro (Excel)</button></div>';
+    var any = false;
+    rifTipi().forEach(function (t) {
+      var mv = rifMovimenti(t.id); if (!mv.length) return; any = true;
+      var c = 0, s = 0; mv.forEach(function (m) { if (m.k === 'c') c += m.kg; else s += m.kg; });
+      h += secH(t.cer + ' · ' + t.nome) + '<div class="group">' + mv.slice(-30).map(function (m) {
+        var b = m.k === 'c' && m.r.barcaId ? boatById(m.r.barcaId) : null;
+        var txt = m.k === 'c' ? 'Carico · ' + ((m.u && m.u !== 'kg') ? fmtNum(m.q, 1) + ' ' + rifUn(m.u, num(m.q)) + ' · ' : '') + '≈ ' + fmtNum(m.kg, 1) + ' kg' + (b ? ' · ' + (b.nome || '') : '')
+          : 'Scarico · ' + fmtNum(m.kg, 1) + ' kg · ' + rifDittaNome(m.x.ditta) + (m.x.fir ? ' · FIR ' + m.x.fir : '');
+        return '<div class="kv-row"><span class="k">' + esc(fmtDate(m.data)) + '</span><span class="v' + (m.k === 's' ? ' t-ok' : '') + '">' + esc(txt) + '</span></div>';
+      }).join('') + '<div class="kv-row"><span class="k"><b>Totale</b></span><span class="v">carichi ≈ ' + fmtNum(c, 1) + ' kg · scarichi ' + fmtNum(s, 1) + ' kg</span></div></div>';
+    });
+    if (!any) h += '<div class="notice">Ancora nessun movimento.</div>';
+    return h;
+  }
+  async function rifCsv() {
+    if (S.dl === undefined) { try { S.dl = (await CLD().use('downloads')) || null; } catch (e) { S.dl = null; } }
+    if (!S.dl) { toast('Da qui non si possono scaricare file.', true); return; }
+    var rows = [['Data', 'Movimento', 'CER', 'Descrizione', 'Pericoloso', 'Quantità', 'Unità', 'Kg', 'Kg pesati o stimati', 'Barca', 'Ditta', 'Formulario', 'Chi', 'Note']];
+    rifTipi().forEach(function (t) {
+      rifMovimenti(t.id).forEach(function (m) {
+        if (m.k === 'c') { var b = m.r.barcaId ? boatById(m.r.barcaId) : null; rows.push([m.data, 'Carico', t.cer, t.nome, rifPer(t) ? 'Sì' : 'No', m.u && m.u !== 'kg' ? String(m.q).replace('.', ',') : '', m.u && m.u !== 'kg' ? rifUn(m.u, 2) : '', String(Math.round(m.kg * 100) / 100).replace('.', ','), 'stimati', b ? b.nome || '' : '', '', '', m.r.utente ? nameOf(m.r.utente) : '', m.r.note || '']); }
+        else rows.push([m.data, 'Scarico', t.cer, t.nome, rifPer(t) ? 'Sì' : 'No', '', '', String(Math.round(m.kg * 100) / 100).replace('.', ','), 'pesati', '', rifDittaNome(m.x.ditta), m.x.fir || '', m.x.utente ? nameOf(m.x.utente) : '', m.x.note || '']);
+      });
+    });
+    var csv = '﻿' + rows.map(function (r) { return r.map(function (c) { c = String(c == null ? '' : c); return /[;"\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(';'); }).join('\r\n');
+    try { var res = await S.dl.save({ filename: 'Registro-rifiuti-' + todayISO() + '.csv', data: csv }); if (res && res.status === 'saved') toast('Registro pronto: si apre con Excel'); }
+    catch (e) { bkDlErr(e && e.code); }
+  }
+
+  function rifSheet(r, preset) {
+    var isNew = !r; r = r || Object.assign({ data: todayISO(), tipo: (preset && preset.tipo) || rifTipi()[0].id }, preset || {});
+    var t0 = rifTipo(r.tipo) || rifTipi()[0], u0 = r.unita || t0.unita;
+    var canDel = !isNew && (S.isEditor || S.isOwner || r.utente === S.myId);
+    var boats = S.boats.slice().sort(byName);
+    openSheet({
+      title: isNew ? 'Segna rifiuto' : 'Rifiuto segnato', submitLabel: 'Salva',
+      deleteLabel: canDel ? 'Elimina' : null, deleteText: 'Lo togli dal deposito e dal registro.',
+      onDelete: canDel ? async function () { var ref = S.db.collection('rifiuti').doc(r.id); if (await w(function () { return ref.delete(); })) { closeSheet(); toast('Eliminato'); } else { var b = $('[data-act="do-del"]'); if (b) b.disabled = false; } } : null,
+      body: field(lab('f-rt', 'Che rifiuto è'), '<select id="f-rt">' + rifTipoOpts(t0.id) + '</select>', '') + '<p class="cap" id="f-rtInfo" style="margin:-4px 2px 10px"></p>' +
+        '<div class="grid2">' + field(lab('f-rq', 'Quanto'), inp('f-rq', num(r.q) != null ? String(r.q).replace('.', ',') : '', 'type="text" inputmode="decimal" placeholder="es. 3" required')) +
+        field(lab('f-ru', 'In'), '<select id="f-ru"></select>') + '</div><p class="cap t-acc" id="f-rkg" style="margin:-4px 2px 10px"></p>' +
+        field(lab('f-rb', 'Da quale barca (facoltativo)'), '<select id="f-rb"><option value="">Nessuna · cantiere</option>' + boats.map(function (b) { return '<option value="' + esc(b.id) + '"' + (b.id === r.barcaId ? ' selected' : '') + '>' + esc(boatLabel(b)) + '</option>'; }).join('') + '</select>') +
+        field(lab('f-rd', 'Giorno'), inp('f-rd', r.data, 'type="date" required')) +
+        field(lab('f-rn', 'Note (facoltative)'), inp('f-rn', r.note, 'type="text" placeholder="es. dal tagliando dei due Volvo"')) +
+        (r.ritiroId ? '<div class="notice">Questo rifiuto è già stato ritirato dalla ditta.</div>' : ''),
+      onOpen: function (f) {
+        var ts = f.querySelector('#f-rt'), us = f.querySelector('#f-ru'), qs = f.querySelector('#f-rq'), first = true;
+        function units() {
+          var t = rifTipo(ts.value) || t0, cur = first ? u0 : (us.value === 'kg' ? 'kg' : t.unita);
+          var list = t.unita === 'kg' ? ['kg'] : [t.unita, 'kg'];
+          us.innerHTML = list.map(function (u) { return '<option value="' + u + '"' + (u === cur ? ' selected' : '') + '>' + rifUn(u, 2) + '</option>'; }).join('');
+          var info = [t.cont, rifDittaNome(t.ditta)]; if (t.es) info.push('es. ' + t.es);
+          $('#f-rtInfo').textContent = 'Va in: ' + info.join(' · '); first = false; kg();
+        }
+        function kg() { var t = rifTipo(ts.value), q = parseDec(qs.value), k = rifKg(t, q, us.value); $('#f-rkg').textContent = k == null ? '' : us.value === 'kg' ? '' : '≈ ' + fmtNum(k, 2) + ' kg (stima: ' + fmtNum(t.kgU, 2) + ' kg a ' + rifUn(t.unita, 1) + ')'; }
+        ts.addEventListener('change', units); us.addEventListener('change', kg); qs.addEventListener('input', kg);
+        units(); if (isNew) setTimeout(function () { try { qs.focus(); } catch (e) { } }, 50);
+      },
+      onSubmit: async function (f) {
+        var t = rifTipo(val(f, 'f-rt')), q = parseDec(val(f, 'f-rq')), u = val(f, 'f-ru') || 'kg';
+        if (!t) { formErr('Scegli il tipo di rifiuto.'); return false; }
+        if (!(q > 0)) { formErr('Scrivi quanto, per esempio 3.'); return false; }
+        var now = new Date().toISOString();
+        var data = { tipo: t.id, q: q, unita: u, kg: rifKg(t, q, u), data: val(f, 'f-rd') || todayISO(), barcaId: val(f, 'f-rb'), note: val(f, 'f-rn'), modificato: now };
+        var ref;
+        if (isNew) { data.utente = S.myId || ''; data.creato = now; data.lavId = r.lavId || ''; data.ritiroId = ''; ref = S.db.collection('rifiuti').doc(); if (!(await w(function () { return ref.set(data); }))) return false; }
+        else { ref = S.db.collection('rifiuti').doc(r.id); if (!(await w(function () { return ref.update(data); }))) return false; }
+        toast(isNew ? t.nome + ': ≈ ' + fmtNum(data.kg, 1) + ' kg nel deposito' : 'Rifiuto aggiornato');
+        return true;
+      }
+    });
+  }
+
+  function rifRitiroSheet(x) {
+    var isNew = !x, ditte = rifDitte(), dep = rifDep(), dit0 = x ? x.ditta : (Object.keys(dep).some(function (k) { var t = rifTipo(k); return t && t.ditta === 'd1'; }) ? 'd1' : Object.keys(dep).some(function (k) { var t = rifTipo(k); return t && t.ditta === 'olio'; }) ? 'olio' : 'd1');
+    var canDel = !isNew && (S.isEditor || S.isOwner);
+    function rowsFor(dit) {
+      var list = rifTipi().filter(function (t) { return t.ditta === dit; });
+      if (!isNew) { var saved = {}; (x.righe || []).forEach(function (r) { saved[r.tipo] = r; }); list = list.filter(function (t) { return saved[t.id]; }); }
+      if (!list.length) return '<div class="notice">Nessun rifiuto di questa ditta.</div>';
+      return '<div class="group">' + list.map(function (t) {
+        var d = dep[t.id], sv = !isNew ? (x.righe || []).find(function (r) { return r.tipo === t.id; }) : null;
+        var kg = sv ? num(sv.kg) : d ? Math.round(d.kg * 10) / 10 : null, on = sv ? true : !!d;
+        return '<div class="ck rit-row"><label><input type="checkbox" data-rit="' + esc(t.id) + '"' + (on ? ' checked' : '') + (isNew ? '' : ' disabled') + '><span class="t"><b>' + esc(t.nome) + '</b> · ' + esc(t.cer) +
+          '<span class="cap" style="display:block">' + (d && isNew ? 'In deposito ≈ ' + fmtNum(d.kg, 1) + ' kg' : sv && sv.stima != null ? 'Stima era ≈ ' + fmtNum(sv.stima, 1) + ' kg' : isNew ? 'Niente segnato' : '') + '</span></span></label>' +
+          '<input type="text" inputmode="decimal" class="rit-kg" data-kg="' + esc(t.id) + '" value="' + (kg != null ? String(kg).replace('.', ',') : '') + '" placeholder="kg" aria-label="Kg pesati di ' + esc(t.nome) + '"></div>';
+      }).join('') + '</div>';
+    }
+    openSheet({
+      title: isNew ? 'Ritiro della ditta' : 'Ritiro', submitLabel: 'Salva',
+      deleteLabel: canDel ? 'Elimina il ritiro' : null, deleteText: 'I rifiuti di questo ritiro tornano nel deposito.',
+      onDelete: canDel ? async function () {
+        var refs = (S.rif || []).filter(function (r) { return r.ritiroId === x.id; });
+        for (var i = 0; i < refs.length; i++) { var rr = S.db.collection('rifiuti').doc(refs[i].id); if (!(await w(function () { return rr.update({ ritiroId: '' }); }))) return; }
+        var ref = S.db.collection('ritiri').doc(x.id); if (await w(function () { return ref.delete(); })) { closeSheet(); toast('Ritiro eliminato: i rifiuti tornano nel deposito'); }
+      } : null,
+      body: '<div class="grid2">' + field(lab('f-xd', 'Giorno del ritiro'), inp('f-xd', x ? x.data : todayISO(), 'type="date" required')) +
+        field(lab('f-xdi', 'Ditta'), '<select id="f-xdi"' + (isNew ? '' : ' disabled') + '>' + opts([['d1', ditte.d1], ['olio', ditte.olio]], dit0) + '</select>') + '</div>' +
+        field(lab('f-xf', 'Numero del formulario (FIR)'), inp('f-xf', x ? x.fir : '', 'type="text" placeholder="es. RNTR-ABC123-2026" autocapitalize="characters"'), 'Se ora non ce l’hai, lo aggiungi dopo.') +
+        '<div class="lbl">Cosa ritira e kg pesati</div><div id="f-xrows">' + rowsFor(dit0) + '</div>' +
+        '<p class="cap" style="margin:6px 2px 10px">I kg sono già scritti con la stima: correggili con quelli pesati dalla ditta.</p>' +
+        field(lab('f-xn', 'Note (facoltative)'), inp('f-xn', x ? x.note : '', 'type="text"')),
+      onOpen: function (f) {
+        var ds = f.querySelector('#f-xdi'); if (ds && isNew) ds.addEventListener('change', function () { $('#f-xrows').innerHTML = rowsFor(ds.value); });
+        f.addEventListener('input', function (e) { var k = e.target.getAttribute && e.target.getAttribute('data-kg'); if (!k || !isNew) return; var c = f.querySelector('input[data-rit="' + k + '"]'); if (c && parseDec(e.target.value) > 0) c.checked = true; });
+      },
+      onSubmit: async function (f) {
+        var now = new Date().toISOString(), dit = isNew ? val(f, 'f-xdi') : x.ditta, righe = [];
+        Array.prototype.forEach.call(f.querySelectorAll('input[data-rit]'), function (c) {
+          if (!c.checked) return; var id = c.getAttribute('data-rit'), kg = parseDec((f.querySelector('input[data-kg="' + id + '"]') || {}).value);
+          var d = dep[id], sv = !isNew ? (x.righe || []).find(function (r) { return r.tipo === id; }) : null;
+          righe.push({ tipo: id, kg: kg, stima: sv ? (sv.stima != null ? sv.stima : null) : d ? Math.round(d.kg * 100) / 100 : null });
+        });
+        if (!righe.length) { formErr('Spunta almeno un rifiuto ritirato.'); return false; }
+        if (righe.some(function (r) { return !(r.kg > 0); })) { formErr('Scrivi i kg di ogni rifiuto spuntato.'); return false; }
+        var data = { data: val(f, 'f-xd') || todayISO(), ditta: dit, fir: val(f, 'f-xf'), righe: righe, note: val(f, 'f-xn'), modificato: now };
+        if (!isNew) { var r2 = S.db.collection('ritiri').doc(x.id); if (!(await w(function () { return r2.update(data); }))) return false; toast('Ritiro aggiornato'); return true; }
+        data.utente = S.myId || ''; data.creato = now;
+        var ref = S.db.collection('ritiri').doc(); if (!(await w(function () { return ref.set(data); }))) return false;
+        var tipi = righe.map(function (r) { return r.tipo; }), mine = rifOpen().filter(function (r) { return tipi.indexOf(r.tipo) >= 0 && (!r.data || r.data <= data.data); });
+        for (var i = 0; i < mine.length; i++) { var rr = S.db.collection('rifiuti').doc(mine[i].id); await w(function () { return rr.update({ ritiroId: ref.id }); }); }
+        var kg = 0; righe.forEach(function (r) { kg += r.kg; });
+        toast('Ritiro salvato: ' + fmtNum(kg, 1) + ' kg' + (data.fir ? '' : ' · ricordati il numero del formulario'));
+        V.rifTab = 'ritiri'; setTimeout(render, 60);
+        return true;
+      }
+    });
+  }
+
+  function rifCfgSheet() {
+    var d = rifDitte();
+    openSheet({
+      title: 'Impostazioni rifiuti', submitLabel: 'Salva',
+      body: '<div class="grid2">' + field(lab('f-cd1', 'Ditta dei rifiuti'), inp('f-cd1', d.d1, 'type="text"')) + field(lab('f-cdo', 'Ditta dell’olio'), inp('f-cdo', d.olio, 'type="text"')) + '</div>' +
+        '<div class="lbl">Tipi di rifiuto</div><div class="group">' + rifTipi().map(function (t) {
+          return '<button type="button" class="row" data-act="rif-tipo" data-id="' + esc(t.id) + '"><span class="main"><span class="title">' + esc(t.nome) + '</span><span class="sub">' + esc([t.cer, t.cont, '≈ ' + fmtNum(t.kgU, 2) + ' kg a ' + rifUn(t.unita, 1), t.dare ? 'la ditta paga' : num(t.euro) != null ? fmtEuro(t.euro) + '/kg' : '', rifDittaNome(t.ditta)].filter(Boolean).join(' · ')) + '</span></span></button>';
+        }).join('') + '</div><button type="button" class="btn sec self-start" data-act="rif-tipo" data-id="">' + I.plus + 'Nuovo tipo di rifiuto</button>' +
+        '<p class="cap" style="margin-top:10px">Le stime dei kg servono solo quando segnate a pezzi, litri o sacchetti: al ritiro valgono i kg pesati.</p>',
+      onSubmit: async function (f) {
+        var ref = S.db.collection('impostazioni').doc('rifiuti');
+        return w(function () { return ref.set({ tipi: rifTipi(), ditte: { d1: val(f, 'f-cd1') || 'Ditta dei rifiuti', olio: val(f, 'f-cdo') || 'Ditta dell’olio' }, modificato: new Date().toISOString() }); });
+      }
+    });
+  }
+  function rifTipoSheet(id) {
+    var t = id ? rifTipo(id) : null, isNew = !t; t = t || { id: '', nome: '', cer: '', cont: '', unita: 'pz', kgU: 1, euro: null, ditta: 'd1' };
+    var used = !isNew && (S.rif || []).some(function (r) { return r.tipo === t.id; });
+    openSheet({
+      title: isNew ? 'Nuovo tipo di rifiuto' : t.nome, submitLabel: 'Salva',
+      deleteLabel: !isNew && !used ? 'Elimina questo tipo' : null, deleteText: 'Lo togli dall’elenco.',
+      onDelete: !isNew && !used ? async function () { if (await rifTipiSave(rifTipi().filter(function (x) { return x.id !== t.id; }))) closeSheet(); } : null,
+      body: field(lab('f-tn', 'Nome'), inp('f-tn', t.nome, 'type="text" required')) +
+        '<div class="grid2">' + field(lab('f-tc', 'Codice CER'), inp('f-tc', t.cer, 'type="text" placeholder="es. 16 01 07*"'), 'L’asterisco vuol dire pericoloso') + field(lab('f-tk', 'Contenitore'), inp('f-tk', t.cont, 'type="text" placeholder="es. Big bag R"')) + '</div>' +
+        '<div class="grid2">' + field(lab('f-tu', 'Si segna in'), '<select id="f-tu">' + opts([['pz', 'Pezzi'], ['l', 'Litri'], ['sacchetto', 'Sacchetti'], ['kg', 'Kg']], t.unita) + '</select>') + field(lab('f-tw', 'Kg stimati per unità'), inp('f-tw', num(t.kgU) != null ? String(t.kgU).replace('.', ',') : '', 'type="text" inputmode="decimal"')) + '</div>' +
+        '<div class="grid2">' + field(lab('f-te', 'Costo al kg (€)'), inp('f-te', num(t.euro) != null ? String(t.euro).replace('.', ',') : '', 'type="text" inputmode="decimal" placeholder="—"')) + field(lab('f-td', 'Ditta'), '<select id="f-td">' + opts([['d1', rifDitte().d1], ['olio', rifDitte().olio]], t.ditta) + '</select>') + '</div>' +
+        '<label class="vopt"><input type="checkbox" id="f-tdare"' + (t.dare ? ' checked' : '') + '><span>La ditta paga noi (es. piombo e zinco, a quotazione del mese)</span></label>',
+      onSubmit: async function (f) {
+        var nome = val(f, 'f-tn'); if (!nome) { formErr('Scrivi il nome.'); return false; }
+        var nt = { id: t.id || ('t' + Date.now().toString(36)), nome: nome, cer: val(f, 'f-tc'), cont: val(f, 'f-tk') || 'Altro', unita: val(f, 'f-tu') || 'pz', kgU: parseDec(val(f, 'f-tw')) || 1, euro: parseDec(val(f, 'f-te')), ditta: val(f, 'f-td') || 'd1', dare: !!f.querySelector('#f-tdare').checked };
+        if (t.es) nt.es = t.es;
+        var list = rifTipi().slice(), i = list.findIndex(function (x) { return x.id === nt.id; });
+        if (i >= 0) list[i] = nt; else list.push(nt);
+        return rifTipiSave(list);
+      }
+    });
+  }
+  function rifTipiSave(list) {
+    var ref = S.db.collection('impostazioni').doc('rifiuti'), d = rifDitte();
+    return w(function () { return ref.set({ tipi: list, ditte: d, modificato: new Date().toISOString() }); }).then(function (ok) { if (ok) toast('Tipi di rifiuto aggiornati'); return ok; });
+  }
+
+  // Dopo una mansione o una lavorazione: «metto i vecchi nei rifiuti?»
+  var RIF_GUESS = [ // per il nome di un ricambio: il primo che corrisponde
+    [/filtr\w*\s+(dell'|del |d')?aria/, 'filtri-aria'],
+    [/filtr|separatore|prefiltr/, 'filtri-olio'],
+    [/batteri/, 'batterie'],
+    [/\banod|zinc/, 'zinco'],
+    [/candel/, 'candele'],
+    [/antigelo|refrigerante/, 'antigelo'],
+    [/bombolett|spray/, 'spray'],
+    [/estintor/, 'estintori'],
+    [/\bolio\b/, 'olio']
+  ];
+  function rifGuess(txt) { txt = String(txt || '').toLowerCase(); for (var i = 0; i < RIF_GUESS.length; i++) if (RIF_GUESS[i][0].test(txt)) return RIF_GUESS[i][1]; return null; }
+  function rifGuessTitle(txt) { // per il titolo di un lavoro: tutti quelli che c'entrano, solo se si è tolto o cambiato qualcosa
+    txt = String(txt || '').toLowerCase(); if (!/sostitu|cambi|tagliand|rimoss|smontat|nuov|scaric|svuot/.test(txt)) return [];
+    var out = [];
+    if (/tagliand/.test(txt) || /\bolio\b/.test(txt)) out.push('olio');
+    if (/tagliand/.test(txt) || (/filtr/.test(txt) && !/filtr\w*\s+(dell'|del |d')?aria/.test(txt))) out.push('filtri-olio');
+    if (/filtr\w*\s+(dell'|del |d')?aria/.test(txt)) out.push('filtri-aria');
+    [[/batteri/, 'batterie'], [/\banod|zinc/, 'zinco'], [/candel/, 'candele'], [/antigelo|refrigerante/, 'antigelo'], [/estintor/, 'estintori']].forEach(function (r) { if (r[0].test(txt)) out.push(r[1]); });
+    return out;
+  }
+  function rifSuggest(data, lavId, prevRic, isNew) {
+    if (!S.canWrite || !rifTipi().length) return;
+    var prev = {}; (prevRic || []).forEach(function (r) { prev[String(r.nome || '').toLowerCase()] = num(r.qta) || 1; });
+    var sug = {};
+    (data.ricambi || []).forEach(function (r) {
+      var k = rifGuess(r.nome); if (!k || !rifTipo(k)) return;
+      var q = (num(r.qta) || 1) - (prev[String(r.nome || '').toLowerCase()] || 0); if (q <= 0) return;
+      if (rifTipo(k).unita === 'l' && r.um && r.um !== 'l') { if (!(k in sug)) sug[k] = null; return; } // olio in latte o taniche: i litri li scrivi tu
+      sug[k] = (sug[k] || 0) + q;
+    });
+    if (isNew) rifGuessTitle(data.titolo).forEach(function (k) { if (rifTipo(k) && !(k in sug)) sug[k] = rifTipo(k).unita === 'l' ? null : 1; });
+    var keys = Object.keys(sug); if (!keys.length) return;
+    // non chiedere due volte per lo stesso lavoro
+    if (lavId && (S.rif || []).some(function (r) { return r.lavId === lavId; })) return;
+    setTimeout(function () {
+      if ($('#sheet-wrap')) return;
+      openSheet({
+        title: 'Rifiuti da questo lavoro', submitLabel: 'Segna',
+        body: '<p style="margin:0 2px 10px">Metto i pezzi vecchi nei rifiuti?</p><div class="group">' + keys.map(function (k) {
+          var t = rifTipo(k), q = sug[k];
+          return '<div class="ck rit-row"><label><input type="checkbox" data-rs="' + esc(k) + '" checked><span class="t"><b>' + esc(t.nome) + '</b><span class="cap" style="display:block">' + esc(t.cont) + '</span></span></label>' +
+            '<span class="rit-q"><input type="text" inputmode="decimal" class="rit-kg" data-rq="' + esc(k) + '" value="' + (q != null ? String(q).replace('.', ',') : '') + '" placeholder="' + esc(rifUn(t.unita, 2)) + '" aria-label="Quanti ' + esc(rifUn(t.unita, 2)) + '"><small>' + esc(rifUn(t.unita, 2)) + '</small></span></div>';
+        }).join('') + '</div><p class="cap" style="margin-top:8px">Si aggiungono al deposito con la barca di questo lavoro.</p>',
+        onSubmit: async function (f) {
+          var now = new Date().toISOString(), n = 0, todo = [];
+          var boxes = Array.prototype.filter.call(f.querySelectorAll('input[data-rs]'), function (c) { return c.checked; });
+          for (var i = 0; i < boxes.length; i++) { // prima controllo tutto, poi salvo
+            var k = boxes[i].getAttribute('data-rs'), t = rifTipo(k), q = parseDec((f.querySelector('input[data-rq="' + k + '"]') || {}).value);
+            if (!(q > 0)) { formErr('Scrivi quanti ' + rifUn(t.unita, 2) + ' di ' + t.nome.toLowerCase() + ', oppure togli la spunta.'); return false; }
+            todo.push({ tipo: k, q: q, unita: t.unita, kg: rifKg(t, q, t.unita), data: data.data || todayISO(), barcaId: data.barcaId || '', note: data.titolo || '', lavId: lavId || '', ritiroId: '', utente: S.myId || '', creato: now, modificato: now });
+          }
+          for (var j = 0; j < todo.length; j++) { var ref = S.db.collection('rifiuti').doc(), d = todo[j]; if (!(await w(function () { return ref.set(d); }))) return false; n++; }
+          if (n) toast(n === 1 ? 'Segnato nei rifiuti' : n + ' rifiuti segnati');
+          return true;
+        }
+      });
+    }, 450);
+  }
+
   /* ---------- Attrezzatura di bordo: elenco per barca, campi a scelta ---------- */
   var ATTR_TIPI = ['Salpancora', 'Verricello', 'Cuscineria', 'Tendalino o bimini', 'Cappottina', 'Telo di copertura', 'Copertura consolle o sedili', 'Passerella', 'Plancetta o scaletta', 'Gruetta', 'Tientibene e pulpiti', 'Parabordi', 'Ancora e catena', 'Vele e sartiame', 'Elica di prua', 'Zattera e dotazioni'];
   var ATTR_GRP = { mm: 'Marca e modello', mis: 'Misure', col: 'Colore e tessuto', st: 'Stato', ft: 'Foto', nt: 'Note' };
@@ -3933,6 +4275,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       ['batterie', I.batt, 'soon', 'Batterie', 'Quante batterie ha ogni barca e quando le avete caricate', battDue().length ? '<span class="pill soon">' + battDue().length + ' da caricare</span>' : ''],
       ['vari', I.updown, 'vio', 'Vari e alaggi', 'Uscite e rientri in acqua programmati', vN ? '<span class="pill vio">' + vN + ' in settimana</span>' : ''],
       ['magazzino', I.box, 'soon', 'Magazzino', 'Ricambi, materiali e scorte', low ? '<span class="pill soon">' + low + ' da riordinare</span>' : ''],
+      ['rifiuti', I.trash, 'late', 'Rifiuti', 'Cosa produciamo, deposito, ritiri della ditta e registro', rifDepKg() > 0 ? '<span class="pill">≈ ' + fmtNum(rifDepKg(), 0) + ' kg in deposito</span>' : ''],
       ['ore', I.hours, 'ok', 'Ore del mese', 'Ore di ogni dipendente e giornate confermate', ''],
       ['operazioni', I.list, '', 'Servizi di cantiere', 'Trasporti, alaggi, movimentazioni, vari, lavaggi: passaggi e tempi', runs ? '<span class="pill acc">' + runs + ' in corso</span>' : ''],
       ['scadenze', I.alarm, 'late', 'Scadenze', 'Tagliandi, assicurazioni, contratti', late ? '<span class="pill late">' + late + ' scadute</span>' : ''],
@@ -3953,7 +4296,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     ['barche', 'Barche'], ['lavori', 'Lavorazioni e mansioni'], ['scadenze', 'Scadenze'], ['vari', 'Vari e alaggi'],
     ['magazzino', 'Ricambi del magazzino'], ['movimenti', 'Carichi e scarichi di magazzino'], ['operazioni', 'Servizi di cantiere'],
     ['opModelli', 'Gruppi dei servizi'], ['mezzi', 'Mezzi e carrelli'], ['conferme', 'Giornate confermate'],
-    ['dipendenti', 'Nomi dei dipendenti'], ['impostazioni', 'Misure della mappa'], ['posti', 'Posti al porto'], ['attrezzatura', 'Attrezzatura di bordo'], ['programma', 'Programma dei lavori'], ['cariche', 'Cariche delle batterie'], ['richieste', 'Richieste di chi cerca una barca'],
+    ['dipendenti', 'Nomi dei dipendenti'], ['impostazioni', 'Misure della mappa'], ['posti', 'Posti al porto'], ['attrezzatura', 'Attrezzatura di bordo'], ['programma', 'Programma dei lavori'], ['cariche', 'Cariche delle batterie'], ['richieste', 'Richieste di chi cerca una barca'], ['rifiuti', 'Rifiuti segnati'], ['ritiri', 'Ritiri dei rifiuti'],
     ['checklist', 'Vecchie checklist'], ['checkBarca', 'Vecchie liste per barca'], ['modelli', 'Vecchi modelli di checklist']
   ];
   var BK_OLD = ['checklist', 'checkBarca', 'modelli'];
@@ -3969,7 +4312,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       operazioni: S.ops.length, opModelli: S.opModelli.length, mezzi: S.mezzi.length, conferme: Object.keys(S.conf).length, dipendenti: Object.keys(S.dip).length,
       impostazioni: S.mapCfg ? 1 : 0, checklist: S.check.length, checkBarca: Object.keys(S.ckBarca).length, modelli: S.modelli.length,
       posti: Object.keys(S.posti || {}).length, attrezzatura: (S.attr || []).length, programma: (S.prog || []).length,
-      cariche: (S.cariche || []).length, richieste: (S.richieste || []).length
+      cariche: (S.cariche || []).length, richieste: (S.richieste || []).length, rifiuti: (S.rif || []).length, ritiri: (S.ritiri || []).length
     };
   }
   async function bkGet(name) {
@@ -3993,7 +4336,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       ? '<p class="cap" style="margin:6px 0 0">Da qui non si possono scaricare file: apri l’app da claude.ai o dall’app Claude.</p>'
       : '<div class="acts"><button type="button" class="btn" data-act="bk-save"' + (BK.busy ? ' disabled' : '') + '>' + I.dl + (BK.busy === 'save' ? 'Preparo la copia…' : 'Scarica la copia') + '</button></div>';
     h += '<div class="empty" style="margin-top:14px"><span class="ic-circle">' + I.dl + '</span><h3>Copia di tutti i dati</h3>' +
-      '<p>Un unico file con barche, lavorazioni, scheda lavoro, programma, scadenze, magazzino, vari e alaggi, servizi, porto, attrezzatura, batterie, mezzi e mappa.</p>' + save +
+      '<p>Un unico file con barche, lavorazioni, scheda lavoro, programma, scadenze, magazzino, rifiuti, vari e alaggi, servizi, porto, attrezzatura, batterie, mezzi e mappa.</p>' + save +
       (inf && inf.ultima ? '<p class="cap" style="margin-top:6px">Ultima copia: ' + esc(fmtWhen(inf.ultima)) + (inf.nome ? ' · ' + esc(inf.nome) : '') + '</p>' : '') + '</div>';
 
     var rows = BK_COLL.filter(function (x) { return x[0] !== 'impostazioni' && (c[x[0]] || BK_OLD.indexOf(x[0]) < 0); }).map(function (x) {
@@ -4290,7 +4633,7 @@ button.row:active, .row .hit:active { opacity: .65; }
         (S.canWrite && S.status === 'ready' && M.area !== 'porto' ? '<button type="button" class="icon-btn" data-act="m-cfg" aria-label="Misure del cantiere">' + I.ruler + '</button>' : '') + '</div>';
       return;
     }
-    var titles = { home: 'Nautica Mare', scheda: 'Scheda lavoro', scadenze: 'Scadenze', calendario: 'Calendario', barche: 'Barche', lavori: 'Lavorazioni da fare', altro: 'Altro', vari: 'Vari e alaggi', magazzino: 'Magazzino', ore: 'Ore del mese', checklist: 'Checklist', operazioni: 'Servizi di cantiere', backup: 'Copia dei dati', programma: 'Programma', pannello: 'Pannello', batterie: 'Batterie' };
+    var titles = { home: 'Nautica Mare', scheda: 'Scheda lavoro', scadenze: 'Scadenze', calendario: 'Calendario', barche: 'Barche', lavori: 'Lavorazioni da fare', altro: 'Altro', vari: 'Vari e alaggi', magazzino: 'Magazzino', rifiuti: 'Rifiuti', ore: 'Ore del mese', checklist: 'Checklist', operazioni: 'Servizi di cantiere', backup: 'Copia dei dati', programma: 'Programma', pannello: 'Pannello', batterie: 'Batterie' };
     var late = S.status === 'ready' ? lateCount() : 0;
     var left = V.tab === 'home' ? '<button type="button" class="icon-btn" data-act="tab" data-tab="scadenze" aria-label="Scadenze scadute: ' + late + '">' + I.bell + (late ? '<span class="dot">' + late + '</span>' : '') + '</button>'
       : (ALTRO.indexOf(V.tab) > 0 ? '<button type="button" class="icon-btn blue" data-act="tab" data-tab="altro" aria-label="Torna ad Altro">' + I.back + '</button>' : '');
@@ -4327,7 +4670,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var html;
     if (S.status === 'absent') html = '<div class="notice" style="margin-top:14px">I dati del registro si aprono solo da Claude, con il tuo account. Apri il link della pagina da claude.ai o dall’app Claude per vedere e salvare barche, lavori e scadenze.</div>';
     else if (S.status === 'loading') html = '<div class="notice" style="margin-top:14px">Carico barche, lavori e scadenze…</div>';
-    else html = ({ programma: viewProgramma, pannello: viewPannello, batterie: viewBatterie, mappa: viewMappa, altro: viewAltro, backup: viewBackup, vari: viewVari, magazzino: viewMagazzino, ore: viewOre, checklist: viewChecklist, operazioni: viewOperazioni, home: viewHome, scheda: viewScheda, scadenze: viewScadenze, calendario: viewCalendario, lavori: viewLavori, barche: function () { return V.boatId ? viewBoat() : viewBarche(); } })[V.tab]();
+    else html = ({ programma: viewProgramma, pannello: viewPannello, batterie: viewBatterie, mappa: viewMappa, altro: viewAltro, backup: viewBackup, vari: viewVari, magazzino: viewMagazzino, rifiuti: viewRifiuti, ore: viewOre, checklist: viewChecklist, operazioni: viewOperazioni, home: viewHome, scheda: viewScheda, scadenze: viewScadenze, calendario: viewCalendario, lavori: viewLavori, barche: function () { return V.boatId ? viewBoat() : viewBarche(); } })[V.tab]();
     $('#view').innerHTML = html;
     renderTop(); renderTabs(); bindFeat();
     if (V.tab === 'mappa' && S.status === 'ready') { if (M.area === 'porto') { M.mounted = null; Porto.mount(); } else { M.mounted = M.mode; mapMount(); } } else M.mounted = null;
@@ -4578,9 +4921,10 @@ button.row:active, .row .hit:active { opacity: .65; }
         if (!data.titolo) { formErr('Scrivi che lavorazione è.'); return false; }
         var aid = await attrLinkSave(f, data.barcaId); if (aid === null) return false; if (aid !== undefined) data.attrId = aid === '__nuova' ? '' : aid;
         var ok;
-        if (isNew) { data.creato = data.modificato; var ref = S.db.collection('lavori').doc(); ok = await w(function () { return ref.set(data); }); }
-        else { var r2 = S.db.collection('lavori').doc(l.id); ok = await w(function () { return r2.update(data); }); }
-        if (ok) { await bumpOre(data.barcaId, data.oreMotore); toast(isNew ? 'Lavorazione aggiunta' : 'Lavorazione salvata'); }
+        var lid = null;
+        if (isNew) { data.creato = data.modificato; var ref = S.db.collection('lavori').doc(); lid = ref.id; ok = await w(function () { return ref.set(data); }); }
+        else { lid = l.id; var r2 = S.db.collection('lavori').doc(l.id); ok = await w(function () { return r2.update(data); }); }
+        if (ok) { await bumpOre(data.barcaId, data.oreMotore); toast(isNew ? 'Lavorazione aggiunta' : 'Lavorazione salvata'); if (data.stato === 'fatto') rifSuggest(data, lid, isNew ? [] : l.ricambi, isNew || l.stato !== 'fatto'); }
         return ok;
       }
     });
@@ -4793,7 +5137,7 @@ button.row:active, .row .hit:active { opacity: .65; }
           if (isConfirmed(S.myId, giorno)) data.aggiuntaDopoConferma = true;
           var ref = S.db.collection('lavori').doc(); ok = await w(function () { return ref.set(data); });
         } else { var r2 = S.db.collection('lavori').doc(l.id); ok = await w(function () { return r2.update(data); }); }
-        if (ok) { V.schedaDay = giorno; toast(isNew ? 'Mansione salvata' : 'Mansione aggiornata'); render(); }
+        if (ok) { V.schedaDay = giorno; toast(isNew ? 'Mansione salvata' : 'Mansione aggiornata'); render(); rifSuggest(data, isNew ? ref.id : l.id, isNew ? [] : l.ricambi, isNew || !!l.daSegnare); }
         return ok;
       }
     });
@@ -5244,6 +5588,15 @@ button.row:active, .row .hit:active { opacity: .65; }
       case 'batt-open': x = boatById(id); if (x && S.canWrite) battSheet(x); break;
       case 'batt-quick': x = boatById(id); if (x && S.canWrite) battQuick(x); break;
       case 'batt-cfg': battCfgSheet(); break;
+      case 'rif-new': if (S.db && S.canWrite) rifSheet(null, t.getAttribute('data-tipo') ? { tipo: t.getAttribute('data-tipo') } : null); break;
+      case 'rif-edit': x = (S.rif || []).find(function (r) { return r.id === id; }); if (x && S.canWrite) rifSheet(x); break;
+      case 'rif-ritiro': if (S.db && S.canWrite) rifRitiroSheet(null); break;
+      case 'rif-rit-edit': x = (S.ritiri || []).find(function (r) { return r.id === id; }); if (x && S.canWrite) rifRitiroSheet(x); break;
+      case 'rif-tab': V.rifTab = t.getAttribute('data-v'); render(); break;
+      case 'rif-euro': V.rifEuro = !V.rifEuro; render(); break;
+      case 'rif-cfg': if (S.db) rifCfgSheet(); break;
+      case 'rif-tipo': if (S.db) rifTipoSheet(id || ''); break;
+      case 'rif-csv': rifCsv(); break;
       case 'new-attr': if (S.canWrite) attrSheet(null, t.getAttribute('data-boat') || V.boatId); break;
       case 'edit-attr': x = S.attr.find(function (a) { return a.id === id; }); if (x && S.canWrite) attrSheet(x); break;
       case 'new-lav': lavSheet(null, t.getAttribute('data-boat') || V.boatId, t.getAttribute('data-date')); break;
@@ -5335,9 +5688,9 @@ button.row:active, .row .hit:active { opacity: .65; }
     sub('conferme', function (x) { S.conf = toMap(x); });
     db.collection('impostazioni').onSnapshot(function (snap) {
       var m = null, b = null;
-      snap.docs.forEach(function (d) { if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); });
+      snap.docs.forEach(function (d) { if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); else if (d.id === 'rifiuti') S.rifCfg = d.data(); });
       var mc = m !== S.mapCfg; S.mapCfg = m; S.bkInfo = b;
-      if ((V.tab === 'mappa' && mc) || V.tab === 'backup' || V.tab === 'batterie') render();
+      if ((V.tab === 'mappa' && mc) || V.tab === 'backup' || V.tab === 'batterie' || V.tab === 'rifiuti') render();
     }, function () { });
     sub('magazzino', function (x) { S.mag = x; });
     sub('movimenti', function (x) { S.mov = x; });
@@ -5353,6 +5706,8 @@ button.row:active, .row .hit:active { opacity: .65; }
     sub('cariche', function (x) { S.cariche = x; });
     sub('posti', function (x) { S.posti = toMap(x); });
     sub('richieste', function (x) { S.richieste = x; });
+    sub('rifiuti', function (x) { S.rif = x; });
+    sub('ritiri', function (x) { S.ritiri = x; });
     CLD().use('assets').then(function (a) { S.assets = a || null; if (a) render(); }, function () { });
     CLD().use('downloads').then(function (d) { S.dl = d || null; if (V.tab === 'backup') render(); }, function () { S.dl = null; if (V.tab === 'backup') render(); });
     try {
