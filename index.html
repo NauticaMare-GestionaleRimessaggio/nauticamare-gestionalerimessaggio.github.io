@@ -594,7 +594,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     trash: svg('<path d="M4.5 6.5h15M9.5 6.5V4h5v2.5"/><path d="M6.5 6.5l1 13.5h9l1-13.5"/><path d="M10 10.5v6M14 10.5v6"/>'),
     restore: svg('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4.2h4.2"/><path d="M12 8.5V12l2.5 1.8"/>')
   };
-  var ALTRO = ['altro', 'programma', 'pannello', 'batterie', 'scadenze', 'vari', 'magazzino', 'rifiuti', 'ore', 'operazioni', 'backup'];
+  var ALTRO = ['altro', 'programma', 'pannello', 'batterie', 'scadenze', 'vari', 'magazzino', 'rifiuti', 'scadcantiere', 'ore', 'operazioni', 'backup'];
   var LOGO_SRC = document.getElementById('logo-src').getAttribute('src');
   var LOGO_IMG = document.createElement('img'); LOGO_IMG.className = 'logo'; LOGO_IMG.alt = 'Nautica Mare'; LOGO_IMG.src = document.getElementById('scritta-src').getAttribute('src');
   var splashT0 = Date.now();
@@ -649,9 +649,9 @@ button.row:active, .row .hit:active { opacity: .65; }
 
   /* ---------- Stato ---------- */
   var S = { posti: {}, richieste: [], db: null, status: 'loading', canWrite: true, writeUnknown: false, boats: [], lavori: [], lavoriAll: [], scadenze: [], got: {}, pendingBoat: null, user: null, myId: null, me: {}, isOwner: false, dip: {}, prof: {},
-    conf: {}, mag: [], mov: [], vari: [], modelli: [], ckBarca: {}, check: [], assets: null, opModelli: [], ops: [], mezzi: [], attr: [], prog: [], cariche: [], isEditor: false, battCfg: null, dl: undefined, bkInfo: null, rif: [], ritiri: [], rifCfg: null, meteoCfg: null };
+    conf: {}, mag: [], mov: [], vari: [], modelli: [], ckBarca: {}, check: [], assets: null, opModelli: [], ops: [], mezzi: [], attr: [], prog: [], cariche: [], isEditor: false, battCfg: null, dl: undefined, bkInfo: null, rif: [], ritiri: [], rifCfg: null, meteoCfg: null, scadC: [] };
   var V = { tab: 'home', boatId: null, q: '', lavFilter: 'aperti', showDone: false, exConfirm: false, calMonth: todayISO().slice(0, 7), calDay: todayISO(), feat: 0, boatLavAll: false, schedaDay: todayISO(), nomeDraft: null,
-    boatView: null, resRange: 'anno', oreMonth: todayISO().slice(0, 7), oreOpen: null, magQ: '', magGroup: 'tipo', progDay: null, progView: 'ora', panPer: 'sett', panBy: 'persona', variDone: false, rifTab: 'deposito', rifEuro: false };
+    boatView: null, resRange: 'anno', oreMonth: todayISO().slice(0, 7), oreOpen: null, magQ: '', magGroup: 'tipo', progDay: null, progView: 'ora', panPer: 'sett', panBy: 'persona', variDone: false, rifTab: 'deposito', rifEuro: false, scShowDone: false };
   var SHEET = { onDelete: null, foto: [], run: null };
   function CLD() { return window.__NM_DEMO || window.__NM_FB || window.claude; } // prova: dati sul dispositivo · sito proprio: Firebase · altrimenti Claude
   function blobSrc(id) { return window.__NM_FB ? window.__NM_FB.photoSrc(id) : '/_blob/' + id; }
@@ -915,6 +915,10 @@ button.row:active, .row .hit:active { opacity: .65; }
         (S.canWrite ? '<button type="button" class="btn" data-act="done-scad" data-id="' + esc(x.s.id) + '">Segna come fatta</button>' : '') +
         (x.i.boat ? '<button type="button" class="btn sec" data-act="open-boat" data-id="' + esc(x.i.boat.id) + '">Apri scheda</button>' : '')));
     });
+    scOpen().filter(function (x) { return x.i.level !== 'ok'; }).slice(0, 3).forEach(function (x) {
+      cards.push(featCard(x.i.level, I.alarm, (x.s.tipo || 'Scadenza') + ' · ' + (x.s.rif || ''), scGruppo(x.s.gruppo), '<div class="feat-status t-' + x.i.level + '">' + esc(x.i.text) + '</div>',
+        (S.canWrite ? '<button type="button" class="btn" data-act="sc-done" data-id="' + esc(x.s.id) + '">Segna come fatta</button>' : '') + '<button type="button" class="btn sec" data-act="tab" data-tab="scadcantiere">Scadenze del cantiere</button>'));
+    });
     var bd = battDue();
     if (bd.length) { var bo = bd.map(function (b) { return { b: b, i: battInfo(b) }; }).sort(function (a, c) { return (c.i.d == null ? 1e6 : c.i.d) - (a.i.d == null ? 1e6 : a.i.d); });
       cards.push(featCard('soon', I.batt, bd.length === 1 ? 'Batterie da caricare: ' + (bo[0].b.nome || 'barca') : bd.length + ' barche con le batterie da caricare', bo.slice(0, 3).map(function (x) { return x.b.nome + (x.i.d != null ? ' (' + x.i.d + ' gg)' : ' (mai)'); }).join(', '), '', '<button type="button" class="btn sec" data-act="tab" data-tab="batterie">Apri batterie</button>')); }
@@ -1010,6 +1014,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     S.vari.forEach(function (v) { add(v.fatto ? (v.fattoIl || v.data) : v.data, { k: 'v', cls: v.fatto ? 'grey' : 'vio', o: v }); });
     S.lavori.forEach(function (l) { add(l.data, { k: 'l', cls: l.stato === 'fatto' ? '' : l.stato === 'in_corso' ? 'stripe' : 'grey', o: l }); });
     (S.prog || []).forEach(function (x) { add(x.data, { k: 'p', cls: x.fatto ? 'grey' : 'teal', o: x }); });
+    (S.scadC || []).forEach(function (x) { if (!x.fatta) add(x.data, { k: 'z', cls: scInfo(x).level, o: x }); else if (x.fattaIl) add(x.fattaIl, { k: 'z', cls: 'grey', o: x }); });
     return m;
   }
   function viewCalendario() {
@@ -1037,7 +1042,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (sum) h += '<div class="lbl" style="margin:4px 4px 6px">Scheda lavoro</div>' + sum;
     if (progIts.length) h += '<div class="lbl" style="margin:14px 4px 6px">Programma</div><div class="group">' + progIts.map(function (x) { return progRow(x, progOf(sel), true); }).join('') + '</div>';
     if (rest.length) h += (sum || progIts.length ? '<div class="lbl" style="margin:14px 4px 6px">Lavori, vari e scadenze</div>' : '') +
-      '<div class="group">' + rest.map(function (it) { return it.k === 's' ? scadRow({ s: it.o, i: scadInfo(it.o) }, true) : it.k === 'v' ? variRow(it.o, true) : lavRow(it.o, true); }).join('') + '</div>';
+      '<div class="group">' + rest.map(function (it) { return it.k === 's' ? scadRow({ s: it.o, i: scadInfo(it.o) }, true) : it.k === 'z' ? scRow({ s: it.o, i: scInfo(it.o) }) : it.k === 'v' ? variRow(it.o, true) : lavRow(it.o, true); }).join('') + '</div>';
     if (!its.length) h += '<div class="notice">Niente in programma per questo giorno.</div>';
     return h;
   }
@@ -3474,6 +3479,88 @@ button.row:active, .row .hit:active { opacity: .65; }
     return h;
   }
 
+  /* ---------- Scadenze del cantiere: mezzi, attrezzature e sicurezza, separate da quelle delle barche ---------- */
+  var SC_GRUPPI = [['mezzi', 'Mezzi e attrezzature'], ['sicurezza', 'Sicurezza del cantiere']];
+  var SC_RIF = { mezzi: ['Gru', 'Travel lift', 'Muletto', 'Carrello', 'Furgone', 'Camion', 'Trattore', 'Compressore', 'Idropulitrice'],
+    sicurezza: ['Estintori', 'Cassetta di pronto soccorso', 'Impianto elettrico', 'Impianto di messa a terra', 'Luci di emergenza', 'Uscite di emergenza', 'DVR (documento valutazione rischi)'] };
+  var SC_TIPI = { mezzi: ['Revisione', 'Assicurazione', 'Bollo', 'Tagliando', 'Verifica periodica', 'Verifica funi e catene', 'Ingrassaggio', 'Manutenzione'],
+    sicurezza: ['Revisione', 'Controllo periodico', 'Verifica periodica', 'Sostituzione', 'Reintegro', 'Aggiornamento'] };
+  function scGruppo(k) { var g = SC_GRUPPI.find(function (x) { return x[0] === k; }); return g ? g[1] : 'Cantiere'; }
+  function scInfo(s) {
+    var days = s.data ? daysUntil(s.data) : null, level = 'ok';
+    if (days != null && days < 0) level = 'late'; else if (days != null && days <= 30) level = 'soon';
+    var text = days == null ? '' : days < 0 ? 'Scaduta da ' + (-days) + (days === -1 ? ' giorno' : ' giorni') : days === 0 ? 'Scade oggi' : days === 1 ? 'Scade domani' : 'Tra ' + days + ' giorni';
+    return { level: level, text: text, days: days };
+  }
+  function scOpen() { return (S.scadC || []).filter(function (s) { return !s.fatta; }).map(function (s) { return { s: s, i: scInfo(s) }; }).sort(function (a, b) { return String(a.s.data || '9').localeCompare(String(b.s.data || '9')); }); }
+  function scRow(x) {
+    var s = x.s, i = x.i, done = !!s.fatta, lvl = done ? '' : i.level, sub = [s.rif || scGruppo(s.gruppo)];
+    if (num(s.ricorrenzaMesi)) sub.push('si ripete ogni ' + s.ricorrenzaMesi + (+s.ricorrenzaMesi === 1 ? ' mese' : ' mesi'));
+    if (s.ultimaIl) sub.push('ultima fatta il ' + fmtDate(s.ultimaIl));
+    var status = done ? '<span class="status ok">Fatta il ' + esc(fmtDate(s.fattaIl)) + '</span>' : (i.text ? '<span class="status ' + lvl + '">' + esc(i.text) + '</span>' : '');
+    var btn = (!done && S.canWrite) ? '<button type="button" class="chk" data-act="sc-done" data-id="' + esc(s.id) + '">' + I.check + 'Fatto</button>' : '';
+    return '<div class="row"><button type="button" class="hit" data-act="sc-edit" data-id="' + esc(s.id) + '">' + dateBlock(done ? s.fattaIl : s.data, lvl) +
+      '<span class="main"><span class="title">' + esc(s.tipo || 'Scadenza') + '</span><span class="sub">' + esc(sub.join(' · ')) + '</span>' + status + '</span></button>' + btn + '</div>';
+  }
+  function scCounts() { var o = scOpen(); return { late: o.filter(function (x) { return x.i.level === 'late'; }).length, soon: o.filter(function (x) { return x.i.level === 'soon'; }).length }; }
+  function viewScadCantiere() {
+    var open = scOpen(), h = '<p class="context" style="margin-top:12px">Scadenze dei vostri mezzi, delle attrezzature e della sicurezza del cantiere. Sono separate da quelle delle barche dei clienti.</p>';
+    h += secH('Da fare', S.canWrite ? 'sc-new' : '', '+ Nuova scadenza');
+    if (!open.length) h += emptyCard(I.alarm, 'Nessuna scadenza del cantiere', 'Aggiungi revisioni e verifiche di gru, carrelli e muletto, la revisione degli estintori, la cassetta di pronto soccorso.', S.canWrite ? ['sc-new', 'Aggiungi scadenza'] : null);
+    SC_GRUPPI.forEach(function (g) {
+      var list = open.filter(function (x) { return (x.s.gruppo || 'mezzi') === g[0]; }); if (!list.length) return;
+      h += '<div class="lbl" style="margin:14px 4px 6px">' + esc(g[1]) + ' (' + list.length + ')</div><div class="group">' + list.map(scRow).join('') + '</div>';
+    });
+    var done = (S.scadC || []).filter(function (s) { return s.fatta; }).sort(function (a, b) { return String(b.fattaIl || '').localeCompare(String(a.fattaIl || '')); });
+    if (done.length) {
+      h += secH('Completate', 'sc-toggle', V.scShowDone ? 'Nascondi' : 'Mostra (' + done.length + ')');
+      if (V.scShowDone) h += '<div class="group">' + done.slice(0, 40).map(function (s) { return scRow({ s: s, i: scInfo(s) }); }).join('') + '</div>';
+    }
+    return h;
+  }
+  function scSheet(s, preset) {
+    var isNew = !s; s = s || Object.assign({ gruppo: 'mezzi', data: '' }, preset || {});
+    var canDel = !isNew && (S.isEditor || S.isOwner);
+    var mz = (S.mezzi || []).map(function (m) { return m.nome; }).filter(Boolean);
+    function rifList(g) { var a = (g === 'mezzi' ? mz : []).concat(SC_RIF[g] || []); return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
+    openSheet({
+      title: isNew ? 'Scadenza del cantiere' : 'Modifica scadenza', submitLabel: 'Salva',
+      deleteLabel: canDel ? 'Elimina scadenza' : null, deleteText: 'Elimini “' + (s.tipo || 'questa scadenza') + '”.',
+      onDelete: canDel ? async function () { if (await delSeq([S.db.collection('scadCantiere').doc(s.id)])) { closeSheet(); toast('Scadenza eliminata'); } } : null,
+      body: field(lab('f-scg', 'Gruppo'), '<select id="f-scg">' + opts(SC_GRUPPI, s.gruppo) + '</select>') +
+        '<datalist id="sc-rif"></datalist><datalist id="sc-tipi"></datalist>' +
+        field(lab('f-scr', 'Di cosa'), inp('f-scr', s.rif, 'type="text" list="sc-rif" required placeholder="es. Carrello BL 20, Estintori capannone"')) +
+        field(lab('f-sct', 'Cosa scade'), inp('f-sct', s.tipo, 'type="text" list="sc-tipi" required placeholder="es. Verifica periodica"')) +
+        '<div class="grid2">' + field(lab('f-scd', 'Entro il'), inp('f-scd', s.data, 'type="date" required')) + field(lab('f-scm', 'Si ripete ogni (mesi)'), inp('f-scm', s.ricorrenzaMesi, 'type="text" inputmode="numeric" placeholder="es. 6"')) + '</div>' +
+        field(lab('f-scn', 'Note'), '<textarea id="f-scn" placeholder="es. ditta che fa la verifica, numero di matricola">' + esc(s.note || '') + '</textarea>') +
+        (!isNew && (s.storico || []).length ? '<div class="lbl">Fatte in passato</div><div class="group">' + s.storico.slice().reverse().slice(0, 8).map(function (h) { return '<div class="hist"><span>' + esc(fmtDate(h.fattaIl) + (h.da ? ' · ' + nameOf(h.da) : '') + (h.data ? ' (scadeva il ' + fmtDate(h.data) + ')' : '')) + '</span></div>'; }).join('') + '</div>' : '') +
+        (!isNew ? '<label class="check"><input type="checkbox" id="f-scf"' + (s.fatta ? ' checked' : '') + '> Completata, non si ripete più</label>' : ''),
+      onOpen: function (f) {
+        var g = f.querySelector('#f-scg');
+        function fill() { $('#sc-rif').innerHTML = rifList(g.value).map(function (x) { return '<option value="' + esc(x) + '">'; }).join(''); $('#sc-tipi').innerHTML = (SC_TIPI[g.value] || []).map(function (x) { return '<option value="' + esc(x) + '">'; }).join(''); }
+        g.addEventListener('change', fill); fill();
+      },
+      onSubmit: async function (f) {
+        var data = { gruppo: val(f, 'f-scg') || 'mezzi', rif: val(f, 'f-scr'), tipo: val(f, 'f-sct'), data: val(f, 'f-scd'), ricorrenzaMesi: parseIntS(val(f, 'f-scm')), note: val(f, 'f-scn'), modificato: new Date().toISOString() };
+        if (!data.rif) { formErr('Scrivi di cosa è la scadenza.'); return false; }
+        if (!data.tipo) { formErr('Scrivi cosa scade.'); return false; }
+        if (!data.data) { formErr('Scegli la data.'); return false; }
+        var m = (S.mezzi || []).find(function (z) { return z.nome && z.nome.toLowerCase() === data.rif.toLowerCase(); }); data.mezzoId = m ? m.id : '';
+        var ok;
+        if (isNew) { data.fatta = false; data.creato = data.modificato; data.creatoDa = S.myId || ''; var ref = S.db.collection('scadCantiere').doc(); ok = await w(function () { return ref.set(data); }); }
+        else { var fc = f.querySelector('#f-scf'); data.fatta = !!(fc && fc.checked); if (data.fatta && !s.fatta) data.fattaIl = todayISO(); var r2 = S.db.collection('scadCantiere').doc(s.id); ok = await w(function () { return r2.update(data); }); }
+        if (ok) toast(isNew ? 'Scadenza aggiunta' : 'Scadenza salvata');
+        return ok;
+      }
+    });
+  }
+  async function scDone(s) { // fatta: se si ripete passa alla prossima data, e resta lo storico
+    var t = todayISO(), n = num(s.ricorrenzaMesi), ref = S.db.collection('scadCantiere').doc(s.id), now = new Date().toISOString();
+    var st = (s.storico || []).concat([{ data: s.data || '', fattaIl: t, da: S.myId || '' }]);
+    var upd = n > 0 ? { data: addMonths(t, n), ultimaIl: t, storico: st, modificato: now } : { fatta: true, fattaIl: t, storico: st, modificato: now };
+    if (await w(function () { return ref.update(upd); })) toast(n > 0 ? 'Fatta: la prossima è il ' + fmtDate(upd.data) : 'Segnata come fatta');
+  }
+
   /* ---------- Meteo a Marina di San Vincenzo (dati MET Norway, licenza CC BY 4.0) ----------
      Vento in nodi e km/h, raffiche col semaforo (soglie in impostazioni/meteo), pioggia e temperatura.
      Una sola richiesta, conservata sul telefono fino alla scadenza indicata dal servizio. */
@@ -4411,6 +4498,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       ['ore', I.hours, 'ok', 'Ore del mese', 'Ore di ogni dipendente e giornate confermate', ''],
       ['operazioni', I.list, '', 'Servizi di cantiere', 'Trasporti, alaggi, movimentazioni, vari, lavaggi: passaggi e tempi', runs ? '<span class="pill acc">' + runs + ' in corso</span>' : ''],
       ['scadenze', I.alarm, 'late', 'Scadenze', 'Tagliandi, assicurazioni, contratti', late ? '<span class="pill late">' + late + ' scadute</span>' : ''],
+      ['scadcantiere', I.alarm, 'soon', 'Scadenze del cantiere', 'Mezzi, attrezzature e sicurezza: revisioni, verifiche, estintori', scCounts().late ? '<span class="pill late">' + scCounts().late + (scCounts().late === 1 ? ' scaduta' : ' scadute') + '</span>' : scCounts().soon ? '<span class="pill soon">' + scCounts().soon + ' entro 30 giorni</span>' : ''],
       ['backup', I.dl, 'ok', 'Copia dei dati', 'Scarica una copia di tutto o recupera ciò che è stato cancellato', '']
     ];
     var fbRows = window.__NM_FB && window.__NM_FB.altroRows ? window.__NM_FB.altroRows() : [];
@@ -4428,7 +4516,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     ['barche', 'Barche'], ['lavori', 'Lavorazioni e mansioni'], ['scadenze', 'Scadenze'], ['vari', 'Vari e alaggi'],
     ['magazzino', 'Ricambi del magazzino'], ['movimenti', 'Carichi e scarichi di magazzino'], ['operazioni', 'Servizi di cantiere'],
     ['opModelli', 'Gruppi dei servizi'], ['mezzi', 'Mezzi e carrelli'], ['conferme', 'Giornate confermate'],
-    ['dipendenti', 'Nomi dei dipendenti'], ['impostazioni', 'Misure della mappa'], ['posti', 'Posti al porto'], ['attrezzatura', 'Attrezzatura di bordo'], ['programma', 'Programma dei lavori'], ['cariche', 'Cariche delle batterie'], ['richieste', 'Richieste di chi cerca una barca'], ['rifiuti', 'Rifiuti segnati'], ['ritiri', 'Ritiri dei rifiuti'],
+    ['dipendenti', 'Nomi dei dipendenti'], ['impostazioni', 'Misure della mappa'], ['posti', 'Posti al porto'], ['attrezzatura', 'Attrezzatura di bordo'], ['programma', 'Programma dei lavori'], ['cariche', 'Cariche delle batterie'], ['richieste', 'Richieste di chi cerca una barca'], ['rifiuti', 'Rifiuti segnati'], ['ritiri', 'Ritiri dei rifiuti'], ['scadCantiere', 'Scadenze del cantiere'],
     ['checklist', 'Vecchie checklist'], ['checkBarca', 'Vecchie liste per barca'], ['modelli', 'Vecchi modelli di checklist']
   ];
   var BK_OLD = ['checklist', 'checkBarca', 'modelli'];
@@ -4444,7 +4532,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       operazioni: S.ops.length, opModelli: S.opModelli.length, mezzi: S.mezzi.length, conferme: Object.keys(S.conf).length, dipendenti: Object.keys(S.dip).length,
       impostazioni: S.mapCfg ? 1 : 0, checklist: S.check.length, checkBarca: Object.keys(S.ckBarca).length, modelli: S.modelli.length,
       posti: Object.keys(S.posti || {}).length, attrezzatura: (S.attr || []).length, programma: (S.prog || []).length,
-      cariche: (S.cariche || []).length, richieste: (S.richieste || []).length, rifiuti: (S.rif || []).length, ritiri: (S.ritiri || []).length
+      cariche: (S.cariche || []).length, richieste: (S.richieste || []).length, rifiuti: (S.rif || []).length, ritiri: (S.ritiri || []).length, scadCantiere: (S.scadC || []).length
     };
   }
   async function bkGet(name) {
@@ -4765,11 +4853,11 @@ button.row:active, .row .hit:active { opacity: .65; }
         (S.canWrite && S.status === 'ready' && M.area !== 'porto' ? '<button type="button" class="icon-btn" data-act="m-cfg" aria-label="Misure del cantiere">' + I.ruler + '</button>' : '') + '</div>';
       return;
     }
-    var titles = { home: 'Nautica Mare', scheda: 'Scheda lavoro', scadenze: 'Scadenze', calendario: 'Calendario', barche: 'Barche', lavori: 'Lavorazioni da fare', altro: 'Altro', vari: 'Vari e alaggi', magazzino: 'Magazzino', rifiuti: 'Rifiuti', ore: 'Ore del mese', checklist: 'Checklist', operazioni: 'Servizi di cantiere', backup: 'Copia dei dati', programma: 'Programma', pannello: 'Pannello', batterie: 'Batterie' };
+    var titles = { home: 'Nautica Mare', scheda: 'Scheda lavoro', scadenze: 'Scadenze', calendario: 'Calendario', barche: 'Barche', lavori: 'Lavorazioni da fare', altro: 'Altro', vari: 'Vari e alaggi', magazzino: 'Magazzino', rifiuti: 'Rifiuti', scadcantiere: 'Scadenze del cantiere', ore: 'Ore del mese', checklist: 'Checklist', operazioni: 'Servizi di cantiere', backup: 'Copia dei dati', programma: 'Programma', pannello: 'Pannello', batterie: 'Batterie' };
     var late = S.status === 'ready' ? lateCount() : 0;
     var left = V.tab === 'home' ? '<button type="button" class="icon-btn" data-act="tab" data-tab="scadenze" aria-label="Scadenze scadute: ' + late + '">' + I.bell + (late ? '<span class="dot">' + late + '</span>' : '') + '</button>'
       : (ALTRO.indexOf(V.tab) > 0 ? '<button type="button" class="icon-btn blue" data-act="tab" data-tab="altro" aria-label="Torna ad Altro">' + I.back + '</button>' : '');
-    var addAct = ({ scheda: S.myId ? 'new-entry' : '', lavori: 'new-lav', vari: 'new-vari', magazzino: 'new-mag', checklist: 'new-modello', operazioni: 'new-op', ore: '', backup: '', programma: 'new-prog', pannello: '', batterie: '' })[V.tab];
+    var addAct = ({ scheda: S.myId ? 'new-entry' : '', lavori: 'new-lav', vari: 'new-vari', magazzino: 'new-mag', checklist: 'new-modello', operazioni: 'new-op', ore: '', backup: '', programma: 'new-prog', pannello: '', batterie: '', rifiuti: 'rif-new', scadcantiere: 'sc-new' })[V.tab];
     if (addAct == null) addAct = 'add-menu';
     var ro = S.status === 'ready' && !S.canWrite ? ' · sola lettura' : '';
     t.innerHTML = '<div class="l">' + left + '</div><h1' + (V.tab === 'home' ? ' id="logo-slot"' : '') + '>' + (V.tab === 'home' ? '' : titles[V.tab] + ro) + '</h1>' +
@@ -4802,7 +4890,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var html;
     if (S.status === 'absent') html = '<div class="notice" style="margin-top:14px">I dati del registro si aprono solo da Claude, con il tuo account. Apri il link della pagina da claude.ai o dall’app Claude per vedere e salvare barche, lavori e scadenze.</div>';
     else if (S.status === 'loading') html = '<div class="notice" style="margin-top:14px">Carico barche, lavori e scadenze…</div>';
-    else html = ({ programma: viewProgramma, pannello: viewPannello, batterie: viewBatterie, mappa: viewMappa, altro: viewAltro, backup: viewBackup, vari: viewVari, magazzino: viewMagazzino, rifiuti: viewRifiuti, ore: viewOre, checklist: viewChecklist, operazioni: viewOperazioni, home: viewHome, scheda: viewScheda, scadenze: viewScadenze, calendario: viewCalendario, lavori: viewLavori, barche: function () { return V.boatId ? viewBoat() : viewBarche(); } })[V.tab]();
+    else html = ({ programma: viewProgramma, pannello: viewPannello, batterie: viewBatterie, mappa: viewMappa, altro: viewAltro, backup: viewBackup, vari: viewVari, magazzino: viewMagazzino, rifiuti: viewRifiuti, scadcantiere: viewScadCantiere, ore: viewOre, checklist: viewChecklist, operazioni: viewOperazioni, home: viewHome, scheda: viewScheda, scadenze: viewScadenze, calendario: viewCalendario, lavori: viewLavori, barche: function () { return V.boatId ? viewBoat() : viewBarche(); } })[V.tab]();
     $('#view').innerHTML = html;
     renderTop(); renderTabs(); bindFeat();
     if (V.tab === 'mappa' && S.status === 'ready') { if (M.area === 'porto') { M.mounted = null; Porto.mount(); } else { M.mounted = M.mode; mapMount(); } } else M.mounted = null;
@@ -5730,6 +5818,10 @@ button.row:active, .row .hit:active { opacity: .65; }
       case 'rif-tipo': if (S.db) rifTipoSheet(id || ''); break;
       case 'rif-csv': rifCsv(); break;
       case 'met-cfg': if (S.db) metCfgSheet(); break;
+      case 'sc-new': if (S.db && S.canWrite) scSheet(null); break;
+      case 'sc-edit': x = (S.scadC || []).find(function (q) { return q.id === id; }); if (x && S.canWrite) scSheet(x); break;
+      case 'sc-done': x = (S.scadC || []).find(function (q) { return q.id === id; }); if (x && S.canWrite) scDone(x); break;
+      case 'sc-toggle': V.scShowDone = !V.scShowDone; render(); break;
       case 'new-attr': if (S.canWrite) attrSheet(null, t.getAttribute('data-boat') || V.boatId); break;
       case 'edit-attr': x = S.attr.find(function (a) { return a.id === id; }); if (x && S.canWrite) attrSheet(x); break;
       case 'new-lav': lavSheet(null, t.getAttribute('data-boat') || V.boatId, t.getAttribute('data-date')); break;
@@ -5841,6 +5933,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     sub('richieste', function (x) { S.richieste = x; });
     sub('rifiuti', function (x) { S.rif = x; });
     sub('ritiri', function (x) { S.ritiri = x; });
+    sub('scadCantiere', function (x) { S.scadC = x; });
     CLD().use('assets').then(function (a) { S.assets = a || null; if (a) render(); }, function () { });
     CLD().use('downloads').then(function (d) { S.dl = d || null; if (V.tab === 'backup') render(); }, function () { S.dl = null; if (V.tab === 'backup') render(); });
     try {
