@@ -466,6 +466,8 @@
     D.start.then(function () { return whenReady(D, 15000); }).then(function () {
       if (ME && !D.map[ME.uid]) write('dipendenti', ME.uid, 'set', { nome: ME.nome || '', modificato: nowISO() }).catch(function () { });
     });
+    // aperto dal link per portare i dati dall'app di Claude
+    if (IMP_KEY) setTimeout(offerImport, 800);
   }
 
   /* ---------- pannelli: utenti e permessi, il mio account ---------- */
@@ -663,6 +665,125 @@
       s.aggiornato = nowISO();
       write('portale', bid, 'set', s).catch(function () { });
     });
+  }
+
+  /* ---------- dati portati dall'app di Claude: link con la chiave, una volta sola ----------
+     Il pacchetto sul sito è cifrato (AES-GCM): senza la chiave, che sta solo nel link, non si legge.
+     Aggiunge solo ciò che nel sito non c'è e non c'è mai stato; quello che c'è non viene toccato. */
+  var IMP_FILE = 'dati-claude.enc', IMP_ID = /^[A-Za-z0-9_\-.~:@+]{1,200}$/;
+  var IMP_NOMI = { barche: ['barca', 'barche'], lavori: ['lavorazione o mansione', 'lavorazioni e mansioni'], scadenze: ['scadenza', 'scadenze'], vari: ['varo o alaggio', 'vari e alaggi'],
+    magazzino: ['voce di magazzino', 'voci di magazzino'], movimenti: ['carico o scarico', 'carichi e scarichi'], operazioni: ['servizio di cantiere', 'servizi di cantiere'],
+    opModelli: ['gruppo dei servizi', 'gruppi dei servizi'], mezzi: ['mezzo o carrello', 'mezzi e carrelli'], conferme: ['giornata confermata', 'giornate confermate'],
+    dipendenti: ['nome dei dipendenti', 'nomi dei dipendenti'], impostazioni: ['misure della mappa', 'misure della mappa'], posti: ['posto al porto', 'posti al porto'],
+    attrezzatura: ['attrezzatura di bordo', 'attrezzature di bordo'], programma: ['voce del programma', 'voci del programma'], cariche: ['carica delle batterie', 'cariche delle batterie'],
+    richieste: ['richiesta', 'richieste'], checklist: ['checklist', 'checklist'], checkBarca: ['lista per barca', 'liste per barca'], modelli: ['modello di checklist', 'modelli di checklist'] };
+  var IMP_KEY = null, IMP = null;
+  function impHash() {
+    var m = /[#&]importa=([A-Za-z0-9_-]{40,})/.exec(location.hash || '');
+    try {
+      if (m) { IMP_KEY = m[1]; sessionStorage.setItem('nm-importa', IMP_KEY); history.replaceState(null, '', location.pathname + location.search); }
+      else IMP_KEY = IMP_KEY || sessionStorage.getItem('nm-importa');
+    } catch (e) { if (m) IMP_KEY = m[1]; }
+    return !!m;
+  }
+  impHash();
+  // link aperto con l'app già aperta nella stessa scheda
+  window.addEventListener('hashchange', function () { if (impHash() && started && ME && !CLIENTE) offerImport(); });
+  function impForget() { IMP_KEY = null; try { sessionStorage.removeItem('nm-importa'); } catch (e) { } }
+  function b64u(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; var b = atob(s), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+  async function impLoad() {
+    var r; try { r = await fetch(IMP_FILE, { cache: 'no-store' }); } catch (e) { throw { code: 'rete' }; }
+    if (r.status === 404) throw { code: 'manca' };
+    if (!r.ok) throw { code: 'rete' };
+    var buf = new Uint8Array(await r.arrayBuffer()), plain;
+    try {
+      var key = await crypto.subtle.importKey('raw', b64u(IMP_KEY), { name: 'AES-GCM' }, false, ['decrypt']);
+      plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
+    } catch (e) { throw { code: 'chiave' }; }
+    var data = JSON.parse(new TextDecoder().decode(plain));
+    if (!data || data.app !== 'Nautica Mare' || !data.collezioni) throw { code: 'chiave' };
+    return data;
+  }
+  async function impMissing(data) {
+    var list = [];
+    COLLS.forEach(function (name) {
+      var src = data.collezioni[name]; if (!src || typeof src !== 'object') return;
+      Object.keys(src).forEach(function (id) {
+        var d = src[id];
+        if (IMP_ID.test(id) && d && typeof d === 'object' && !Array.isArray(d) && !(name === 'impostazioni' && id !== 'mappa')) list.push({ c: name, id: id });
+      });
+    });
+    var out = [];
+    for (var i = 0; i < list.length; i += 10) {
+      var part = await Promise.all(list.slice(i, i + 10).map(function (x) {
+        return fs.collection(x.c).doc(x.id).get({ source: 'server' }).then(function (d) { return d.exists ? null : x; });
+      }));
+      part.forEach(function (x) { if (x) out.push(x); });
+    }
+    return out;
+  }
+  function impCount(list) {
+    var n = {}; list.forEach(function (x) { n[x.c] = (n[x.c] || 0) + 1; });
+    return COLLS.filter(function (c) { return n[c]; }).map(function (c) { var w = IMP_NOMI[c] || [c, c]; return n[c] + ' ' + (n[c] === 1 ? w[0] : w[1]); });
+  }
+  function impScreen(html) {
+    var o = overlay('<h2>Dati dall’app di Claude</h2>' + html);
+    if (o) o.onclick = function (e) {
+      var t = e.target.closest && e.target.closest('[data-imp]'); if (!t) return;
+      var k = t.getAttribute('data-imp');
+      if (k === 'chiudi') { hideOverlay(); }
+      else if (k === 'fine') { impForget(); hideOverlay(); }
+      else if (k === 'riprova') offerImport();
+      else if (k === 'via') runImport();
+    };
+    return o;
+  }
+  async function offerImport() {
+    if (!IMP_KEY || !ME) return;
+    if (ME.ruolo !== 'admin') { toast('Solo un amministratore può importare i dati dall’app di Claude.'); return; }
+    impScreen('<div class="spin"></div><p style="text-align:center">Apro i dati…</p>');
+    try {
+      var data = await impLoad();
+      var fatto = await fs.collection('impostazioni').doc('importClaude').get({ source: 'server' });
+      var list = await impMissing(data);
+      IMP = { data: data, list: list };
+      var qd = data.creata ? quando(data.creata) : '';
+      if (!list.length) {
+        impScreen('<div class="card"><p style="margin:0">' + (fatto.exists ? 'L’importazione è già stata fatta: ' : '') + 'nel sito c’è già tutto quello che c’era nell’app di Claude.</p></div>' +
+          '<button class="btn" data-imp="fine">Apri l’app</button>');
+        return;
+      }
+      var io = data.io && data.io.id && data.io.id !== ME.uid && !UT[data.io.id] ? data.io : null;
+      impScreen('<p>Copia presa dall’app di Claude' + (qd ? (/^(8|11) /.test(qd) ? ' l’' : ' il ') + esc(qd) : '') + '. Nel sito mancano:</p>' +
+        '<div class="card">' + impCount(list).map(function (s) { return '<div class="kv" style="border-top:0;padding:4px 0"><b style="text-align:left">' + esc(s) + '</b></div>'; }).join('') + '</div>' +
+        '<p style="margin-top:14px">Quello che c’è già nel sito non viene toccato.' + (io ? ' Le mansioni, le ore e le giornate di <b>' + esc(io.nome || 'chi usava l’app') + '</b> passano al tuo account.' : '') + '</p>' +
+        '<button class="btn" data-imp="via">Importa</button><button class="lnk" data-imp="chiudi">Non ora</button>');
+    } catch (e) {
+      var c = e && e.code;
+      if (c === 'manca') { impForget(); impScreen('<div class="card"><p style="margin:0">Il pacchetto con i dati non è più sul sito: l’importazione è già stata fatta.</p></div><button class="btn" data-imp="fine">Apri l’app</button>'); }
+      else if (c === 'chiave') { impForget(); impScreen('<div class="card"><p style="margin:0">Il link non è completo, quindi i dati non si aprono. Riapri il link intero.</p></div><button class="btn" data-imp="fine">Apri l’app</button>'); }
+      else impScreen('<div class="card"><p style="margin:0">Serve internet per importare i dati. Riprova quando hai campo.</p></div><button class="btn" data-imp="riprova">Riprova</button><button class="lnk" data-imp="chiudi">Non ora</button>');
+    }
+  }
+  async function runImport() {
+    if (!IMP) return;
+    var data = IMP.data, list = IMP.list, done = 0, fail = 0;
+    var prog = function (t) { var p = $('#nm-imp-p'); if (p) p.textContent = t; };
+    impScreen('<div class="spin"></div><p style="text-align:center" id="nm-imp-p">Importo…</p>');
+    for (var i = 0; i < list.length; i += 8) {
+      await Promise.all(list.slice(i, i + 8).map(function (x) {
+        return write(x.c, x.id, 'set', data.collezioni[x.c][x.id]).then(function () { done++; }, function () { fail++; });
+      }));
+      prog('Importo ' + (done + fail) + ' di ' + list.length + '…');
+    }
+    var linked = 0, io = data.io && data.io.id && data.io.id !== ME.uid && !UT[data.io.id] ? data.io : null;
+    if (io && !fail) { prog('Collego i dati al tuo account…'); try { linked = await relink(io.id, ME.uid); } catch (e) { fail++; } }
+    if (!fail) { try { await write('impostazioni', 'importClaude', 'set', { il: nowISO(), da: ME.uid, voci: done, collegati: linked, copia: data.creata || '' }); } catch (e) { } }
+    IMP = null;
+    impScreen(fail
+      ? '<div class="card"><p style="margin:0">Importate ' + done + ' voci, ' + fail + ' non riuscite. Riapri il link per riprovare: rimette solo quelle che mancano.</p></div><button class="btn" data-imp="chiudi">Apri l’app</button>'
+      : '<div class="card"><p style="margin:0" class="ok"><b>Fatto!</b></p><p style="margin:6px 0 0">Ho importato ' + done + (done === 1 ? ' voce' : ' voci') + ' dall’app di Claude' + (io ? ' e le ho collegate al tuo account' : '') + '.</p></div>' +
+        '<button class="btn" data-imp="fine">Apri l’app</button>');
   }
 
   /* ---------- quello che vede l'app ---------- */
