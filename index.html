@@ -1170,6 +1170,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     h += secH('Servizi', S.canWrite ? 'new-op' : '', '+ Nuovo', ' data-boat="' + esc(b.id) + '"');
     h += bops.length ? '<div class="group">' + bops.slice(0, 6).map(function (o) { return opRow(o, false); }).join('') + '</div>' : '<div class="notice">Nessun servizio per questa barca.</div>';
 
+    h += secH('Trasporto: passa?') + passaHtml(b);
     var pvs = prevOfBoat(b.id);
     h += secH('Preventivi', S.canWrite ? 'prev-new' : '', '+ Nuovo', ' data-boat="' + esc(b.id) + '"');
     h += pvs.length ? '<div class="group">' + pvs.slice(0, 5).map(function (p) { return prevRow(p, false); }).join('') + '</div>' : '<div class="notice">Nessun preventivo per questa barca.</div>';
@@ -1426,9 +1427,9 @@ button.row:active, .row .hit:active { opacity: .65; }
   function mezzoDims(m) { var L = num(m.lunghezza), B = num(m.larghezza); return L > 0 && B > 0 ? { L: L, B: B } : null; }
   function mezzoPos(m) { var p = M.pend['m:' + m.id] || m.mappa; return p && num(p.x) != null && num(p.y) != null ? p : null; }
   function carrierOf(boatId) { for (var i = 0; i < S.mezzi.length; i++) { var m = S.mezzi[i]; if (m.barcaId === boatId && mezzoPos(m) && mezzoDims(m)) return m; } return null; }
-  function drawbarLen(d) { return Math.min(2, d.L * 0.18); }
-  function mezzoLocal(d) { var h = d.L / 2, b = d.B / 2, db = drawbarLen(d); return [[-h, -b], [h - db, -b], [h, 0], [h - db, b], [-h, b]]; }
-  function cargoPose(m) { var p = mezzoPos(m), d = mezzoDims(m), off = -drawbarLen(d) / 2, r = (num(p.rot) || 0) * Math.PI / 180; return { x: p.x + Math.cos(r) * off, y: p.y + Math.sin(r) * off, rot: num(p.rot) || 0 }; }
+  function drawbarLen(d, m) { if (m && !isTrailer(m)) return 0; var k = m ? mezzoKind(m) : ''; return k === 'idraulico' ? Math.min(2.4, d.L * 0.2) : Math.min(2, d.L * 0.18); }
+  function mezzoLocal(d, m) { var h = d.L / 2, b = d.B / 2, db = drawbarLen(d, m); if (!db) return [[-h, -b], [h, -b], [h, b], [-h, b]]; return [[-h, -b], [h - db, -b], [h, 0], [h - db, b], [-h, b]]; }
+  function cargoPose(m) { var p = mezzoPos(m), d = mezzoDims(m), off = -drawbarLen(d, m) / 2, r = (num(p.rot) || 0) * Math.PI / 180; return { x: p.x + Math.cos(r) * off, y: p.y + Math.sin(r) * off, rot: num(p.rot) || 0 }; }
   function boatPos(b) { var c = carrierOf(b.id); if (c) return cargoPose(c); var p = M.pend[b.id] || b.mappa; return p && num(p.x) != null && num(p.y) != null ? p : null; }
   function placedBoats() { return S.boats.filter(function (b) { return boatPos(b) && boatDims(b); }); }
   function unplacedBoats() { return S.boats.filter(function (b) { return !boatPos(b) || !boatDims(b); }).sort(byName); }
@@ -1489,13 +1490,13 @@ button.row:active, .row .hit:active { opacity: .65; }
     var dx = Math.max(c.x, Math.min(d.x, c.x + c.w)), dx2 = Math.max(dx, Math.min(d.x + d.w, c.x + c.w)), w = dx2 - dx;
     if (w > 0) {
       var toE = (c.x + c.w) - dx2 >= dx - c.x, a = toE ? dx2 : Math.max(c.x, dx - w), b = toE ? Math.min(c.x + c.w, dx2 + w) : dx;
-      L.push({ x0: a, x1: b, y0: c.y + c.h + t, y1: c.y + c.h + t + k, h: 4.6 });
-      if (cfg.portaN) L.push({ x0: a, x1: b, y0: c.y - t - k, y1: c.y - t, h: 4.6 });
+      L.push({ x0: a, x1: b, y0: c.y + c.h + t, y1: c.y + c.h + t + k, h: portaAlt(cfg).pitagora });
+      if (cfg.portaN) L.push({ x0: a, x1: b, y0: c.y - t - k, y1: c.y - t, h: portaAlt(cfg).pitagora });
     }
     var ty = Math.max(c.y, Math.min(c.y + cfg.portaT.y, c.y + c.h)), ty2 = Math.max(ty, Math.min(ty + cfg.portaT.w, c.y + c.h)), wt = ty2 - ty;
     if (wt > 0) {
       var toN = ty - c.y >= (c.y + c.h) - ty2, a2 = toN ? Math.max(c.y, ty - wt) : ty2, b2 = toN ? ty : Math.min(c.y + c.h, ty2 + wt);
-      L.push({ x0: c.x - t - k, x1: c.x - t, y0: a2, y1: b2, h: 4.2 });
+      L.push({ x0: c.x - t - k, x1: c.x - t, y0: a2, y1: b2, h: portaAlt(cfg).talete });
     }
     return L;
   }
@@ -1538,7 +1539,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
   function mapAnalysis() {
     var cfg = mapCfg(), obs = obstacles(cfg), items = [], bad = {}, pairs = [];
-    S.mezzi.forEach(function (m) { var d = mezzoDims(m), p = mezzoPos(m); if (d && p) items.push({ id: 'm:' + m.id, mezzo: true, m: m, d: d, p: p, poly: toWorld(mezzoLocal(d), p) }); });
+    S.mezzi.forEach(function (m) { var d = mezzoDims(m), p = mezzoPos(m); if (d && p) items.push({ id: 'm:' + m.id, mezzo: true, m: m, d: d, p: p, poly: toWorld(mezzoLocal(d, m), p) }); });
     placedBoats().forEach(function (b) { var d = boatDims(b), p = boatPos(b); items.push({ id: b.id, b: b, d: d, p: p, poly: toWorld(hullLocal(d.L, d.B), p) }); });
     if (M.ghost) items.push({ id: '__ghost', ghost: true, d: { L: M.ghost.L, B: M.ghost.B, est: false }, p: M.ghost, poly: toWorld(hullLocal(M.ghost.L, M.ghost.B), M.ghost) });
     for (var i = 0; i < items.length; i++) {
@@ -1609,8 +1610,8 @@ button.row:active, .row .hit:active { opacity: .65; }
     return h;
   }
   function mezzoSvg(it, an) {
-    var d = it.d, p = it.p, sel = M.sel === it.id, bad = an.bad[it.id] === true, h = d.L / 2, b = d.B / 2, db = drawbarLen(d);
-    var pts = mezzoLocal(d).map(function (q) { return q[0].toFixed(3) + ',' + q[1].toFixed(3); }).join(' ');
+    var d = it.d, p = it.p, sel = M.sel === it.id, bad = an.bad[it.id] === true, h = d.L / 2, b = d.B / 2, db = drawbarLen(d, it.m);
+    var pts = mezzoLocal(d, it.m).map(function (q) { return q[0].toFixed(3) + ',' + q[1].toFixed(3); }).join(' ');
     var stroke = bad ? '#F2473D' : sel ? '#ffffff' : '#c8ccd4', sw = bad || sel ? 2.5 : 1.2, rot = num(p.rot) || 0, nr = ((rot % 360) + 360) % 360, flip = nr > 90 && nr < 270;
     var beams = '<rect x="' + (-h).toFixed(2) + '" y="' + (-b * 0.78).toFixed(2) + '" width="' + (d.L - db).toFixed(2) + '" height="' + (b * 0.22).toFixed(2) + '" fill="#9aa0aa"/>' +
       '<rect x="' + (-h).toFixed(2) + '" y="' + (b * 0.56).toFixed(2) + '" width="' + (d.L - db).toFixed(2) + '" height="' + (b * 0.22).toFixed(2) + '" fill="#9aa0aa"/>';
@@ -1726,7 +1727,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var nb = it.near || nearestFor(it, an), d = it.d, gl;
     if (an.bad[it.id] === true || nb.d < 0) gl = '<div class="gapline bad">Si sovrappone a ' + esc(nb.d < 0 ? nb.nome : 'un’altra barca o un ostacolo') + '</div>';
     else if (an.bad[it.id] === 'fuori') gl = '<div class="gapline bad">Esce dal perimetro del cantiere</div>';
-    else gl = '<div class="gapline ' + (nb.d < 0.05 ? 'warn' : 'ok') + '">Più vicino: ' + esc(nb.nome) + ' a ' + fmtGap(nb.d) + '</div>';
+    else { var dl = distList(it, an, 4); gl = '<div class="gapline ' + (nb.d < 0.5 ? 'warn' : 'ok') + '">Distanze: ' + (dl.length ? dl.map(function (q) { return '<span class="t-' + gapLevel(q.d) + '"><b>' + fmtGap(q.d) + '</b></span> da ' + esc(q.nome); }).join(' · ') : 'niente nel raggio di 8 m') + '</div>'; }
     if (it.mezzo) return mezzoCard(card, it, an, nb, gl);
     var carr = !it.ghost && carrierOf(it.id);
     var title = it.ghost ? 'Barca di prova' : esc(it.b.nome || 'Barca');
@@ -1910,7 +1911,7 @@ button.row:active, .row .hit:active { opacity: .65; }
         var tdy = g('f-tdy'), tdw = g('f-tdw'), pn = !!(f.querySelector('#f-pn') || {}).checked;
         if (tdy == null || tdw == null || tdw < 0) { formErr('Controlla le misure del portone lato Via Talete.'); return false; }
         if ([W, H, cw, ch, pp, pc].some(function (v) { return !v || v <= 0; }) || cx == null || cy == null || px == null || !pw) { formErr('Controlla le misure: devono essere tutte numeri in metri.'); return false; }
-        var data = { W: W, H: H, cap: { x: cx, y: cy, w: cw, h: ch }, porta: { x: cx + px, w: pw }, portaT: { y: tdy, w: tdw }, portaN: pn, cancello: { x: gx, w: gw }, passo: pp, colonna: pc, muro: c.muro, ostacoli: c.ostacoli, confermate: true, modificato: new Date().toISOString() };
+        var data = { W: W, H: H, cap: { x: cx, y: cy, w: cw, h: ch }, porta: { x: cx + px, w: pw }, portaT: { y: tdy, w: tdw }, portaN: pn, cancello: { x: gx, w: gw }, passo: pp, colonna: pc, muro: c.muro, ostacoli: c.ostacoli, alt: (S.mapCfg || {}).alt || null, confermate: true, modificato: new Date().toISOString() };
         var ref = S.db.collection('impostazioni').doc('mappa'), ok = await w(function () { return ref.set(data); });
         if (ok) { M.fitted = false; toast('Misure salvate'); setTimeout(function () { if (V.tab === 'mappa') { mapFit(); applyView(); mapRefresh(); } }, 300); }
         return ok;
@@ -1921,7 +1922,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   var ING_TIPI = [['edificio', 'Edificio o locale'], ['uffici', 'Uffici e bagni'], ['attrezzatura', 'Attrezzatura o banco'], ['serbatoi', 'Serbatoi'], ['verde', 'Aiuola o alberi']];
   async function saveMapCfg(patch) {
     var c = mapCfg(), raw = S.mapCfg || {}, now = new Date().toISOString();
-    var data = { W: c.W, H: c.H, cap: c.cap, porta: c.porta, portaT: c.portaT, portaN: c.portaN, cancello: c.cancello, passo: c.passo, colonna: c.colonna, muro: c.muro, ostacoli: c.ostacoli, confermate: !!raw.confermate, modificato: now };
+    var data = { W: c.W, H: c.H, cap: c.cap, porta: c.porta, portaT: c.portaT, portaN: c.portaN, cancello: c.cancello, passo: c.passo, colonna: c.colonna, muro: c.muro, ostacoli: c.ostacoli, alt: raw.alt || null, confermate: !!raw.confermate, modificato: now };
     Object.assign(data, patch);
     var ref = S.db.collection('impostazioni').doc('mappa'), ok = await w(function () { return ref.set(data); });
     if (ok) setTimeout(function () { if (V.tab === 'mappa') { M.staticKey = null; mapRefresh(); if (M.three) { dispose3D(); M.mounted = null; render(); } } }, 300);
@@ -1974,13 +1975,38 @@ button.row:active, .row .hit:active { opacity: .65; }
         return '<button type="button" data-act="m-mezzo-go" data-id="' + esc(m.id) + '"><span class="ic-circle" style="background:var(--card-2);color:var(--ink)">' + I.updown + '</span><span class="main"><span class="title">' + esc(m.nome || 'Carrello') + '</span><span class="sub">' +
           esc(m.tipo || 'Mezzo') + (d ? ' · ' + fmtNum(d.L, 2) + ' × ' + fmtNum(d.B, 2) + ' m' : '') + ' · ' + (mezzoPos(m) ? (c ? 'a bordo ' + esc(c.nome) : 'sulla mappa') : 'da posizionare') + '</span></span></button>';
       }).join('') + '</div>' : '<p class="context">Nessun mezzo. Aggiungi carrelli, muletti e gli altri mezzi che si muovono nel cantiere.</p>') +
-        (S.canWrite ? '<button type="button" class="btn sec self-start" data-act="m-mezzo-new">' + I.plus + 'Nuovo mezzo</button>' : '')
+        (S.canWrite ? '<button type="button" class="btn sec self-start" data-act="m-mezzo-new">' + I.plus + 'Nuovo mezzo</button><button type="button" class="link" data-act="mz-seed" style="align-self:flex-start">Aggiungi i mezzi del cantiere (BoatLift, motrice, trattore…)</button><button type="button" class="link" data-act="perc-edit" style="align-self:flex-start">Percorso MSV → cantiere e portoni</button>' : '')
+    });
+  }
+  var TIPI_MEZZO = ['BoatLift (semovente)', 'Carrello autotaccante con timone snodato', 'Carrello autolivellante', 'Carrello stradale', 'Carrello', 'Motrice', 'Trattore', 'Furgone', 'Muletto', 'Altro'];
+  var MEZZI_NM = [
+    { nome: 'BoatLift BL 20', tipo: 'BoatLift (semovente)', lunghezza: 9.886, larghezza: 3, altezzaCarico: 0.6, colore: '#2c45ad', note: 'BL 20 MAS 90° · matricola ZA9BL20000PN71474 · motore Doosan EDM02 · radiocomando IMET · portata 20.000 kg', misureStimate: false },
+    { nome: 'Carrello stradale', tipo: 'Carrello stradale', lunghezza: 8, larghezza: 2.5, altezzaCarico: 0.7, colore: '#22306b', misureStimate: true },
+    { nome: 'Carrello autotaccante grigio', tipo: 'Carrello autotaccante con timone snodato', lunghezza: 10.8, larghezza: 2.7, altezzaCarico: 0.75, colore: '#8a8f96', misureStimate: true },
+    { nome: 'Motrice', tipo: 'Motrice', lunghezza: 5.6, larghezza: 2.5, colore: '#9aa0a8', misureStimate: true },
+    { nome: 'Trattore John Deere', tipo: 'Trattore', lunghezza: 4.6, larghezza: 2.55, colore: '#367c2b', misureStimate: true },
+    { nome: 'Furgone Citroën', tipo: 'Furgone', lunghezza: 4.95, larghezza: 1.92, colore: '#f4f5f7', misureStimate: true }];
+  function mezziSeedSheet() {
+    var have = S.mezzi.map(function (m) { return String(m.nome || '').toLowerCase(); });
+    openSheet({
+      title: 'Mezzi del cantiere', submitLabel: 'Aggiungi',
+      body: '<p class="context">Quelli che mi hai descritto. Spunta quelli da aggiungere: le misure segnate «stimate» poi correggile col metro.</p><div class="group">' + MEZZI_NM.map(function (x, i) {
+        var got = have.some(function (h) { return h.indexOf(x.nome.toLowerCase().split(' ')[0]) >= 0 && (x.nome.split(' ').length < 2 || h.indexOf(x.nome.toLowerCase().split(' ')[1]) >= 0); });
+        return '<div class="ck"><label><input type="checkbox" data-seed="' + i + '"' + (got ? '' : ' checked') + '><span class="t"><b>' + esc(x.nome) + '</b><span class="cap" style="display:block">' + esc(x.tipo + ' · ' + fmtNum(x.lunghezza, 2) + ' × ' + fmtNum(x.larghezza, 2) + ' m' + (x.misureStimate ? ' (stimate)' : '') + (got ? ' · sembra già presente' : '')) + '</span></span></label></div>';
+      }).join('') + '</div><p class="cap" style="margin-top:8px">Lo Zenti c’è già: se il «Carrello 2» è il carrello stradale, non aggiungere il nuovo e cambia il tipo del Carrello 2.</p>',
+      onSubmit: async function (f) {
+        var now = new Date().toISOString(), n = 0, boxes = f.querySelectorAll('input[data-seed]:checked');
+        for (var i = 0; i < boxes.length; i++) { var x = Object.assign({}, MEZZI_NM[+boxes[i].getAttribute('data-seed')], { barcaId: null, creato: now, modificato: now }), ref = S.db.collection('mezzi').doc(); if (!(await w(function () { return ref.set(x); }))) return false; n++; }
+        if (n) toast(n === 1 ? 'Mezzo aggiunto: mettilo sulla mappa' : n + ' mezzi aggiunti: mettili sulla mappa'); return true;
+      }
     });
   }
   function mezzoSheet(m) {
     var isNew = !m; m = m || { tipo: 'Carrello' };
     var body = field(lab('f-mzn', 'Nome'), inp('f-mzn', m.nome, 'type="text" required placeholder="es. Zenti"')) +
-      field(lab('f-mzt', 'Tipo'), '<select id="f-mzt">' + opts(['Carrello autolivellante', 'Carrello', 'Muletto', 'Altro'], m.tipo) + '</select>') +
+      field(lab('f-mzt', 'Tipo'), '<select id="f-mzt">' + opts(TIPI_MEZZO.indexOf(m.tipo) >= 0 || !m.tipo ? TIPI_MEZZO : TIPI_MEZZO.concat([m.tipo]), m.tipo) + '</select>') +
+      '<div class="grid2">' + field(lab('f-mzh', 'Altezza del piano di carico (m)'), inp('f-mzh', num(m.altezzaCarico) != null ? String(m.altezzaCarico).replace('.', ',') : '', 'type="text" inputmode="decimal" placeholder="dove poggia la chiglia"')) +
+      field(lab('f-mzc', 'Colore'), '<input id="f-mzc" type="color" value="' + esc(/^#[0-9a-f]{6}$/i.test(m.colore || '') ? m.colore : '#23306e') + '">') + '</div>' +
       '<div class="grid2">' + field(lab('f-mzl', 'Lunghezza con timone (m)'), inp('f-mzl', num(m.lunghezza) != null ? String(m.lunghezza).replace('.', ',') : '', 'type="text" inputmode="decimal" required')) +
       field(lab('f-mzb', 'Larghezza (m)'), inp('f-mzb', num(m.larghezza) != null ? String(m.larghezza).replace('.', ',') : '', 'type="text" inputmode="decimal" required')) + '</div>' +
       field(lab('f-mznote', 'Note'), '<textarea id="f-mznote" placeholder="es. portata massima, numero pistoni, targa">' + esc(m.note || '') + '</textarea>');
@@ -1992,7 +2018,7 @@ button.row:active, .row .hit:active { opacity: .65; }
         var L = parseDec(val(f, 'f-mzl')), B = parseDec(val(f, 'f-mzb')), nome = val(f, 'f-mzn');
         if (!nome) { formErr('Scrivi il nome del mezzo.'); return false; }
         if (!L || !B || L <= 0 || B <= 0) { formErr('Scrivi lunghezza e larghezza in metri.'); return false; }
-        var now = new Date().toISOString(), data = { nome: nome, tipo: val(f, 'f-mzt'), lunghezza: L, larghezza: B, note: val(f, 'f-mznote'), misureStimate: false, modificato: now }, ok;
+        var now = new Date().toISOString(), data = { nome: nome, tipo: val(f, 'f-mzt'), lunghezza: L, larghezza: B, altezzaCarico: parseDec(val(f, 'f-mzh')), colore: val(f, 'f-mzc'), note: val(f, 'f-mznote'), misureStimate: false, modificato: now }, ok;
         if (isNew) { data.creato = now; data.barcaId = null; var ref = S.db.collection('mezzi').doc(); ok = await w(function () { return ref.set(data); }); }
         else { var r2_ = S.db.collection('mezzi').doc(m.id); ok = await w(function () { return r2_.update(data); }); }
         if (ok) toast('Mezzo salvato');
@@ -2085,7 +2111,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     segs.forEach(function (q) { bx(q[0] - 0.02, q[1] + 0.02, q[2] - 0.02, q[3] + 0.02, hW - 1.7, hW - 1.25, 0xe8dfcf, 0.8); bx(q[0] - 0.04, q[1] + 0.04, q[2] - 0.04, q[3] + 0.04, hW - 0.2, hW, 0xe8dfcf, 0.85); });
     var dx = Math.max(c.x, Math.min(cfg.porta.x, c.x + c.w)), dx2 = Math.max(dx, Math.min(cfg.porta.x + cfg.porta.w, c.x + c.w));
     var ty = Math.max(c.y, Math.min(c.y + cfg.portaT.y, c.y + c.h)), ty2 = Math.max(ty, Math.min(ty + cfg.portaT.w, c.y + c.h));
-    var BRICK = 0xb8693f, DOOR = 0x9aa0a8, GLASS = 0x2a3240, PH = 4.6, PHT = 4.2;
+    var BRICK = 0xb8693f, DOOR = 0x9aa0a8, GLASS = 0x2a3240, PH = portaAlt(cfg).pitagora, PHT = portaAlt(cfg).talete;
     // portoni scorrevoli: muro sopra l'apertura e anta aperta, fatta scorrere fuori lungo il muro
     var sl = slideLeaves(cfg);
     if (dx2 > dx) {
@@ -2113,56 +2139,327 @@ button.row:active, .row .hit:active { opacity: .65; }
       v.rotation.z = Math.PI / 2; v.position.set(c.x + c.w / 2, hW, c.y + (i + 0.5) * dv); scene.add(v);
     }
   }
+  /* ---------- Modelli 3D fedeli ----------
+     Barche: scafo a V costruito dalle misure (lunghezza, baglio, altezza dello scafo) con carena, murata e fascia dei colori veri,
+     sovrastruttura secondo la tipologia (open, T-top, walkaround, cabinato, fly, gozzo, vela, gommone), motori con il colore della marca.
+     Carrelli e mezzi del cantiere: BoatLift BL 20, carrelli autotaccanti con timone snodato, carrello stradale, motrice, trattore, furgone. */
+  var TIPOLOGIE = [['', 'Scegli…'], ['open', 'Open con consolle'], ['ttop', 'Open con T-top'], ['walk', 'Walkaround o hardtop'], ['cab', 'Cabinato'], ['fly', 'Fly'], ['gozzo', 'Gozzo o menorchino'], ['vela', 'Vela'], ['gommone', 'Gommone']];
+  var FASCE = [['nessuna', 'Nessuna'], ['alta', 'Sotto la falchetta'], ['murata', 'Tutta la murata']];
+  function tipologiaOf(b) {
+    if (b.tipologia) return b.tipologia;
+    if (b.tipo === 'Vela') return 'vela'; if (b.tipo === 'Gommone') return 'gommone';
+    var L = num(b.lunghezza) || 0; return L >= 14 ? 'fly' : L >= 8 ? 'cab' : 'open';
+  }
+  var SUP_H = { open: 1.35, ttop: 2.3, walk: 2.2, cab: 1.35, fly: 3.3, gozzo: 1.8, gommone: 1.1 }; // dalla coperta al punto più alto
+  function boat3D(b) {
+    var d = boatDims(b); if (!d) return null;
+    var tip = tipologiaOf(b), L = d.L, B = d.B;
+    var D = num(b.altezzaScafo), Dest = !(D > 0);
+    if (Dest) D = tip === 'gommone' ? 0.55 + 0.03 * L : tip === 'vela' ? 0.32 * B + 0.35 : tip === 'fly' ? 0.42 * B + 0.55 : tip === 'cab' || tip === 'walk' || tip === 'gozzo' ? 0.38 * B + 0.3 : 0.36 * B + 0.25;
+    var keel = tip === 'vela' ? Math.max(1.1, Math.min(2.6, 0.16 * L + 0.2)) : 0; // pinna di deriva sotto lo scafo
+    var H = num(b.altezzaMax), Hest = !(H > 0);
+    if (Hest) H = keel + D + (tip === 'vela' ? 1.32 * L : (SUP_H[tip] || 1.4) + (tip === 'cab' || tip === 'walk' ? 0.05 * L : 0));
+    var mt = b.motoreTipo || (tip === 'vela' ? 'Entrobordo' : 'Fuoribordo');
+    return { L: L, B: B, D: D, H: H, keel: keel, tip: tip, Dest: Dest, Hest: Hest, est: d.est,
+      cols: { scafo: b.coloreScafo || '#f2f3f5', carena: b.coloreCarena || (tip === 'gommone' ? '#e9ebee' : '#22324f'), fascia: b.coloreFascia || '#2b2f36', coperta: '#e6e8ec' },
+      fascia: b.fascia || 'nessuna', mot: { tipo: mt, n: Math.max(1, Math.min(4, num(b.nMotori) || 1)), testo: String(b.motore || ''), cv: num(b.potenza) || 0 } };
+  }
+  function brandCol(t) {
+    t = String(t || '').toLowerCase();
+    return /mercury|verado|mariner/.test(t) ? 0x17181c : /yamaha/.test(t) ? 0x7e848c : /suzuki/.test(t) ? 0xe6e8ea : /honda/.test(t) ? 0xdfe2e6 : /tohatsu|nissan/.test(t) ? 0x9aa0a8 : /evinrude|johnson|selva|parsun/.test(t) ? 0xeeeeef : 0x2b2d33;
+  }
+  function lam(T, c, o) { var m = new T.MeshLambertMaterial(Object.assign({ color: c, side: T.DoubleSide }, o || {})); return m; }
+  function hullGeo(T, P) {
+    var N = 28, L = P.L, B = P.B, D = P.D, sets = [[], [], [], [], []]; // 0 carena, 1 murata, 2 fascia, 3 coperta, 4 specchio di poppa
+    function st(s) {
+      var b = s <= 0.55 ? B / 2 * (0.9 + 0.1 * Math.sin(s / 0.55 * Math.PI / 2)) : B / 2 * Math.pow(Math.max(0, 1 - Math.pow((s - 0.55) / 0.45, 1.8)), 0.62);
+      var c = b * (s < 0.6 ? (P.tondo ? 0.7 : 0.86) : (P.tondo ? 0.7 : 0.86) - 0.5 * (s - 0.6) / 0.4);
+      var yk = s < 0.6 ? 0 : D * 0.6 * Math.pow((s - 0.6) / 0.4, 2.2);
+      var beta = ((P.tondo ? 28 : 19) + 32 * Math.pow(Math.max(0, (s - 0.25) / 0.75), 1.3)) * Math.PI / 180;
+      var ys = D * (1 + (P.cavallino || 0.1) * s * s);
+      var yc = Math.min(yk + c * Math.tan(beta), ys - 0.1 * D);
+      var ts = (ys - yc) || 1, tw = Math.max(0, Math.min(1, ((P.yw != null ? P.yw : D * 0.36) - yc) / ts)), t0 = 1, t1 = 1;
+      if (P.fascia === 'murata') { t0 = tw + 0.16 * (1 - tw); t1 = 1; } else if (P.fascia === 'alta') { t0 = 0.7; t1 = 0.93; }
+      var tt = [0, tw, Math.max(tw, t0), Math.max(tw, t0, t1), 1];
+      return { x: -L / 2 + s * L, b: b, c: c, yk: yk, yc: yc, ys: ys, side: tt.map(function (t) { return [c + t * (b - c), yc + t * (ys - yc)]; }) };
+    }
+    var S_ = []; for (var i = 0; i <= N; i++) S_.push(st(i / N));
+    function quad(set, a, b2, c2, d2) { set.push(a[0], a[1], a[2], b2[0], b2[1], b2[2], c2[0], c2[1], c2[2], a[0], a[1], a[2], c2[0], c2[1], c2[2], d2[0], d2[1], d2[2]); }
+    for (i = 0; i < N; i++) {
+      var p = S_[i], q = S_[i + 1];
+      [-1, 1].forEach(function (sd) {
+        quad(sets[0], [p.x, p.yk, 0], [p.x, p.yc, sd * p.c], [q.x, q.yc, sd * q.c], [q.x, q.yk, 0]);
+        for (var r = 0; r < 4; r++) {
+          var mat = r === 0 ? 0 : r === 2 ? 2 : 1;
+          quad(sets[mat], [p.x, p.side[r][1], sd * p.side[r][0]], [p.x, p.side[r + 1][1], sd * p.side[r + 1][0]], [q.x, q.side[r + 1][1], sd * q.side[r + 1][0]], [q.x, q.side[r][1], sd * q.side[r][0]]);
+        }
+      });
+      quad(sets[3], [p.x, p.ys - 0.02, -p.b], [p.x, p.ys - 0.02, p.b], [q.x, q.ys - 0.02, q.b], [q.x, q.ys - 0.02, -q.b]);
+    }
+    var t = S_[0];
+    [[[t.x, t.yk, 0], [t.x, t.yc, t.c], [t.x, t.ys, t.b]], [[t.x, t.yk, 0], [t.x, t.ys, t.b], [t.x, t.ys, -t.b]], [[t.x, t.yk, 0], [t.x, t.ys, -t.b], [t.x, t.yc, -t.c]]].forEach(function (tri) { tri.forEach(function (v) { sets[4].push(v[0], v[1], v[2]); }); });
+    var pos = [], g = new T.BufferGeometry(), start = 0;
+    sets.forEach(function (s, k) { pos = pos.concat(s); g.addGroup(start, s.length / 3, k); start += s.length / 3; });
+    g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+    var mesh = new T.Mesh(g, [lam(T, P.cols.carena), lam(T, P.cols.scafo), lam(T, P.fascia === 'nessuna' ? P.cols.scafo : P.cols.fascia), lam(T, P.cols.coperta), lam(T, P.cols.scafo)]);
+    var sheer = S_.map(function (s) { return [s.x, s.ys, s.b]; });
+    return { mesh: mesh, sheer: sheer, at: function (s) { return st(Math.max(0, Math.min(1, s))); } };
+  }
+  function boatModel(T, b) { // la barca con la chiglia a quota 0 (la pinna della vela scende sotto)
+    var P = boat3D(b); if (!P) return null;
+    var g = new T.Group(), L = P.L, B = P.B, D = P.D, tip = P.tip;
+    var white = lam(T, 0xf1f2f4), grey = lam(T, 0xc9cdd3), dark = lam(T, 0x1d2433), steel = lam(T, 0xd5d8dd), glass = lam(T, 0x2a3646, { transparent: true, opacity: 0.55 });
+    function box(w, h, d, mat, x, y, z) { var m = new T.Mesh(new T.BoxGeometry(Math.max(0.02, w), Math.max(0.02, h), Math.max(0.02, d)), mat); m.position.set(x, y, z); return m; }
+    function cyl(r, h, mat, x, y, z) { var m = new T.Mesh(new T.CylinderGeometry(r, r, h, 10), mat); m.position.set(x, y, z); return m; }
+    var hp = { L: L, B: B, D: D, cols: P.cols, fascia: P.fascia, tondo: tip === 'vela' || tip === 'gozzo', cavallino: tip === 'gozzo' ? 0.22 : 0.1, yw: tip === 'gommone' ? D * 0.2 : D * 0.36 };
+    var hull = hullGeo(T, hp); g.add(hull.mesh);
+    var rail = new T.Line(new T.BufferGeometry().setFromPoints(hull.sheer.map(function (q) { return new T.Vector3(q[0], q[1], q[2] + 0.01); }).concat(hull.sheer.slice().reverse().map(function (q) { return new T.Vector3(q[0], q[1], -q[2] - 0.01); }))), new T.LineBasicMaterial({ color: 0x3a3f47 }));
+    g.add(rail);
+    var sup = new T.Group(); sup.position.y = D; g.add(sup); // sovrastruttura: quota 0 = coperta a centro barca
+    var bw = function (s) { return hull.at(s).b; };
+    function rails(x0, x1, h) { [-1, 1].forEach(function (sd) { var n = 4; for (var k = 0; k <= n; k++) { var s = (x0 + (x1 - x0) * k / n + L / 2) / L; sup.add(cyl(0.015, h, steel, x0 + (x1 - x0) * k / n, h / 2, sd * (bw(s) - 0.08))); } var mid = (x0 + x1) / 2; sup.add(box(x1 - x0, 0.03, 0.03, steel, mid, h, sd * (bw((mid + L / 2) / L) - 0.08))); }); }
+    function consolle(x, w, h) { sup.add(box(w, h, Math.max(0.6, B * 0.34), white, x, h / 2, 0)); var sc = box(0.03, 0.42, Math.max(0.66, B * 0.38), glass, x + w / 2 - 0.05, h + 0.2, 0); sc.rotation.z = -0.35; sup.add(sc); sup.add(box(0.5, 0.75, Math.max(0.6, B * 0.3), grey, x - w / 2 - 0.45, 0.38, 0)); }
+    if (tip === 'open' || tip === 'ttop') {
+      var cw = Math.max(0.6, L * 0.11); consolle(-L * 0.04, cw, 0.95);
+      sup.add(box(L * 0.18, 0.18, B * 0.62, grey, L * 0.27, 0.09, 0)); // prendisole a prua
+      rails(-L * 0.12, L * 0.4, 0.55);
+      if (tip === 'ttop') {
+        [-1, 1].forEach(function (sd) { [-L * 0.1, L * 0.02].forEach(function (x) { sup.add(cyl(0.03, 2.2, dark, x, 1.1, sd * B * 0.26)); }); });
+        sup.add(box(L * 0.27, 0.08, B * 0.66, white, -L * 0.04, 2.24, 0));
+      }
+    } else if (tip === 'walk') {
+      sup.add(box(L * 0.32, 0.5, B * 0.55, white, L * 0.2, 0.25, 0));
+      var ws = box(0.03, 0.75, B * 0.62, glass, L * 0.035, 0.85, 0); ws.rotation.z = -0.4; sup.add(ws);
+      [-1, 1].forEach(function (sd) { [-L * 0.17, L * 0.02].forEach(function (x) { sup.add(cyl(0.035, 2.05, steel, x, 1.02, sd * B * 0.34)); }); });
+      sup.add(box(L * 0.3, 0.12, B * 0.78, white, -L * 0.07, 2.1, 0));
+      consolle(-L * 0.05, Math.max(0.6, L * 0.09), 0.95); rails(L * 0.02, L * 0.44, 0.6);
+    } else if (tip === 'cab') {
+      var ch = 0.85 + L * 0.035;
+      sup.add(box(L * 0.42, ch, B * 0.72, white, L * 0.08, ch / 2, 0)); sup.add(box(L * 0.3, 0.2, B * 0.73, dark, L * 0.06, ch * 0.62, 0));
+      var w2 = box(0.03, 0.5, B * 0.66, glass, -L * 0.14, ch + 0.2, 0); w2.rotation.z = -0.5; sup.add(w2); rails(-L * 0.4, L * 0.44, 0.5);
+    } else if (tip === 'fly') {
+      sup.add(box(L * 0.5, 1.95, B * 0.86, white, -L * 0.05, 0.98, 0)); sup.add(box(L * 0.44, 0.45, B * 0.87, dark, -L * 0.04, 1.35, 0));
+      sup.add(box(L * 0.34, 0.16, B * 0.82, white, -L * 0.12, 2.03, 0)); sup.add(box(0.8, 0.9, B * 0.45, white, L * 0.0, 2.55, 0));
+      [-1, 1].forEach(function (sd) { sup.add(cyl(0.03, 1.1, steel, -L * 0.26, 2.65, sd * B * 0.36)); }); sup.add(box(L * 0.18, 0.05, B * 0.75, lam(T, 0x2a3140), -L * 0.22, 3.22, 0));
+      rails(-L * 0.25, L * 0.45, 0.8);
+    } else if (tip === 'gozzo') {
+      sup.add(box(L * 0.22, 1.6, B * 0.6, white, -L * 0.02, 0.8, 0)); sup.add(box(L * 0.2, 0.42, B * 0.61, dark, -L * 0.02, 1.15, 0));
+      sup.add(box(L * 0.24, 0.07, B * 0.66, white, -L * 0.02, 1.64, 0)); sup.add(cyl(0.04, 1.1, steel, L * 0.33, 0.55, 0)); rails(-L * 0.42, L * 0.42, 0.45);
+    } else if (tip === 'vela') {
+      sup.add(box(L * 0.34, 0.5, B * 0.58, white, L * 0.08, 0.25, 0)); sup.add(box(L * 0.28, 0.12, B * 0.59, dark, L * 0.08, 0.32, 0));
+      var mh = Math.max(3, L * 1.3); sup.add(cyl(0.07, mh, grey, L * 0.12, mh / 2, 0));
+      var boom = cyl(0.05, L * 0.42, grey, L * 0.12 - L * 0.21, 1.25, 0); boom.rotation.z = Math.PI / 2; sup.add(boom); rails(-L * 0.45, L * 0.45, 0.6);
+      var fin = new T.Mesh(new T.BoxGeometry(L * 0.14, P.keel, 0.12), lam(T, 0x2b2f36)); fin.position.set(L * 0.03, -P.keel / 2, 0); g.add(fin);
+      var bulb = cyl(0.16, L * 0.16, lam(T, 0x2b2f36), L * 0.02, -P.keel + 0.1, 0); bulb.rotation.z = Math.PI / 2; g.add(bulb);
+      var rud = new T.Mesh(new T.BoxGeometry(L * 0.06, P.keel * 0.7, 0.06), lam(T, 0x2b2f36)); rud.position.set(-L * 0.4, -P.keel * 0.35 + D * 0.1, 0); g.add(rud);
+    } else if (tip === 'gommone') {
+      var r = Math.max(0.2, Math.min(0.32, 0.17 + 0.025 * L)), pts = [];
+      for (var k = 0; k <= 20; k++) { var s = k / 20, q = hull.at(s * 0.97); pts.push(new T.Vector3(q.x - (k === 0 ? 0.35 : 0), q.ys - D * 0.15, q.b + r * 0.4)); }
+      var path = pts.concat(pts.slice(0, -1).reverse().map(function (v) { return new T.Vector3(v.x, v.y, -v.z); }));
+      var tubeMat = lam(T, P.fascia !== 'nessuna' ? P.cols.fascia : 0x3c4149);
+      g.add(new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(path), 80, r, 10, false), tubeMat));
+      consolle(-L * 0.05, Math.max(0.55, L * 0.1), 0.85);
+    }
+    // altezza totale vera: allungo o accorcio la sovrastruttura (non lo scafo)
+    var supTop = (SUP_H[tip] || 1.3) + (tip === 'cab' ? 0.035 * L + 0.2 : tip === 'vela' ? Math.max(3, L * 1.3) - 1.3 : 0);
+    var want = P.H - P.keel - D;
+    if (!P.Hest && want > 0.2 && supTop > 0.2) sup.scale.y = Math.max(0.3, Math.min(3, want / supTop));
+    // motori
+    var mt = P.mot, mc = lam(T, brandCol(mt.testo));
+    if (/fuoribordo/i.test(mt.tipo)) {
+      var kk = Math.max(0.75, Math.min(1.35, 0.7 + mt.cv / (mt.n * 450))), gap = 0.62 * kk + 0.12;
+      for (var mi = 0; mi < mt.n; mi++) {
+        var z = (mi - (mt.n - 1) / 2) * gap, mo = new T.Group(); mo.position.set(-L / 2 - 0.32 * kk, 0, z);
+        mo.add(box(0.5 * kk, 0.72 * kk, 0.42 * kk, mc, -0.05, D + 0.12, 0));                 // calandra
+        mo.add(box(0.16 * kk, D * 0.9, 0.2 * kk, mc, 0.04, D * 0.45 - 0.1, 0));              // gambo
+        mo.add(box(0.42 * kk, 0.16 * kk, 0.14 * kk, mc, 0.02, -0.12, 0));                    // piede
+        mo.add(box(0.05, 0.22 * kk, 0.05, steel, -0.2 * kk, -0.12, 0));                      // elica
+        g.add(mo);
+      }
+    } else if (/entrofuori/i.test(mt.tipo)) {
+      for (var ni2 = 0; ni2 < mt.n; ni2++) { var z2 = (ni2 - (mt.n - 1) / 2) * 0.6; g.add(box(0.28, D * 0.55, 0.16, lam(T, 0x6d737c), -L / 2 - 0.16, D * 0.2, z2)); }
+    } else if (/entrobordo/i.test(mt.tipo) && tip !== 'vela') {
+      for (var nj = 0; nj < mt.n; nj++) { var z3 = (nj - (mt.n - 1) / 2) * B * 0.32; var sh = cyl(0.03, L * 0.22, steel, -L * 0.36, D * 0.06, z3); sh.rotation.z = Math.PI / 2 - 0.12; g.add(sh); g.add(box(0.05, 0.36, 0.05, lam(T, 0xb8a26a), -L * 0.47, D * 0.02, z3)); }
+    }
+    g.userData.P = P;
+    return g;
+  }
+  // altezza della chiglia da terra: sull'invaso o sul piano del carrello
+  var INVASO_H = 0.4;
+  function invaso(T, P) {
+    var g = new T.Group(), wood = lam(T, 0x8a6a45), steel = lam(T, 0x6f757e), base = P.keel ? 0.3 : INVASO_H, L = P.L;
+    [-0.3, 0.05, 0.32].forEach(function (s) { var bl = new T.Mesh(new T.BoxGeometry(0.4, base, 0.35), wood); bl.position.set(s * L, base / 2, 0); g.add(bl); });
+    var lift = base + P.keel;
+    [-0.22, 0.2].forEach(function (s) { [-1, 1].forEach(function (sd) {
+      var h = lift + P.D * 0.42, pz = sd * P.B * 0.38, pr = new T.Mesh(new T.CylinderGeometry(0.035, 0.05, h, 8), steel); pr.position.set(s * L, h / 2, pz); pr.rotation.x = -sd * 0.1; g.add(pr);
+      var pad = new T.Mesh(new T.BoxGeometry(0.25, 0.04, 0.25), wood); pad.position.set(s * L, h, pz + sd * 0.05); g.add(pad);
+    }); });
+    return { g: g, lift: lift };
+  }
+
+  /* Carrelli e mezzi */
+  function mezzoKind(m) {
+    var t = String((m.tipo || '') + ' ' + (m.nome || '')).toLowerCase();
+    return /boat ?lift|bl ?20/.test(t) ? 'boatlift' : /stradal/.test(t) ? 'stradale' : /autotacc|zenti|autoliv|idraulic/.test(t) ? 'idraulico' : /motrice/.test(t) ? 'motrice' : /trattor|john ?deere/.test(t) ? 'trattore' : /furgon|citro/.test(t) ? 'furgone' : /muletto/.test(t) ? 'muletto' : 'carrello';
+  }
+  function isTrailer(m) { var k = m ? mezzoKind(m) : 'carrello'; return k === 'idraulico' || k === 'stradale' || k === 'carrello'; }
+  function carrierDeck(m) { var h = num(m.altezzaCarico); if (h > 0) return h; var k = mezzoKind(m); return k === 'boatlift' ? 0.6 : k === 'idraulico' ? 0.75 : 0.7; }
+  function mezzoColor(m, def) { var c = m.colore; return /^#[0-9a-f]{6}$/i.test(c || '') ? c : def; }
+  function mezzoModel(T, m, d) {
+    var k = mezzoKind(m), g = new T.Group(), h = d.L / 2, b = d.B / 2, db = drawbarLen(d, m), fl = d.L - db;
+    var black = lam(T, 0x17181c), steel = lam(T, 0xbfc4cb);
+    function box(w, hh, dd, mat, x, y, z) { var o = new T.Mesh(new T.BoxGeometry(Math.max(0.02, w), Math.max(0.02, hh), Math.max(0.02, dd)), mat); o.position.set(x, y, z); g.add(o); return o; }
+    function wheel(r, wd, x, z, rim) { var o = new T.Mesh(new T.CylinderGeometry(r, r, wd, 18), black); o.rotation.x = Math.PI / 2; o.position.set(x, r, z); g.add(o); if (rim) { var rr = new T.Mesh(new T.CylinderGeometry(r * 0.55, r * 0.55, wd + 0.02, 14), lam(T, rim)); rr.rotation.x = Math.PI / 2; rr.position.set(x, r, z); g.add(rr); } }
+    if (k === 'boatlift') {
+      var blue = lam(T, mezzoColor(m, '#2c45ad')), yel = lam(T, 0xffa420);
+      [-1, 1].forEach(function (sd) { box(d.L * 0.92, 0.42, 0.34, blue, -d.L * 0.02, 0.45, sd * b * 0.62); });   // longheroni bassi
+      box(0.5, 0.4, d.B * 0.8, blue, h - 0.5, 0.45, 0); box(0.5, 0.35, d.B * 0.8, blue, -h + 0.9, 0.42, 0);     // traverse
+      box(1.5, 1.05, d.B * 0.42, blue, h - 0.8, 0.85, -b * 0.42); box(0.05, 0.7, d.B * 0.3, lam(T, 0x2b2f36), h - 0.02, 0.9, -b * 0.42); // motore e radiatore
+      [-0.32, -0.05, 0.22].forEach(function (s) { [-1, 1].forEach(function (sd) { box(0.42, 0.14, 0.42, yel, s * d.L, carrierDeck(m) - 0.07, sd * b * 0.42); }); }); // pattini gialli
+      [[-h + 0.6, 1], [h - 1.6, 1]].forEach(function (q) { [-1, 1].forEach(function (sd) { wheel(0.32, 0.26, q[0] - 0.22, sd * (b - 0.25), 0x2c45ad); wheel(0.32, 0.26, q[0] + 0.22, sd * (b - 0.25), 0x2c45ad); box(0.95, 0.32, 0.06, yel, q[0], 0.35, sd * (b - 0.08)); }); });
+      box(0.55, 0.55, 0.55, lam(T, 0x22252b), -h + 0.15, 0.95, b - 0.1); box(0.06, 0.6, 0.45, lam(T, 0xd8dbe0), -h - 0.05, 1.0, -b + 0.2); // posto guida e cartello
+    } else if (k === 'idraulico' || k === 'carrello') {
+      var col = lam(T, mezzoColor(m, /grig/i.test(m.nome || '') ? '#8a8f96' : '#23306e')), red = 0xc7342b;
+      [-1, 1].forEach(function (sd) { box(fl, 0.24, 0.2, col, -h + fl / 2, 0.58, sd * b * 0.62); });
+      for (var c2 = 0; c2 < 4; c2++) box(0.16, 0.16, d.B * 0.82, col, -h + 0.3 + c2 * (fl - 0.6) / 3, 0.58, 0);
+      box(fl * 0.85, 0.12, 0.22, lam(T, 0x6e5a40), -h + fl * 0.48, carrierDeck(m) - 0.06, 0);                     // legni per la chiglia
+      var bar = box(db + 0.3, 0.14, 0.14, col, h - (db + 0.3) / 2, 0.5, 0);                                        // timone snodato
+      box(0.22, 0.22, 0.22, steel, h - db, 0.5, 0);
+      wheel(0.33, 0.22, h - db - 0.45, -(b - 0.2), red); wheel(0.33, 0.22, h - db - 0.45, b - 0.2, red);            // asse anteriore sterzante
+      wheel(0.33, 0.22, -h + 0.6, -(b - 0.2), red); wheel(0.33, 0.22, -h + 0.6, b - 0.2, red);                       // asse posteriore
+      if (k === 'idraulico' || /autoliv/i.test(m.tipo || '')) [-0.25, 0.2].forEach(function (s) { [-1, 1].forEach(function (sd) { var px = -h + fl / 2 + s * fl; box(0.09, 0.95, 0.09, steel, px, 1.05, sd * b * 0.62); box(0.3, 0.05, 0.3, lam(T, 0x3a3f47), px, 1.55, sd * b * 0.55); }); });
+    } else if (k === 'stradale') {
+      var col2 = lam(T, mezzoColor(m, '#22306b'));
+      [-1, 1].forEach(function (sd) { box(fl, 0.2, 0.16, col2, -h + fl / 2, 0.55, sd * b * 0.55); var tv = box(db + 1.2, 0.18, 0.16, col2, h - (db + 1.2) / 2, 0.52, sd * b * 0.3); tv.rotation.y = sd * 0.18; });
+      for (var c3 = 0; c3 < 3; c3++) box(0.12, 0.12, d.B * 0.7, col2, -h + 0.4 + c3 * (fl - 0.8) / 2, 0.55, 0);
+      box(0.16, 0.16, 0.16, steel, h - 0.08, 0.52, 0); box(0.08, 0.8, 0.08, steel, h - db - 0.2, 0.95, 0);           // gancio e verricello
+      [-0.2, 0.25].forEach(function (s) { [-1, 1].forEach(function (sd) { box(1.2, 0.1, 0.18, lam(T, 0x6e5a40), -h + fl * (0.5 + s), carrierDeck(m) - 0.05, sd * b * 0.35); }); });
+      [-0.4, 0.4].forEach(function (o) { [-1, 1].forEach(function (sd) { wheel(0.32, 0.2, -d.L * 0.1 + o, sd * (b - 0.15), 0xb9bdc4); }); });
+    } else if (k === 'motrice') {
+      var grey = lam(T, mezzoColor(m, '#9aa0a8')), yel2 = lam(T, 0xf2c12e);
+      box(d.L * 0.92, 0.55, d.B * 0.8, grey, 0, 0.85, 0); box(d.L * 0.36, 1.45, d.B * 0.55, yel2, h - d.L * 0.2, 1.85, -b * 0.4); box(d.L * 0.3, 0.6, d.B * 0.56, lam(T, 0x2a3646, { transparent: true, opacity: 0.6 }), h - d.L * 0.2, 2.1, -b * 0.4);
+      box(0.15, 0.15, 0.15, lam(T, 0xff8a00), h - d.L * 0.2, 2.65, -b * 0.4);
+      [h - 0.9, -h + 0.9].forEach(function (x) { [-1, 1].forEach(function (sd) { wheel(0.55, 0.4, x, sd * (b - 0.22)); }); });
+    } else if (k === 'trattore') {
+      var green = lam(T, mezzoColor(m, '#367c2b')), rim = 0xf2d21b;
+      box(d.L * 0.45, 0.9, 0.9, green, h - d.L * 0.25, 1.35, 0); box(d.L * 0.38, 1.6, d.B * 0.6, lam(T, 0x2a3646, { transparent: true, opacity: 0.5 }), -h + d.L * 0.3, 2.2, 0);
+      box(d.L * 0.4, 0.08, d.B * 0.66, lam(T, 0x17181c), -h + d.L * 0.3, 3.0, 0);
+      [-1, 1].forEach(function (sd) { wheel(0.85, 0.55, -h + d.L * 0.28, sd * (b - 0.28), rim); wheel(0.55, 0.4, h - d.L * 0.18, sd * (b - 0.3), rim); });
+    } else if (k === 'furgone') {
+      var wh = lam(T, mezzoColor(m, '#f4f5f7'));
+      box(d.L * 0.98, 1.55, d.B, wh, 0, 1.15, 0); box(d.L * 0.22, 0.55, d.B * 1.01, lam(T, 0x2a3646), h - d.L * 0.2, 1.5, 0);
+      [h - 0.85, -h + 0.85].forEach(function (x) { [-1, 1].forEach(function (sd) { wheel(0.33, 0.22, x, sd * (b - 0.12)); }); });
+    } else {
+      box(d.L, 1.0, d.B, lam(T, mezzoColor(m, '#d29a2a')), 0, 0.7, 0); [-1, 1].forEach(function (sd) { wheel(0.3, 0.25, h - 0.5, sd * (b - 0.15)); wheel(0.3, 0.25, -h + 0.5, sd * (b - 0.15)); });
+    }
+    return g;
+  }
+
+  /* Distanze dalla barca o dal mezzo scelto: le più vicine, in rosso se sotto i 50 cm, in giallo sotto 1 metro */
+  function distList(it, an, max) {
+    var out = [];
+    an.items.forEach(function (o) { if (o.id === it.id || linked(it, o)) return; var g = polyGap(it.poly, o.poly); if (g.d < 8) out.push({ d: g.d, a: g.a, b: g.b, nome: o.ghost ? 'la barca di prova' : o.mezzo ? (o.m.nome || 'un carrello') : (o.b.nome || 'un’altra barca') }); });
+    an.obs.forEach(function (o) { var g = polyGap(it.poly, o.p); if (g.d < 8) out.push({ d: g.d, a: g.a, b: g.b, nome: o.n }); });
+    out.sort(function (a, b) { return a.d - b.d; });
+    var seen = {}; return out.filter(function (x) { if (seen[x.nome] && x.nome !== 'una colonna') return false; seen[x.nome] = 1; return true; }).slice(0, max || 4);
+  }
+  function gapLevel(d) { return d < 0.5 ? 'late' : d < 1 ? 'soon' : 'ok'; }
+  function gapHex(d) { return d < 0.5 ? 0xf2473d : d < 1 ? 0xffb020 : 0x38c172; }
+
+  /* Passa? Altezza e larghezza della barca sul suo carrello (o su quello scelto) contro portoni, sagoma stradale e percorso MSV → cantiere */
+  var PERC_DEF = [{ nome: 'Sottopasso ferroviario', tipo: 'altezza' }, { nome: 'Ponte o cavalcavia', tipo: 'altezza' }, { nome: 'Strettoie e rotonde', tipo: 'larghezza' }];
+  function percorso() { var p = S.percorso && Array.isArray(S.percorso.passaggi) ? S.percorso.passaggi : null; return p && p.length ? p : PERC_DEF; }
+  function portaAlt(cfg) { var a = (S.mapCfg || {}).alt || {}; return { pitagora: num(a.porta) > 0 ? +a.porta : 4.6, talete: num(a.portaT) > 0 ? +a.portaT : 4.2, stime: !(num(a.porta) > 0 && num(a.portaT) > 0) }; }
+  function trasportoDi(b, m) {
+    var P = boat3D(b); if (!P) return null;
+    var deck = m ? carrierDeck(m) : INVASO_H, md = m ? mezzoDims(m) : null;
+    var Ht = deck + P.H, Wt = Math.max(P.B, md && isTrailer(m) || (md && mezzoKind(m) === 'boatlift') ? md.B : 0);
+    if (P.tip === 'vela' && !m) Ht = 0.3 + P.H;
+    return { P: P, m: m, H: Ht, W: Wt, deck: deck };
+  }
+  function passaChecks(tr) {
+    var cfg = mapCfg(), pa = portaAlt(cfg), out = [];
+    function chk(nome, okH, okW, nota) { out.push({ nome: nome, ok: okH !== false && okW !== false, ign: okH == null && okW == null, nota: nota }); }
+    var T1 = cfg.portaT.w > 0;
+    chk('Portone su Via Pitagora', tr.H <= pa.pitagora - 0.1, tr.W <= cfg.porta.w - 0.3, 'luce ' + fmtNum(cfg.porta.w, 2) + ' × ' + fmtNum(pa.pitagora, 2) + ' m' + (pa.stime ? ' (altezza stimata)' : ''));
+    if (T1) chk('Portone su Via Talete', tr.H <= pa.talete - 0.1, tr.W <= cfg.portaT.w - 0.3, 'luce ' + fmtNum(cfg.portaT.w, 2) + ' × ' + fmtNum(pa.talete, 2) + ' m' + (pa.stime ? ' (altezza stimata)' : ''));
+    chk('Cancello su Via Pitagora', null, tr.W <= cfg.cancello.w - 0.3, 'largo ' + fmtNum(cfg.cancello.w, 2) + ' m');
+    out.push({ nome: 'Sagoma stradale (2,55 × 4 m)', ok: tr.W <= 2.55 && tr.H <= 4, nota: tr.W <= 2.55 && tr.H <= 4 ? 'nei limiti' : 'fuori sagoma: trasporto eccezionale' });
+    percorso().forEach(function (p) {
+      var h = num(p.altezza), w = num(p.larghezza);
+      if (!(h > 0) && !(w > 0)) { out.push({ nome: p.nome, ok: null, nota: 'misura da inserire' }); return; }
+      chk(p.nome, h > 0 ? tr.H <= h - 0.1 : null, w > 0 ? tr.W <= w - 0.3 : null, [h > 0 ? 'altezza ' + fmtNum(h, 2) + ' m' : '', w > 0 ? 'larghezza ' + fmtNum(w, 2) + ' m' : ''].filter(Boolean).join(' · '));
+    });
+    return out;
+  }
+  function passaHtml(b) {
+    var cur = carrierOf(b.id), list = S.mezzi.filter(function (m) { return mezzoDims(m) && (isTrailer(m) || mezzoKind(m) === 'boatlift'); });
+    if (!boat3D(b)) return '<div class="notice">Inserisci lunghezza e larghezza della barca per sapere se passa.</div>';
+    var sel = V.passaM && V.passaM[b.id] != null ? mezzoById(V.passaM[b.id]) : cur || list[0] || null;
+    var tr = trasportoDi(b, sel), checks = passaChecks(tr), P = tr.P;
+    var h = '<div class="group pan">' +
+      '<div class="kv-row"><span class="k">Su</span><span class="v"><select data-act2="passa-m" data-id="' + esc(b.id) + '" style="max-width:100%"><option value="">Invaso (a terra)</option>' + list.map(function (m) { return '<option value="' + esc(m.id) + '"' + (sel && sel.id === m.id ? ' selected' : '') + '>' + esc(m.nome || 'Carrello') + (cur && cur.id === m.id ? ' (è sopra)' : '') + '</option>'; }).join('') + '</select></span></div>' +
+      '<div class="kv-row"><span class="k">Altezza totale da terra</span><span class="v"><b>' + fmtNum(tr.H, 2) + ' m</b>' + (P.Hest ? ' <span class="cap">stimata</span>' : '') + '</span></div>' +
+      '<div class="kv-row"><span class="k">Larghezza totale</span><span class="v"><b>' + fmtNum(tr.W, 2) + ' m</b>' + (P.est ? ' <span class="cap">stimata</span>' : '') + '</span></div></div>';
+    h += '<div class="group" style="margin-top:8px">' + checks.map(function (c) {
+      var pill = c.ok === null ? '<span class="pill">?</span>' : c.ok ? '<span class="pill ok">Passa</span>' : '<span class="pill late">Non passa</span>';
+      return '<div class="row"><span class="main"><span class="title">' + esc(c.nome) + '</span><span class="sub">' + esc(c.nota || '') + '</span></span>' + pill + '</div>';
+    }).join('') + '</div>';
+    if (P.Hest) h += '<p class="cap" style="margin:6px 2px 0">Per un risultato sicuro inserisci l’altezza totale della barca (dalla chiglia al punto più alto) nella scheda.</p>';
+    h += '<button type="button" class="link" data-act="perc-edit" style="margin-top:6px">Misure del percorso MSV → cantiere</button>';
+    return h;
+  }
+  function percSheet() {
+    var list = percorso().map(function (p) { return Object.assign({}, p); }), pa = portaAlt(mapCfg());
+    function row(p, i) { return '<div class="vbox" data-pi="' + i + '">' + field('<label>Nome</label>', '<input class="p-n" type="text" value="' + esc(p.nome || '') + '" placeholder="es. Sottopasso di via …">') +
+      '<div class="grid2">' + field('<label>Altezza libera (m)</label>', '<input class="p-h" type="text" inputmode="decimal" value="' + esc(num(p.altezza) != null ? String(p.altezza).replace('.', ',') : '') + '" placeholder="dal cartello">') +
+      field('<label>Larghezza utile (m)</label>', '<input class="p-w" type="text" inputmode="decimal" value="' + esc(num(p.larghezza) != null ? String(p.larghezza).replace('.', ',') : '') + '" placeholder="facoltativa">') + '</div>' +
+      '<button type="button" class="link" data-act="perc-del" style="align-self:flex-start;color:var(--late)">Togli questo passaggio</button></div>'; }
+    openSheet({
+      title: 'Percorso MSV → cantiere', submitLabel: 'Salva',
+      body: '<p class="context">I punti stretti o bassi della strada tra la Marina e il cantiere. Scrivi l’altezza che c’è sul cartello (o misurata) e, se serve, la larghezza utile. L’app li controlla per ogni barca sul suo carrello.</p>' +
+        '<div class="lbl">Portoni del capannone</div><div class="grid2">' + field(lab('f-pah', 'Altezza portone Via Pitagora (m)'), inp('f-pah', String(pa.pitagora).replace('.', ','), 'type="text" inputmode="decimal"')) + field(lab('f-pat', 'Altezza portone Via Talete (m)'), inp('f-pat', String(pa.talete).replace('.', ','), 'type="text" inputmode="decimal"')) + '</div>' +
+        '<div class="lbl">Passaggi sulla strada</div><div id="perc-box" style="display:flex;flex-direction:column;gap:10px">' + list.map(row).join('') + '</div>' +
+        '<button type="button" class="btn sec self-start" data-act="perc-add">' + I.plus + 'Aggiungi un passaggio</button>',
+      onOpen: function (f) {
+        f.addEventListener('click', function (e) {
+          var a = e.target.closest && e.target.closest('[data-act]'); if (!a) return; var k = a.getAttribute('data-act');
+          if (k === 'perc-add') { e.stopPropagation(); $('#perc-box').insertAdjacentHTML('beforeend', row({}, Date.now())); }
+          else if (k === 'perc-del') { e.stopPropagation(); a.closest('.vbox').remove(); }
+        }, true);
+      },
+      onSubmit: async function (f) {
+        var ps = Array.prototype.map.call(f.querySelectorAll('#perc-box .vbox'), function (v) { return { nome: String(v.querySelector('.p-n').value || '').trim(), altezza: parseDec(v.querySelector('.p-h').value), larghezza: parseDec(v.querySelector('.p-w').value) }; }).filter(function (p) { return p.nome; });
+        var now = new Date().toISOString(), r1 = S.db.collection('impostazioni').doc('percorso');
+        if (!(await w(function () { return r1.set({ passaggi: ps, modificato: now }); }))) return false;
+        var ph = parseDec(val(f, 'f-pah')), pt = parseDec(val(f, 'f-pat'));
+        if (ph > 0 && pt > 0 && (ph !== pa.pitagora || pt !== pa.talete || pa.stime)) { if (!(await saveMapCfg({ alt: { porta: ph, portaT: pt } }))) return false; }
+        toast('Percorso salvato'); return true;
+      }
+    });
+  }
+
+  function distSprite(T, text, hex) {
+    var cv = document.createElement('canvas'), cx = cv.getContext('2d'); cv.width = 256; cv.height = 96;
+    cx.fillStyle = 'rgba(14,15,18,.85)'; cx.fillRect(8, 14, 240, 68); cx.fillStyle = '#' + ('000000' + hex.toString(16)).slice(-6);
+    cx.font = '800 48px -apple-system, Segoe UI, Roboto, Arial, sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(text, 128, 50, 228);
+    var sp = new T.Sprite(new T.SpriteMaterial({ map: new T.CanvasTexture(cv), depthTest: false, transparent: true })); sp.scale.set(2.2, 0.82, 1); sp.renderOrder = 12; return sp;
+  }
   function boatMesh(T, b, sel) {
-    var d = boatDims(b), p = boatPos(b), g = new T.Group(), pts = hullLocal(d.L, d.B), shape = new T.Shape();
-    shape.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) shape.lineTo(pts[i][0], pts[i][1]); shape.closePath();
-    var onT = !!carrierOf(b.id), hullH = Math.max(0.6, d.B * 0.34), cradle = onT ? 1.2 : 0.9;
-    function slab(depth, y0, color) {
-      var geo = new T.ExtrudeGeometry(shape, { depth: depth, bevelEnabled: false });
-      geo.rotateX(Math.PI / 2); geo.translate(0, y0 + depth, 0);
-      var m = new T.Mesh(geo, new T.MeshLambertMaterial({ color: color })); m.userData.id = b.id; return m;
-    }
-    var col = new T.Color(statoCol(b.stato));
-    g.add(slab(hullH * 0.42, cradle, col));
-    g.add(slab(hullH * 0.58, cradle + hullH * 0.42, b.tipo === 'Gommone' ? 0x5b5f66 : 0xf2f3f5));
-    if (!onT) { var base = new T.Mesh(new T.BoxGeometry(d.L * 0.55, cradle, d.B * 0.55), new T.MeshLambertMaterial({ color: 0x3a3d44 }));
-    base.position.set(-d.L * 0.05, cradle / 2, 0); base.userData.id = b.id; g.add(base); }
-    var top = cradle + hullH;
-    if (b.tipo === 'Vela') {
-      var cab = new T.Mesh(new T.BoxGeometry(d.L * 0.32, 0.55, d.B * 0.55), new T.MeshLambertMaterial({ color: 0xe6e9ee }));
-      cab.position.set(-d.L * 0.02, top + 0.27, 0); cab.userData.id = b.id; g.add(cab);
-      var mast = new T.Mesh(new T.CylinderGeometry(0.07, 0.09, d.L * 1.25, 8), new T.MeshLambertMaterial({ color: 0xb8bcc4 }));
-      mast.position.set(d.L * 0.12, top + d.L * 0.625, 0); mast.userData.id = b.id; g.add(mast);
-    } else if (b.tipo === 'Gommone') {
-      var con = new T.Mesh(new T.BoxGeometry(0.7, 0.9, 0.7), new T.MeshLambertMaterial({ color: 0xe6e9ee }));
-      con.position.set(0, top + 0.1, 0); con.userData.id = b.id; g.add(con);
-    } else if (d.L >= 5) {
-      var cabH = 0.6 + d.L * 0.06, cb = new T.Mesh(new T.BoxGeometry(d.L * 0.36, cabH, d.B * 0.66), new T.MeshLambertMaterial({ color: 0xe9ecef }));
-      cb.position.set(-d.L * 0.04, top + cabH / 2, 0); cb.userData.id = b.id; g.add(cb);
-      var gl = new T.Mesh(new T.BoxGeometry(d.L * 0.12, cabH * 0.55, d.B * 0.62), new T.MeshLambertMaterial({ color: 0x1d2433 }));
-      gl.position.set(d.L * 0.12, top + cabH * 0.62, 0); gl.userData.id = b.id; g.add(gl);
-    }
-    var lab3 = labelSprite(T, b.nome || 'Barca', d.L); lab3.position.set(0, top + (b.tipo === 'Vela' ? 2.2 : 2.6) + d.L * 0.05, 0); g.add(lab3);
-    if (sel) {
-      var ring = new T.LineLoop(new T.BufferGeometry().setFromPoints(hullLocal(d.L * 1.08 + 0.3, d.B * 1.08 + 0.3).map(function (q) { return new T.Vector3(q[0], 0.06, q[1]); })), new T.LineBasicMaterial({ color: 0xffd34d }));
-      g.add(ring);
-    }
+    var p = boatPos(b), g = new T.Group(), car = carrierOf(b.id), model = boatModel(T, b), P = model.userData.P, base;
+    if (car) base = carrierDeck(car) + P.keel; else { var inv = invaso(T, P); g.add(inv.g); base = inv.lift; }
+    model.position.y = base; g.add(model);
+    g.traverse(function (o) { o.userData.id = b.id; });
+    var top = base - P.keel + P.H, lab3 = labelSprite(T, b.nome || 'Barca', P.L); lab3.position.set(0, top + 1.1, 0); g.add(lab3);
+    if (sel) g.add(new T.LineLoop(new T.BufferGeometry().setFromPoints(hullLocal(P.L * 1.08 + 0.3, P.B * 1.08 + 0.3).map(function (q) { return new T.Vector3(q[0], 0.06, q[1]); })), new T.LineBasicMaterial({ color: 0xffd34d })));
     g.position.set(p.x, 0, p.y); g.rotation.y = -(num(p.rot) || 0) * Math.PI / 180; g.userData.id = b.id;
     return g;
   }
   function mezzoMesh(T, m, sel) {
-    var d = mezzoDims(m), p = mezzoPos(m), g = new T.Group(), h = d.L / 2, b = d.B / 2, db = drawbarLen(d), fl = d.L - db;
-    var steel = new T.MeshLambertMaterial({ color: 0x7d838e }), dark = new T.MeshLambertMaterial({ color: 0x1b1d22 }), chrome = new T.MeshLambertMaterial({ color: 0xd2d5db });
-    function add(mesh) { mesh.userData.id = 'm:' + m.id; g.add(mesh); return mesh; }
-    [-1, 1].forEach(function (sd) { var beam = add(new T.Mesh(new T.BoxGeometry(fl, 0.18, 0.2), steel)); beam.position.set(-h + fl / 2, 0.62, sd * b * 0.67); });
-    for (var k = 0; k < 3; k++) { var cr = add(new T.Mesh(new T.BoxGeometry(0.16, 0.14, d.B * 0.75), steel)); cr.position.set(-h + 0.3 + k * (fl - 0.6) / 2, 0.62, 0); }
-    var bar = add(new T.Mesh(new T.BoxGeometry(db + 0.6, 0.14, 0.14), steel)); bar.position.set(h - (db + 0.6) / 2, 0.55, 0);
-    [-0.55, 0.55].forEach(function (o) { [-1, 1].forEach(function (sd) { var wh = add(new T.Mesh(new T.CylinderGeometry(0.34, 0.34, 0.24, 14), dark)); wh.rotation.x = Math.PI / 2; wh.position.set(-d.L * 0.12 + o, 0.34, sd * (b - 0.12)); }); });
-    if (/autolivell/i.test(m.tipo || '')) {
-      [-h + 0.6, -h + fl - 0.6].forEach(function (x) { [-1, 1].forEach(function (sd) { var pi = add(new T.Mesh(new T.CylinderGeometry(0.09, 0.09, 0.9, 10), chrome)); pi.position.set(x, 1.05, sd * b * 0.67); }); });
-    }
-    if (sel) g.add(new T.LineLoop(new T.BufferGeometry().setFromPoints(mezzoLocal({ L: d.L + 0.5, B: d.B + 0.5 }).map(function (q) { return new T.Vector3(q[0], 0.06, q[1]); })), new T.LineBasicMaterial({ color: 0xffd34d })));
-    if (!m.barcaId || !boatById(m.barcaId)) { var lb = labelSprite(T, m.nome || 'Carrello', d.L); lb.position.set(0, 2.1, 0); g.add(lb); }
+    var d = mezzoDims(m), p = mezzoPos(m), g = mezzoModel(T, m, d);
+    g.traverse(function (o) { o.userData.id = 'm:' + m.id; });
+    if (sel) g.add(new T.LineLoop(new T.BufferGeometry().setFromPoints(mezzoLocal({ L: d.L + 0.5, B: d.B + 0.5 }, m).map(function (q) { return new T.Vector3(q[0], 0.06, q[1]); })), new T.LineBasicMaterial({ color: 0xffd34d })));
+    if (!m.barcaId || !boatById(m.barcaId)) { var lb = labelSprite(T, m.nome || 'Carrello', d.L); lb.position.set(0, mezzoKind(m) === 'trattore' || mezzoKind(m) === 'motrice' ? 3.6 : 2.3, 0); g.add(lb); }
     g.position.set(p.x, 0, p.y); g.rotation.y = -(num(p.rot) || 0) * Math.PI / 180;
     return g;
   }
@@ -2244,10 +2541,19 @@ button.row:active, .row .hit:active { opacity: .65; }
     function rebuild() {
       while (boatsG.children.length) {
         var ch = boatsG.children.pop();
-        ch.traverse(function (o) { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+        ch.traverse(function (o) { if (o.geometry) o.geometry.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (mm) { if (mm.map) mm.map.dispose(); mm.dispose(); }); });
       }
       S.mezzi.forEach(function (m) { if (mezzoPos(m) && mezzoDims(m)) boatsG.add(mezzoMesh(T, m, 'm:' + m.id === M.sel)); });
       placedBoats().forEach(function (b) { boatsG.add(boatMesh(T, b, b.id === M.sel)); });
+      if (M.sel) { // distanze dalle cose vicine
+        var an3 = mapAnalysis(), it3 = an3.items.find(function (x) { return x.id === M.sel; });
+        if (it3) distList(it3, an3, 4).forEach(function (q) {
+          if (!q.a || q.d < 0) return; var hx = gapHex(q.d), dg = new T.Group();
+          dg.add(new T.Line(new T.BufferGeometry().setFromPoints([new T.Vector3(q.a[0], 0.25, q.a[1]), new T.Vector3(q.b[0], 0.25, q.b[1])]), new T.LineBasicMaterial({ color: hx, depthTest: false })));
+          [q.a, q.b].forEach(function (pt) { var dot = new T.Mesh(new T.SphereGeometry(0.09, 8, 6), new T.MeshBasicMaterial({ color: hx })); dot.position.set(pt[0], 0.25, pt[1]); dg.add(dot); });
+          var sp = distSprite(T, fmtGap(q.d), hx); sp.position.set((q.a[0] + q.b[0]) / 2, 1.1, (q.a[1] + q.b[1]) / 2); dg.add(sp); boatsG.add(dg);
+        });
+      }
       draw();
     }
     rebuild();
@@ -5365,6 +5671,13 @@ button.row:active, .row .hit:active { opacity: .65; }
       '<div class="grid2">' + field(lab('f-motoreTipo', 'Installazione'), '<select id="f-motoreTipo">' + opts(TIPI_MOTORE, b.motoreTipo) + '</select>') + field(lab('f-nMotori', 'Numero motori'), '<select id="f-nMotori">' + opts(['1', '2', '3', '4'], String(b.nMotori || 1)) + '</select>') + '</div>' +
       '<div class="grid2">' + field(lab('f-potenza', 'Potenza (cv)'), inp('f-potenza', b.potenza, 'type="text" inputmode="numeric"')) + field(lab('f-oreMotore', 'Ore motore'), inp('f-oreMotore', b.oreMotore, 'type="text" inputmode="numeric"')) + '</div>' +
       field(lab('f-matricolaMotore', 'Matricola motore'), inp('f-matricolaMotore', b.matricolaMotore, 'type="text" autocapitalize="characters"')) +
+      '<div class="lbl">Forma e colori (per il 3D e per sapere se passa)</div>' +
+      field(lab('f-tipologia', 'Tipologia'), '<select id="f-tipologia">' + opts(TIPOLOGIE, b.tipologia || '') + '</select>') +
+      '<div class="grid2">' + field(lab('f-altScafo', 'Altezza scafo, chiglia → coperta (m)'), inp('f-altScafo', num(b.altezzaScafo) != null ? String(b.altezzaScafo).replace('.', ',') : '', 'type="text" inputmode="decimal" placeholder="es. 1,10"')) +
+      field(lab('f-altMax', 'Altezza totale, chiglia → punto più alto (m)'), inp('f-altMax', num(b.altezzaMax) != null ? String(b.altezzaMax).replace('.', ',') : '', 'type="text" inputmode="decimal" placeholder="es. 2,90"')) + '</div>' +
+      '<span class="hint" style="margin-top:-8px">Il punto più alto è il T-top, l’hardtop, il radar o il fly. Se le lasci vuote le stimo.</span>' +
+      '<div class="grid2">' + field(lab('f-colS', 'Colore scafo'), '<input id="f-colS" type="color" value="' + esc(b.coloreScafo || '#f2f3f5') + '">') + field(lab('f-colC', 'Colore carena'), '<input id="f-colC" type="color" value="' + esc(b.coloreCarena || '#22324f') + '">') + '</div>' +
+      '<div class="grid2">' + field(lab('f-fascia', 'Fascia colorata'), '<select id="f-fascia">' + opts(FASCE, b.fascia || 'nessuna') + '</select>') + field(lab('f-colF', 'Colore fascia'), '<input id="f-colF" type="color" value="' + esc(b.coloreFascia || '#2b2f36') + '">') + '</div>' +
       '<div class="lbl">Cliente</div>' +
       field(lab('f-proprietario', 'Nome e cognome'), inp('f-proprietario', b.proprietario, 'type="text" autocapitalize="words"')) +
       '<div class="grid2">' + field(lab('f-telefono', 'Telefono'), inp('f-telefono', b.telefono, 'type="tel" inputmode="tel"')) + field(lab('f-email', 'Email'), inp('f-email', b.email, 'type="email" inputmode="email" autocapitalize="off"')) + '</div>' +
@@ -5385,6 +5698,7 @@ button.row:active, .row .hit:active { opacity: .65; }
           motore: val(f, 'f-motore'), motoreTipo: val(f, 'f-motoreTipo'), nMotori: parseIntS(val(f, 'f-nMotori')) || 1,
           potenza: parseIntS(val(f, 'f-potenza')), oreMotore: parseIntS(val(f, 'f-oreMotore')), matricolaMotore: val(f, 'f-matricolaMotore'),
           proprietario: val(f, 'f-proprietario'), telefono: val(f, 'f-telefono'), email: val(f, 'f-email'), note: val(f, 'f-note'),
+          tipologia: val(f, 'f-tipologia'), altezzaScafo: parseDec(val(f, 'f-altScafo')), altezzaMax: parseDec(val(f, 'f-altMax')), coloreScafo: val(f, 'f-colS'), coloreCarena: val(f, 'f-colC'), fascia: val(f, 'f-fascia') || 'nessuna', coloreFascia: val(f, 'f-colF'),
           daCompletare: false, modificato: new Date().toISOString()
         };
         if (!data.nome) { formErr('Scrivi il nome della barca.'); return false; }
@@ -6153,6 +6467,8 @@ button.row:active, .row .hit:active { opacity: .65; }
       case 'sc-edit': x = (S.scadC || []).find(function (q) { return q.id === id; }); if (x && S.canWrite) scSheet(x); break;
       case 'sc-done': x = (S.scadC || []).find(function (q) { return q.id === id; }); if (x && S.canWrite) scDone(x); break;
       case 'sc-toggle': V.scShowDone = !V.scShowDone; render(); break;
+      case 'perc-edit': if (S.db && S.canWrite) percSheet(); break;
+      case 'mz-seed': if (S.db && S.canWrite) mezziSeedSheet(); break;
       case 'prev-new': if (S.db && S.canWrite) { if (!S.boats.length) toast('Prima aggiungi una barca', true); else prevSheet(null, t.getAttribute('data-boat') || (V.boatId || '')); } break;
       case 'prev-edit': x = (S.prev || []).find(function (q) { return q.id === id; }); if (x && S.canWrite) prevSheet(x); break;
       case 'prev-filter': V.prevFilter = t.getAttribute('data-f'); render(); break;
@@ -6185,6 +6501,10 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (e.target && e.target.id === 'q') { V.q = e.target.value; var bl = $('#boat-list'); if (bl) bl.innerHTML = boatListHtml(); }
     if (e.target && e.target.id === 'nome-in') V.nomeDraft = e.target.value;
     if (e.target && e.target.id === 'mq') { V.magQ = e.target.value; var mb = $('#mag-box'); if (mb) mb.innerHTML = magListHtml(); }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || t.getAttribute('data-act2') !== 'passa-m') return;
+    V.passaM = V.passaM || {}; V.passaM[t.getAttribute('data-id')] = t.value; render();
   });
   document.addEventListener('change', async function (e) {
     var t = e.target; if (!t) return;
@@ -6253,9 +6573,9 @@ button.row:active, .row .hit:active { opacity: .65; }
     sub('conferme', function (x) { S.conf = toMap(x); });
     db.collection('impostazioni').onSnapshot(function (snap) {
       var m = null, b = null;
-      snap.docs.forEach(function (d) { if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); else if (d.id === 'rifiuti') S.rifCfg = d.data(); else if (d.id === 'meteo') S.meteoCfg = d.data(); });
+      snap.docs.forEach(function (d) { if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); else if (d.id === 'rifiuti') S.rifCfg = d.data(); else if (d.id === 'meteo') S.meteoCfg = d.data(); else if (d.id === 'percorso') S.percorso = d.data(); });
       var mc = m !== S.mapCfg; S.mapCfg = m; S.bkInfo = b;
-      if ((V.tab === 'mappa' && mc) || V.tab === 'backup' || V.tab === 'batterie' || V.tab === 'rifiuti' || V.tab === 'home') render();
+      if ((V.tab === 'mappa' && mc) || V.tab === 'backup' || V.tab === 'batterie' || V.tab === 'rifiuti' || V.tab === 'home' || V.tab === 'barche') render();
     }, function () { });
     sub('magazzino', function (x) { S.mag = x; });
     sub('movimenti', function (x) { S.mov = x; });
