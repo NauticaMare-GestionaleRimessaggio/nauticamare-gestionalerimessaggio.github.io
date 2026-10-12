@@ -4065,6 +4065,7 @@ button.row:active, .row .hit:active { opacity: .65; }
         field(lab('f-pvs', 'Stato'), '<select id="f-pvs">' + opts(PREV_STATI, p.stato) + '</select>', wasOk ? '' : 'Quando lo metti su «Accettato», i lavori qui sotto diventano lavorazioni da fare con le ore previste.') +
         photoBlock(p.foto).replace('Foto (facoltative)', 'Foto del preventivo') +
         '<div class="lbl">Lavori previsti e ore</div><div class="field pv-box" id="pv-box">' + (p.voci && p.voci.length ? p.voci : [{}]).map(prevVoceRow).join('') + '</div>' +
+        (aiOn() ? '<button type="button" class="btn sec self-start" data-act="prev-ai">✨ Leggi la foto del preventivo</button>' : '') +
         '<button type="button" class="btn sec self-start" data-act="pv-add">' + I.plus + 'Aggiungi lavoro</button><p class="cap t-acc" id="pv-tot" style="margin:6px 2px 0"></p>' +
         rcBlock(p.ricambi, { lbl: 'Ricambi e materiali previsti (facoltativi)', add: 'Aggiungi ricambio', hint: 'Servono per prepararvi: qui non si scala niente dal magazzino.' }) +
         field(lab('f-pvno', 'Note'), '<textarea id="f-pvno" placeholder="es. il cliente vuole anche il preventivo per la lucidatura">' + esc(p.note || '') + '</textarea>') +
@@ -5364,7 +5365,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var st = stockMap(), q = V.magQ.trim().toLowerCase(), gby = V.magGroup === 'cat' || V.magGroup === 'forn' ? V.magGroup : 'tipo';
     if (!S.mag.length) return '<div style="margin-top:14px">' + emptyCard(I.box, 'Magazzino vuoto', 'Aggiungi ricambi, prodotti e materiali di consumo con le quantità che avete: si scalano da soli quando un dipendente li segna in una mansione.', ['new-mag', 'Aggiungi articolo']) + '</div>';
     var list = S.mag.slice().sort(function (a, b) { return String(a.nome || '').localeCompare(String(b.nome || ''), 'it'); })
-      .filter(function (m) { return !q || [m.nome, m.note, m.categoria, m.fornitore, tipoLabel(m.tipo)].some(function (x) { return x && String(x).toLowerCase().indexOf(q) >= 0; }); });
+      .filter(function (m) { return !q || [m.nome, m.note, m.categoria, m.fornitore, m.codice, tipoLabel(m.tipo)].some(function (x) { return x && String(x).toLowerCase().indexOf(q) >= 0; }); });
     if (!list.length) return '<div class="notice" style="margin-top:14px">Nessun articolo trovato per “' + esc(V.magQ) + '”.</div>';
     function isLow(m) { return num(m.minimo) != null && (st[m.id] || 0) <= m.minimo; }
     function row(m) {
@@ -5383,6 +5384,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
   function viewMagazzino() {
     return exampleBanner() + '<div class="search">' + I.search + '<input id="mq" type="search" placeholder="Cerca articolo, tipo o categoria" value="' + esc(V.magQ) + '" autocomplete="off" aria-label="Cerca nel magazzino"></div>' +
+      (S.mag.length ? '<button type="button" class="btn sec" data-act="mag-find" style="width:100%;margin-top:10px">' + I.camera + 'Trova col codice a barre</button>' : '') +
       (S.mag.length ? '<button type="button" class="btn sec" data-act="mag-shop" style="width:100%;margin-top:10px">' + I.cart + 'Lista della spesa' + (shopList().length ? ' · ' + shopList().length + (shopList().length === 1 ? ' articolo' : ' articoli') : '') + '</button>' : '') +
       (S.mag.length ? '<div class="chips" role="group" aria-label="Raggruppa gli articoli" style="margin-top:10px"><button type="button" data-act="mag-group" data-g="tipo" aria-pressed="' + (V.magGroup !== 'cat') + '">Per tipo</button><button type="button" data-act="mag-group" data-g="cat" aria-pressed="' + (V.magGroup === 'cat') + '">Per categoria</button><button type="button" data-act="mag-group" data-g="forn" aria-pressed="' + (V.magGroup === 'forn') + '">Per fornitore</button></div>' : '') +
       '<div id="mag-box">' + magListHtml() + '</div>';
@@ -5579,6 +5581,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var has = list && list.length; o = o || {};
     return '<div class="lbl">' + esc(o.lbl || 'Ricambi usati (facoltativi)') + '</div><datalist id="mag-list">' + S.mag.map(function (m) { return '<option value="' + esc(m.nome) + '">'; }).join('') + '</datalist>' +
       '<div class="field rc-box" id="rc-box">' + (list || []).map(rcRow).join('') + '</div>' +
+      '<button type="button" class="btn sec self-start" data-act="rc-photo">' + I.camera + 'Ricambio dalla foto</button>' +
       '<button type="button" class="btn sec self-start" data-act="rc-add" id="rc-add" data-more="' + esc(o.more || 'Aggiungi un altro ricambio') + '">' + I.plus + esc(has ? (o.more || 'Aggiungi un altro ricambio') : (o.add || 'Aggiungi ricambio')) + '</button>' +
       '<span class="hint">' + esc(o.hint || 'Scegli dalla lista del magazzino oppure scrivi tu il materiale usato. Se è in magazzino, la quantità si scala da sola.') + '</span>';
   }
@@ -6054,13 +6057,122 @@ button.row:active, .row .hit:active { opacity: .65; }
     S.lavori.forEach(function (l) { (l.ricambi || []).forEach(function (r) { if (r.articoloId === id) out.push({ data: l.data, t: (l.titolo || 'Lavoro') + ' · ' + lavBoatLabel(l), q: -(num(r.qta) || 0) }); }); });
     return out.sort(function (a, b) { return String(b.data || '').localeCompare(String(a.data || '')); }).slice(0, 15);
   }
+  /* ---------- Riconoscimento da foto ----------
+     1) Codice a barre: letto sul telefono dalla foto (libreria ZXing), senza mandare niente a nessuno.
+     2) AI di Google (Gemini) attraverso Firebase AI Logic: capisce cos'è il pezzo o legge un preventivo scritto a mano.
+        Va attivata una volta nella console di Firebase; finché non lo è, l'app lo dice e si continua a mano. */
+  var ZX_URL = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js', zxP = null;
+  function getZX() { if (!zxP) { zxP = (window.ZXing ? Promise.resolve() : loadScript(ZX_URL)).then(function () { return window.ZXing; }); zxP.catch(function () { zxP = null; }); } return zxP; }
+  function pickPhoto() {
+    return new Promise(function (res) {
+      var i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.setAttribute('capture', 'environment'); i.style.display = 'none';
+      i.onchange = function () { var f = i.files && i.files[0]; i.remove(); res(f || null); }; document.body.appendChild(i); i.click();
+    });
+  }
+  function fileToDataUrl(file, max) {
+    return new Promise(function (res, rej) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () { var k = Math.min(1, (max || 1280) / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.85)); };
+      img.onerror = function () { URL.revokeObjectURL(url); rej(new Error('img')); }; img.src = url;
+    });
+  }
+  async function readBarcode(file) {
+    try { var ZX = await getZX(), url = await fileToDataUrl(file, 1600), r = await new ZX.BrowserMultiFormatReader().decodeFromImageUrl(url); return r && r.getText ? r.getText() : null; } catch (e) { return null; }
+  }
+  function magByCode(code) { code = String(code || '').trim(); if (!code) return null; for (var i = 0; i < S.mag.length; i++) { var c = String(S.mag[i].codice || '').trim(); if (c && c === code) return S.mag[i]; } return null; }
+  function aiOn() { var c = window.NM_FIREBASE_CONFIG; return !!(window.__NM_FB && c && c.apiKey && c.projectId); }
+  var AI_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+  async function aiAsk(dataUrl, prompt) {
+    if (!aiOn()) throw { code: 'ai_off' };
+    var c = window.NM_FIREBASE_CONFIG, b64 = String(dataUrl).split(',')[1], last = null;
+    for (var i = 0; i < AI_MODELS.length; i++) {
+      var r = await fetch('https://firebasevertexai.googleapis.com/v1beta/projects/' + encodeURIComponent(c.projectId) + '/models/' + AI_MODELS[i] + ':generateContent', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': c.apiKey, 'X-Firebase-AppId': c.appId || '' },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/jpeg', data: b64 } }, { text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1 } })
+      }).catch(function () { return null; });
+      if (!r) throw { code: 'rete' };
+      if (r.status === 404) { last = 'modello'; continue; }
+      if (r.status === 403 || r.status === 401) throw { code: 'ai_off' };
+      if (r.status === 429) throw { code: 'troppe' };
+      if (!r.ok) throw { code: 'ai_err' };
+      var j = await r.json(), t = (((j.candidates || [])[0] || {}).content || {}).parts || [];
+      var txt = t.map(function (p) { return p.text || ''; }).join('').replace(/^```(json)?|```$/g, '').trim();
+      try { return JSON.parse(txt); } catch (e) { throw { code: 'ai_err' }; }
+    }
+    throw { code: last === 'modello' ? 'ai_off' : 'ai_err' };
+  }
+  function aiErrMsg(e) {
+    var c = e && e.code;
+    return c === 'ai_off' ? 'Il riconoscimento con l’AI non è ancora attivo: va acceso una volta nella console di Firebase (AI Logic). Intanto scrivi a mano.'
+      : c === 'rete' ? 'Serve internet per il riconoscimento con l’AI.' : c === 'troppe' ? 'Troppe richieste in poco tempo: riprova tra un minuto.' : 'Non sono riuscito a riconoscerlo: scrivilo a mano.';
+  }
+  var AI_PEZZO = 'Sei in un cantiere nautico italiano. Nella foto c’è un ricambio, un prodotto o un materiale (anche la sua scatola o etichetta). ' +
+    'Rispondi SOLO con un JSON: {"nome": nome breve in italiano come lo scriverebbe un meccanico (es. "Filtro olio Yamaha F200"), "marca": "", "codice": codice articolo o part number se leggibile, altrimenti "", ' +
+    '"tipo": uno tra "ricambio","consumo","prodotto","accessorio","utensile", "unita": uno tra "pz","l","kg","m","conf.","latta","tanica","rotolo","paia", "quantita": numero di pezzi visibili o contenuto (es. 2.5 per una latta da 2,5 l), "note": eventuali dettagli utili}. Se non sei sicuro lascia la stringa vuota.';
+  var AI_PREV = 'Nella foto c’è un preventivo o un elenco scritto a mano o stampato per una barca (dotazioni di sicurezza, ricambi, lavori). ' +
+    'Rispondi SOLO con un JSON: {"titolo": titolo breve (es. il modello della barca), "voci": [{"descrizione": "", "codice": "", "quantita": numero (1 se non scritto), "ore": ore di lavoro se è un lavoro, altrimenti null}]}. Non inventare: copia quello che leggi.';
+  // Nel foglio del magazzino: codice a barre e «riconosci»
+  async function magScan(f) {
+    var file = await pickPhoto(); if (!file) return;
+    toast('Leggo il codice a barre…');
+    var code = await readBarcode(file);
+    if (!code) { toast('Codice a barre non trovato nella foto: prova più vicino e dritto, oppure usa «Riconosci».', true); return; }
+    var ex = magByCode(code), cf = f.querySelector('#f-mcod'); if (cf) cf.value = code;
+    toast(ex ? 'Questo codice è già in magazzino: ' + ex.nome : 'Codice letto: ' + code);
+  }
+  async function magAI(f) {
+    var file = await pickPhoto(); if (!file) return;
+    var st = f.querySelector('#f-mai'); if (st) { st.hidden = false; st.textContent = 'Riconosco…'; }
+    try {
+      var url = await fileToDataUrl(file, 1280), code = await readBarcode(file), r = await aiAsk(url, AI_PEZZO);
+      function set(id, v) { var el = f.querySelector('#' + id); if (el && v != null && v !== '' && (!el.value || id !== 'f-mn' || confirm('Sostituisco il nome con «' + v + '»?'))) { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } }
+      set('f-mn', r.nome); set('f-mcod', code || r.codice);
+      if (r.tipo && TIPI_ART.some(function (x) { return x[0] === r.tipo; })) set('f-mt', r.tipo);
+      if (r.unita && UM.indexOf(r.unita) >= 0) set('f-mu', r.unita);
+      var q0 = f.querySelector('#f-mq0'); if (q0 && !q0.value && num(r.quantita) > 0 && r.unita !== 'l') q0.value = String(r.quantita).replace('.', ',');
+      if (r.note) { var nt = f.querySelector('#f-mnote'); if (nt && !nt.value) nt.value = (r.marca ? r.marca + ' · ' : '') + r.note; }
+      if (st) st.textContent = 'Riconosciuto: controlla e salva.';
+    } catch (e) { if (st) st.hidden = true; toast(aiErrMsg(e), true); }
+  }
+  // Nella mansione o lavorazione: ricambio dalla foto
+  async function rcFromPhoto() {
+    var file = await pickPhoto(); if (!file) return;
+    toast('Riconosco il ricambio…');
+    var code = await readBarcode(file), m = magByCode(code), nome = m ? m.nome : null;
+    if (!nome && aiOn()) { try { var r = await aiAsk(await fileToDataUrl(file, 1280), AI_PEZZO); nome = r.nome ? r.nome + (r.codice ? ' ' + r.codice : '') : null; var m2 = r.codice && magByCode(r.codice); if (m2) nome = m2.nome; } catch (e) { toast(aiErrMsg(e), true); return; } }
+    if (!nome) { toast(code ? 'Codice ' + code + ' non presente in magazzino: scrivi il nome.' : 'Non riconosciuto: scrivilo a mano.', true); if (!code) return; nome = code; }
+    var box = $('#rc-box'); if (!box) return;
+    var empty = Array.prototype.find.call(box.querySelectorAll('.rc-row'), function (r) { return !r.querySelector('.rc-n').value; });
+    if (!empty) { box.insertAdjacentHTML('beforeend', rcRow({})); empty = box.lastElementChild; }
+    empty.querySelector('.rc-n').value = nome; if (!empty.querySelector('.rc-q').value) empty.querySelector('.rc-q').value = '1';
+    toast(m ? 'Dal magazzino: ' + nome : 'Riconosciuto: ' + nome);
+  }
+  // Nel preventivo: leggo la foto (es. l'elenco delle dotazioni scritto a mano)
+  async function prevFromPhoto() {
+    var img = document.querySelector('#thumbs img'), src = img && img.getAttribute('src');
+    var url = src && /^data:image/.test(src) ? src : null;
+    if (!url) { var file = await pickPhoto(); if (!file) return; url = await fileToDataUrl(file, 1600); }
+    toast('Leggo il preventivo…');
+    try {
+      var r = await aiAsk(url, AI_PREV), voci = Array.isArray(r.voci) ? r.voci : [];
+      var tt = $('#f-pvt'); if (tt && !tt.value && r.titolo) tt.value = r.titolo;
+      var lav = voci.filter(function (v) { return num(v.ore) > 0; }), ric = voci.filter(function (v) { return !(num(v.ore) > 0); });
+      lav.forEach(function (v) { var box = $('#pv-box'); var rows = box.querySelectorAll('.pv-row'), last = rows[rows.length - 1]; if (!last || last.querySelector('.pv-t').value) { box.insertAdjacentHTML('beforeend', prevVoceRow({})); last = box.lastElementChild; } last.querySelector('.pv-t').value = v.descrizione || ''; last.querySelector('.pv-o').value = String(v.ore).replace('.', ','); });
+      var rb = $('#rc-box'); ric.forEach(function (v) { rb.insertAdjacentHTML('beforeend', rcRow({ nome: [v.descrizione, v.codice].filter(Boolean).join(' · '), qta: num(v.quantita) || 1 })); });
+      toast(voci.length ? 'Lette ' + voci.length + ' voci: controlla e salva' : 'Non ho trovato voci nella foto', !voci.length);
+      var pt = $('#pv-tot'); if (pt) pt.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch (e) { toast(aiErrMsg(e), true); }
+  }
+
   function magSheet(m) {
     var isNew = !m; m = m || { um: 'pz' };
     var st = isNew ? 0 : (stockMap()[m.id] || 0), hist = isNew ? [] : movesFor(m.id);
     var umL = { pz: 'pezzi', l: 'litri', kg: 'chili', m: 'metri', 'conf.': 'confezioni', latta: 'latte', tanica: 'taniche', rotolo: 'rotoli', paia: 'paia' };
     var catsP = CATEGORIE.filter(function (c) { return c !== 'Altro' && c !== 'Gestione cantiere'; });
     var body =
+      '<div class="rif-acts" style="margin-top:0;margin-bottom:10px"><button type="button" class="btn sec" data-act="mag-scan">' + I.camera + 'Codice a barre</button>' + (aiOn() ? '<button type="button" class="btn sec" data-act="mag-ai">✨ Riconosci dalla foto</button>' : '') + '</div><p class="cap t-acc" id="f-mai" hidden style="margin:-4px 2px 8px"></p>' +
       field(lab('f-mn', 'Nome'), inp('f-mn', m.nome, 'type="text" required placeholder="es. Filtro olio Yamaha F200, Antivegetativa nera 2,5 l, Guanti nitrile"')) +
+      field(lab('f-mcod', 'Codice o codice a barre (facoltativo)'), inp('f-mcod', m.codice, 'type="text" autocapitalize="characters" placeholder="es. 3840525 o 8001234567890"'), 'Su iPhone puoi anche tenere premuto nel campo e scegliere «Scansiona testo».') +
       field(lab('f-mt', 'Che cos’è (facoltativo)'), '<select id="f-mt">' + opts([['', 'Non specificato']].concat(TIPI_ART), m.tipo || '') + '</select><span class="hint" id="f-mtHint"></span>') +
       field(lab('f-mc', 'Su cosa si usa (facoltativo)'), '<select id="f-mc">' + opts([['', 'Non specificato']].concat(catsP), m.categoria || '') + '</select><span class="hint" id="f-mcHint"></span>') +
       '<div class="grid2">' + field(lab('f-mu', 'Unità'), '<select id="f-mu">' + opts(UM.map(function (u) { return [u, umL[u]]; }), m.um) + '</select>') +
@@ -6108,7 +6220,7 @@ button.row:active, .row .hit:active { opacity: .65; }
         if (!nome) { formErr('Scrivi il nome dell’articolo.'); return false; }
         var dup = magByName(nome);
         if (dup && (isNew || dup.id !== m.id)) { formErr('C’è già un articolo con questo nome.'); return false; }
-        var data = { nome: nome, tipo: val(f, 'f-mt'), categoria: val(f, 'f-mc'), um: val(f, 'f-mu'), minimo: parseDec(val(f, 'f-mmin')), fornitore: val(f, 'f-mf'), qtaOrdine: parseDec(val(f, 'f-mqo')), inLista: !!f.querySelector('#f-mil').checked, note: val(f, 'f-mnote'), modificato: now };
+        var data = { nome: nome, tipo: val(f, 'f-mt'), categoria: val(f, 'f-mc'), um: val(f, 'f-mu'), minimo: parseDec(val(f, 'f-mmin')), fornitore: val(f, 'f-mf'), qtaOrdine: parseDec(val(f, 'f-mqo')), inLista: !!f.querySelector('#f-mil').checked, note: val(f, 'f-mnote'), codice: val(f, 'f-mcod'), modificato: now };
         function mov(id, q, tipo) { var mr = S.db.collection('movimenti').doc(); return w(function () { return mr.set({ articoloId: id, qta: q, tipo: tipo, data: todayISO(), utente: S.myId || '', creato: now }); }); }
         if (isNew) {
           data.creato = now;
@@ -6468,6 +6580,11 @@ button.row:active, .row .hit:active { opacity: .65; }
       case 'sc-done': x = (S.scadC || []).find(function (q) { return q.id === id; }); if (x && S.canWrite) scDone(x); break;
       case 'sc-toggle': V.scShowDone = !V.scShowDone; render(); break;
       case 'perc-edit': if (S.db && S.canWrite) percSheet(); break;
+      case 'mag-scan': magScan(t.closest('form')); break;
+      case 'mag-ai': magAI(t.closest('form')); break;
+      case 'rc-photo': rcFromPhoto(); break;
+      case 'prev-ai': prevFromPhoto(); break;
+      case 'mag-find': (async function () { var file = await pickPhoto(); if (!file) return; var code = await readBarcode(file), m = magByCode(code); if (m) magSheet(m); else if (code) { toast('Codice ' + code + ' non in magazzino: lo aggiungo come nuovo articolo'); magSheet(null); setTimeout(function () { var c = $('#f-mcod'); if (c) c.value = code; }, 80); } else toast('Codice a barre non trovato nella foto: prova più vicino e dritto.', true); })(); break;
       case 'mz-seed': if (S.db && S.canWrite) mezziSeedSheet(); break;
       case 'prev-new': if (S.db && S.canWrite) { if (!S.boats.length) toast('Prima aggiungi una barca', true); else prevSheet(null, t.getAttribute('data-boat') || (V.boatId || '')); } break;
       case 'prev-edit': x = (S.prev || []).find(function (q) { return q.id === id; }); if (x && S.canWrite) prevSheet(x); break;
