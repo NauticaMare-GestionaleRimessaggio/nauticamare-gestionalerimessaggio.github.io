@@ -523,6 +523,9 @@ button.row:active, .row .hit:active { opacity: .65; }
 .bp-pan[hidden] { display: none; }
 .bp-pan input[type="search"] { width: 100%; min-height: 44px; font: inherit; font-size: 16px; color: var(--ink); background: var(--bg, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
 .bp-pan .chips { margin-top: 0; }
+.bp-pan .bp-ai { width: 100%; }
+.bp-ai-d { font-size: .86rem; color: var(--muted); padding: 2px 2px 4px; }
+.bp-ai-d b { color: var(--ink); font-weight: 600; }
 .bp-pan .chips button { padding: 6px 12px; font-size: .84rem; border: 1px solid var(--line); }
 .bp-list { max-height: 46vh; overflow-y: auto; display: flex; flex-direction: column; }
 .bp-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; font: inherit; text-align: left; color: var(--ink); background: none; border: 0; border-top: 1px solid var(--line); padding: 10px 4px; }
@@ -1104,6 +1107,13 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
 
   function boatListHtml() {
+    if (V.boatAi === 'wait') return '<div class="notice" style="margin-top:14px">Riconosco la barca…</div>';
+    if (V.boatAi) {
+      var back = '<button type="button" class="btn sec" data-act="boat-ai-off" style="width:100%;margin-top:10px">Torna all’elenco</button>';
+      return '<div class="notice" style="margin-top:14px">' + V.boatAi.desc + '</div>' +
+        (V.boatAi.list.length ? secH('Le più simili (' + V.boatAi.list.length + ')') + '<div class="group">' + V.boatAi.list.map(function (x) { return boatRow(x.b); }).join('') + '</div>'
+          : '<div class="notice" style="margin-top:10px">Nessuna barca registrata le somiglia. Se è nuova aggiungila con «＋».</div>') + back;
+    }
     var q = V.q.trim().toLowerCase();
     var list = S.boats.slice().sort(byName).filter(function (b) {
       if (!q) return true;
@@ -1115,6 +1125,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
   function viewBarche() {
     return exampleBanner() + '<div class="search">' + I.search + '<input id="q" type="search" placeholder="Cerca nome, modello, cliente, posto" value="' + esc(V.q) + '" autocomplete="off" aria-label="Cerca barche"></div>' +
+      (aiOn() && S.boats.length ? '<button type="button" class="btn sec" data-act="boat-ai" style="width:100%;margin-top:10px">' + I.camera + 'Trova la barca dalla foto</button>' : '') +
       '<div id="boat-list">' + boatListHtml() + '</div>';
   }
 
@@ -4239,7 +4250,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       title: isNew ? 'Scadenza del cantiere' : 'Modifica scadenza', submitLabel: 'Salva',
       deleteLabel: canDel ? 'Elimina scadenza' : null, deleteText: 'Elimini “' + (s.tipo || 'questa scadenza') + '”.',
       item: s, onDelete: canDel ? async function () { if (await delSeq([S.db.collection('scadCantiere').doc(s.id)])) { closeSheet(); toast('Scadenza eliminata'); } } : null,
-      body: field(lab('f-scg', 'Gruppo'), '<select id="f-scg">' + opts(SC_GRUPPI, s.gruppo) + '</select>') +
+      body: aiFillBtn('scadC', 'Leggi dalla foto (etichetta o documento)') + field(lab('f-scg', 'Gruppo'), '<select id="f-scg">' + opts(SC_GRUPPI, s.gruppo) + '</select>') +
         '<datalist id="sc-rif"></datalist><datalist id="sc-tipi"></datalist>' +
         field(lab('f-scr', 'Di cosa'), inp('f-scr', s.rif, 'type="text" list="sc-rif" required placeholder="es. Carrello BL 20, Estintori capannone"')) +
         field(lab('f-sct', 'Cosa scade'), inp('f-sct', s.tipo, 'type="text" list="sc-tipi" required placeholder="es. Verifica periodica"')) +
@@ -4413,7 +4424,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var list = S.cariche.filter(function (c) { return c.barcaId === b.id; }).sort(function (a, c) { return String(c.data || '').localeCompare(String(a.data || '')); });
     openSheet({
       title: 'Batterie · ' + (b.nome || 'Barca'), submitLabel: 'Salva',
-      body: '<div class="grid2">' + field(lab('f-bn', 'Quante batterie'), inp('f-bn', num(b.batterie) != null ? String(b.batterie) : '', 'type="text" inputmode="numeric" placeholder="es. 2"')) + field(lab('f-bc', 'Caricate oggi?'), '<select id="f-bc"><option value="">No, aggiorno solo i dati</option><option value="si">Sì, segna la carica</option></select>') + '</div>' +
+      body: aiFillBtn('batt', 'Leggi l’etichetta dalla foto') + '<div class="grid2">' + field(lab('f-bn', 'Quante batterie'), inp('f-bn', num(b.batterie) != null ? String(b.batterie) : '', 'type="text" inputmode="numeric" placeholder="es. 2"')) + field(lab('f-bc', 'Caricate oggi?'), '<select id="f-bc"><option value="">No, aggiorno solo i dati</option><option value="si">Sì, segna la carica</option></select>') + '</div>' +
         field(lab('f-bnote', 'Note sulle batterie (facoltative)'), inp('f-bnote', b.batterieNote, 'type="text" placeholder="es. 2 servizi + 1 motore, staccabatterie a poppa"')) +
         '<div class="grid2">' + field(lab('f-bv', 'Tensione letta (facoltativa)'), inp('f-bv', '', 'type="text" inputmode="decimal" placeholder="es. 12,6 V"')) + field(lab('f-bq', 'Quante ne hai caricate'), inp('f-bq', '', 'type="text" inputmode="numeric" placeholder="tutte"')) + '</div>' +
         (list.length ? '<div class="lbl">Ultime cariche</div><div class="group">' + list.slice(0, 8).map(function (c) { return '<div class="hist"><span>' + esc(fmtDate(c.data) + (c.utente ? ' · ' + nameOf(c.utente) : '') + (num(c.volt) ? ' · ' + fmtNum(c.volt, 1) + ' V' : '') + (num(c.n) ? ' · ' + c.n + ' batt.' : '')) + '</span></div>'; }).join('') + '</div>' : '<p class="cap">Nessuna carica segnata.</p>'),
@@ -4585,7 +4596,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       title: isNew ? 'Segna rifiuto' : 'Rifiuto segnato', submitLabel: 'Salva',
       deleteLabel: canDel ? 'Elimina' : null, deleteText: 'Lo togli dal deposito e dal registro.',
       item: r, onDelete: canDel ? async function () { var ref = S.db.collection('rifiuti').doc(r.id); if (await w(function () { return ref.delete(); })) { closeSheet(); toast('Eliminato'); } else { var b = $('[data-act="do-del"]'); if (b) b.disabled = false; } } : null,
-      body: field(lab('f-rt', 'Che rifiuto è'), '<select id="f-rt">' + rifTipoOpts(t0.id) + '</select>', '') + '<p class="cap" id="f-rtInfo" style="margin:-4px 2px 10px"></p>' +
+      body: aiFillBtn('rif', 'Riconosci il rifiuto dalla foto') + field(lab('f-rt', 'Che rifiuto è'), '<select id="f-rt">' + rifTipoOpts(t0.id) + '</select>', '') + '<p class="cap" id="f-rtInfo" style="margin:-4px 2px 10px"></p>' +
         '<div class="grid2">' + field(lab('f-rq', 'Quanto'), inp('f-rq', num(r.q) != null ? String(r.q).replace('.', ',') : '', 'type="text" inputmode="decimal" placeholder="es. 3" required')) +
         field(lab('f-ru', 'In'), '<select id="f-ru"></select>') + '</div><p class="cap t-acc" id="f-rkg" style="margin:-4px 2px 10px"></p>' +
         field(lab('f-rb', 'Da quale barca (facoltativo)'), '<select id="f-rb"><option value="">Nessuna · cantiere</option>' + boats.map(function (b) { return '<option value="' + esc(b.id) + '"' + (b.id === r.barcaId ? ' selected' : '') + '>' + esc(boatLabel(b)) + '</option>'; }).join('') + '</select>') +
@@ -5787,6 +5798,7 @@ button.row:active, .row .hit:active { opacity: .65; }
         if (isBoat(o.value) || o.disabled) return;
         out += '<button type="button" class="bp-row" data-v="' + esc(o.value) + '" aria-selected="' + (o.value === sel.value) + '"><span class="bp-rt">' + esc(o.textContent) + '</span></button>';
       });
+      if (st.ai) { pan.querySelector('.bp-list').innerHTML = bpAiRows(); return; }
       var r = st.mis >= 0 ? mis[st.mis] : null, n = 0;
       boats.forEach(function (x) {
         var L = num(x.b.lunghezza);
@@ -5800,19 +5812,51 @@ button.row:active, .row .hit:active { opacity: .65; }
       if (!n && (q || st.pon || st.mis >= 0)) out += '<div class="bp-none">Nessuna barca trovata' + (Array.prototype.some.call(sel.options, function (o) { return o.value === '__nuova'; }) ? ': puoi crearla con «＋ Nuova barca».' : '.') + '</div>';
       pan.querySelector('.bp-list').innerHTML = out;
     }
+    var hasNew = Array.prototype.some.call(sel.options, function (o) { return o.value === '__nuova'; });
+    function bpAiRows() {
+      if (st.ai === 'wait') return '<div class="bp-none">Riconosco la barca…</div>';
+      var out = '<div class="bp-ai-d">' + st.ai.desc + '</div>', ids = boats.map(function (x) { return x.o.value; });
+      var top = st.ai.list.filter(function (x) { return ids.indexOf(x.b.id) >= 0; }).slice(0, 5);
+      top.forEach(function (x) {
+        var o = boats[ids.indexOf(x.b.id)].o, L = num(x.b.lunghezza);
+        var sub = [x.why.length ? 'Simile per ' + x.why.join(', ') : '', L != null ? fmtNum(L, 2) + ' m' : '', x.b.proprietario].filter(Boolean).join(' · ');
+        out += '<button type="button" class="bp-row" data-v="' + esc(o.value) + '" aria-selected="' + (o.value === sel.value) + '"><span class="bp-rt">' + esc(o.textContent) + '</span><span class="bp-rs">' + esc(sub) + '</span></button>';
+      });
+      if (!top.length) out += '<div class="bp-none">Nessuna barca registrata le somiglia.</div>';
+      if (hasNew) out += '<button type="button" class="bp-row" data-new="1"><span class="bp-rt">＋ Nessuna di queste: nuova barca' + (st.ai.r.nome ? ' «' + esc(st.ai.r.nome) + '»' : '') + '</span></button>';
+      return out + '<button type="button" class="link bp-all" style="align-self:flex-start;padding:6px 2px">Mostra tutte le barche</button>';
+    }
+    async function aiRun() {
+      var file = await pickPhoto(); if (!file) return;
+      st.ai = 'wait'; rows();
+      try { st.ai = await boatAiFind(file); }
+      catch (e) { st.ai = null; toast(aiErrMsg(e), true); }
+      if (!pan.hidden) rows();
+    }
     function open() {
       if (!pan.hidden) { close(); return; }
-      pan.innerHTML = '<input type="search" placeholder="Nome, cliente, posto o misura (es. 12)" aria-label="Cerca la barca" enterkeyhint="search">' +
+      st.ai = null;
+      pan.innerHTML = (aiOn() ? '<button type="button" class="btn sec bp-ai">' + I.camera + 'Riconosci dalla foto</button>' : '') +
+        '<input type="search" placeholder="Nome, cliente, posto o misura (es. 12)" aria-label="Cerca la barca" enterkeyhint="search">' +
         (pons.length > 1 ? chips('pon', pons, st.pon) : '') + (mis.length > 1 ? chips('mis', mis, st.mis) : '') + '<div class="bp-list" role="listbox"></div>';
       pan.hidden = false; rows();
       var qi = pan.querySelector('input'); qi.value = st.q;
-      qi.addEventListener('input', function () { st.q = qi.value; rows(); });
+      qi.addEventListener('input', function () { st.q = qi.value; st.ai = null; rows(); });
       qi.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); var first = pan.querySelector('.bp-row'); if (first) first.click(); } });
       if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches || !sel.value) qi.focus();
     }
     function close() { pan.hidden = true; pan.innerHTML = ''; }
     pan.addEventListener('click', function (e) {
+      if (e.target.closest('.bp-ai')) { aiRun(); return; }
+      if (e.target.closest('.bp-all')) { st.ai = null; rows(); return; }
+      if (e.target.closest('[data-new]')) {
+        var nome = st.ai && st.ai.r ? st.ai.r.nome : '';
+        sel.value = '__nuova'; close(); label(); sel.dispatchEvent(new Event('change', { bubbles: true }));
+        var ni = sel.form && sel.form.querySelector('#f-nbNome'); if (ni && nome && !ni.value) ni.value = nome;
+        return;
+      }
       var c = e.target.closest('.chips button');
+      if (c) st.ai = null;
       if (c) { var k = c.parentNode.getAttribute('data-k'), v = c.getAttribute('data-v');
         if (k === 'pon') st.pon = st.pon === v ? '' : v; else st.mis = st.mis === +v ? -1 : +v;
         Array.prototype.forEach.call(c.parentNode.children, function (x) { x.setAttribute('aria-pressed', String(k === 'pon' ? x.getAttribute('data-v') === st.pon : +x.getAttribute('data-v') === st.mis)); });
@@ -6079,6 +6123,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var isNew = !s; s = s || { barcaId: presetBoat || '', data: presetDate || '' };
     var body =
       '<datalist id="tipi-scad">' + TIPI_SCADENZA.map(function (t) { return '<option value="' + esc(t) + '">'; }).join('') + '</datalist>' +
+      aiFillBtn('scad', 'Leggi dalla foto (etichetta o documento)') +
       field(lab('f-barca', 'Barca'), boatSelect(s.barcaId)) +
       field(lab('f-tipoS', 'Scadenza'), inp('f-tipoS', s.tipo, 'type="text" list="tipi-scad" required placeholder="es. Tagliando motore"')) +
       '<div class="grid2">' + field(lab('f-dataS', 'Entro il'), inp('f-dataS', s.data, 'type="date"')) + field(lab('f-oreS', 'Oppure a ore motore'), inp('f-oreS', s.oreScadenza, 'type="text" inputmode="numeric" placeholder="es. 500"')) + '</div>' +
@@ -6499,6 +6544,103 @@ button.row:active, .row .hit:active { opacity: .65; }
     '"tipo": uno tra "ricambio","consumo","prodotto","accessorio","utensile", "unita": uno tra "pz","l","kg","m","conf.","latta","tanica","rotolo","paia", "quantita": numero di pezzi visibili o contenuto (es. 2.5 per una latta da 2,5 l), "note": eventuali dettagli utili}. Se non sei sicuro lascia la stringa vuota.';
   var AI_PREV = 'Nella foto c’è un preventivo o un elenco scritto a mano o stampato per una barca (dotazioni di sicurezza, ricambi, lavori). ' +
     'Rispondi SOLO con un JSON: {"titolo": titolo breve (es. il modello della barca), "voci": [{"descrizione": "", "codice": "", "quantita": numero (1 se non scritto), "ore": ore di lavoro se è un lavoro, altrimenti null}]}. Non inventare: copia quello che leggi.';
+  // Barca dalla foto: l'AI descrive la barca, l'app cerca le più simili tra quelle registrate (nessuna foto viene salvata)
+  var AI_BARCA = 'Sei in un rimessaggio nautico italiano. Nella foto c’è una barca, anche solo in parte. ' +
+    'Rispondi SOLO con un JSON: {"nome": nome scritto sullo scafo se leggibile, "immatricolazione": sigla di immatricolazione o numero velico se leggibile (es. "RM 1234 D"), ' +
+    '"cantiere": marca del cantiere se scritta o se la riconosci con sicurezza (es. "Jeanneau"), "modello": modello se scritto o riconosciuto (es. "Cap Camarat 7.5 WA"), ' +
+    '"tipo": uno tra "Motore","Vela","Gommone","Altro", "tipologia": uno tra "open","ttop","walk","cab","fly","gozzo","vela","gommone", ' +
+    '"lunghezza": lunghezza fuori tutto stimata in metri (numero), "coloreScafo": colore dello scafo in esadecimale (es. "#ffffff"), "coloreNome": colore dello scafo in parole (es. "bianco"), ' +
+    '"motore": marca dei motori se visibile (es. "Yamaha"), "motoreTipo": uno tra "Fuoribordo","Entrobordo","Entrofuoribordo", "nMotori": numero di motori visibili, ' +
+    '"dettagli": altri segni distintivi in poche parole (es. "T-top nero, fascia blu")}. Non inventare: se non sei sicuro metti "" o null.';
+  function aiStr(v) { return v == null ? '' : String(v).trim(); }
+  function hexRgb(h) { var m = /^#?([0-9a-f]{6})$/i.exec(aiStr(h)); if (!m) return null; var n = parseInt(m[1], 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+  function alnum(t) { return bpNorm(t).replace(/[^a-z0-9]/g, ''); }
+  function bigrams(t) { var o = []; for (var i = 0; i < t.length - 1; i++) o.push(t.slice(i, i + 2)); return o; }
+  function dice(a, b) { var x = bigrams(a), y = bigrams(b); if (!x.length || !y.length) return 0; var m = 0, z = y.slice(); x.forEach(function (g) { var k = z.indexOf(g); if (k >= 0) { m++; z.splice(k, 1); } }); return 2 * m / (x.length + y.length); }
+  function boatAiScore(b, r) {
+    var s = 0, why = [];
+    var an = alnum(r.nome), bn = alnum(b.nome);
+    if (an.length >= 2 && bn) {
+      if (an === bn) { s += 100; why.push('nome'); }
+      else if (an.length >= 3 && bn.length >= 3 && (an.indexOf(bn) >= 0 || bn.indexOf(an) >= 0)) { s += 45; why.push('nome'); }
+      else { var d = dice(an, bn); if (d >= 0.55) { s += Math.round(40 * d); why.push('nome'); } }
+    }
+    var ai = alnum(r.immatricolazione), bi = alnum(b.immatricolazione);
+    if (ai.length >= 4 && bi.length >= 4 && (ai === bi || ai.indexOf(bi) >= 0 || bi.indexOf(ai) >= 0)) { s += ai === bi ? 80 : 50; why.push('immatricolazione'); }
+    var bm = ' ' + bpNorm(b.modello).replace(/[^a-z0-9.]+/g, ' ') + ' ', cant = bpNorm(r.cantiere).replace(/[^a-z0-9]+/g, ' ').trim();
+    if (cant && bm.indexOf(' ' + cant.split(' ')[0] + ' ') >= 0) { s += 15; why.push('cantiere'); }
+    var mt = bpNorm(r.modello).replace(/[^a-z0-9.]+/g, ' ').split(' ').filter(function (t) { return t.length >= 2 || /\d/.test(t); });
+    if (mt.length) { var hit = mt.filter(function (t) { return bm.indexOf(' ' + t + ' ') >= 0; }).length; if (hit) { s += Math.round(30 * hit / mt.length); why.push('modello'); } }
+    var tipoAi = aiStr(r.tipo), tipoB = b.tipo || '';
+    if (tipoAi && tipoB && tipoAi !== 'Altro' && tipoB !== 'Altro') s += tipoAi === tipoB ? 5 : -15;
+    if (r.tipologia && b.tipologia && r.tipologia === b.tipologia) { s += 10; why.push('forma'); }
+    var La = num(r.lunghezza), Lb = num(b.lunghezza);
+    if (La != null && Lb != null) { var dl = Math.abs(La - Lb); if (dl <= 0.8) { s += 12; why.push('misura'); } else if (dl <= 1.6) s += 6; else if (dl > 3) s -= 8; }
+    var ca = hexRgb(r.coloreScafo), cb = b.coloreScafo && b.coloreScafo !== '#f2f3f5' ? hexRgb(b.coloreScafo) : null;
+    if (ca && cb) { var dc = Math.sqrt(Math.pow(ca[0] - cb[0], 2) + Math.pow(ca[1] - cb[1], 2) + Math.pow(ca[2] - cb[2], 2)); if (dc < 70) { s += 6; why.push('colore'); } else if (dc > 220) s -= 4; }
+    var mot = bpNorm(r.motore).split(/\s+/)[0];
+    if (mot && mot.length >= 3 && bpNorm(b.motore).indexOf(mot) >= 0) { s += 6; why.push('motore'); }
+    if (r.motoreTipo && b.motoreTipo && r.motoreTipo === b.motoreTipo) s += 4;
+    if (num(r.nMotori) && num(b.nMotori) && num(r.nMotori) === num(b.nMotori)) s += 3;
+    return { b: b, s: s, why: why };
+  }
+  function boatAiDesc(r) {
+    var tip = (TIPOLOGIE.filter(function (t) { return t[0] && t[0] === r.tipologia; })[0] || [])[1];
+    var parts = [[aiStr(r.cantiere), aiStr(r.modello)].filter(Boolean).join(' '), tip || aiStr(r.tipo), aiStr(r.coloreNome),
+      num(r.lunghezza) ? 'circa ' + fmtNum(num(r.lunghezza), 1) + ' m' : '', r.nome ? 'nome «' + aiStr(r.nome) + '»' : '', aiStr(r.immatricolazione),
+      [num(r.nMotori) > 1 ? num(r.nMotori) + ' motori' : '', aiStr(r.motore), aiStr(r.motoreTipo).toLowerCase()].filter(Boolean).join(' '), aiStr(r.dettagli)].filter(Boolean);
+    return '<b>Nella foto:</b> ' + esc(parts.join(' · ') || 'non sono riuscito a descriverla');
+  }
+  async function boatAiFind(file) {
+    var r = await aiAsk(await fileToDataUrl(file, 1280), AI_BARCA) || {};
+    var list = S.boats.map(function (b) { return boatAiScore(b, r); }).filter(function (x) { return x.s >= 12 && x.why.length; })
+      .sort(function (a, c) { return c.s - a.s; });
+    if (list.length && list[0].s >= 60) list = list.filter(function (x) { return x.s >= list[0].s - 50; }); // nome o immatricolazione certi: tolgo le lontane
+    return { r: r, desc: boatAiDesc(r), list: list.slice(0, 5) };
+  }
+  async function boatAiList() {
+    var file = await pickPhoto(); if (!file) return;
+    V.boatAi = 'wait'; var bl = $('#boat-list'); if (bl) bl.innerHTML = boatListHtml();
+    try { V.boatAi = await boatAiFind(file); } catch (e) { V.boatAi = null; toast(aiErrMsg(e), true); }
+    bl = $('#boat-list'); if (bl) bl.innerHTML = boatListHtml();
+  }
+  // Scadenze, batterie e rifiuti: l'AI legge la foto e compila i campi; si controlla e si salva a mano
+  function aiFillBtn(k, t) { return aiOn() ? '<button type="button" class="btn sec" data-act="ai-fill" data-k="' + k + '" style="width:100%;margin-bottom:6px">' + I.camera + esc(t) + '</button><p class="cap t-acc" id="f-aist" hidden style="margin:0 2px 10px"></p>' : ''; }
+  function aiPrompt(k) {
+    if (k === 'scad' || k === 'scadC') return 'Nella foto c’è un’etichetta, un cartellino, un certificato o un documento con una scadenza (estintore, razzi, zattera, giubbotti, cassetta di pronto soccorso, assicurazione, revisione, tagliando, verifica periodica). Oggi è il ' + todayISO() + '. ' +
+      'Rispondi SOLO con un JSON: {"tipo": cosa scade, breve in italiano (es. "Revisione estintore"), "data": data di scadenza come AAAA-MM-GG (se c’è solo mese e anno usa l’ultimo giorno del mese; se c’è solo l’ultima revisione e la periodicità è scritta, calcola la prossima), ' +
+      '"ricorrenzaMesi": ogni quanti mesi si ripete, solo se scritto, "dettagli": marca, matricola o altri dati utili in poche parole}. Non inventare: se non leggi la data metti "".';
+    if (k === 'batt') return 'Nella foto c’è l’etichetta di una o più batterie di una barca. Rispondi SOLO con un JSON: {"marca": "", "modello": "", "volt": numero, "ah": capacità in Ah (numero), "spunto": corrente di spunto in A (CCA o EN, numero), ' +
+      '"tipo": uno tra "AGM","gel","piombo","litio" o "", "data": data di produzione se leggibile, "quante": numero di batterie visibili}. Non inventare: se non leggi un dato metti "" o null.';
+    return 'Nella foto c’è un rifiuto prodotto in un cantiere nautico. Scegli il tipo giusto tra questi (usa l’id prima dei due punti):\n' +
+      rifTipi().map(function (t) { return t.id + ': ' + t.nome + ' (CER ' + t.cer + ')' + (t.es ? ', es. ' + t.es : ''); }).join('\n') +
+      '\nRispondi SOLO con un JSON: {"tipo": id scelto, oppure "" se nessuno va bene, "perche": una riga in italiano su cos’è e perché va in quel tipo (es. "latta sporca di antivegetativa: contenitore di sostanza pericolosa"), ' +
+      '"quantita": numero di pezzi visibili o null, "altro": se nessun tipo va bene, nome del rifiuto e codice CER probabile}.';
+  }
+  async function aiFill(f, k) {
+    var file = await pickPhoto(); if (!file || !f) return;
+    var st = f.querySelector('#f-aist'); if (st) { st.hidden = false; st.textContent = 'Leggo la foto…'; }
+    function set(id, v, over) { var el = f.querySelector('#' + id); if (!el || v == null || v === '' || (el.value && !over)) return false; el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); return true; }
+    function addNote(id, t) { var el = f.querySelector('#' + id); if (el && t && String(el.value).indexOf(t) < 0) el.value = el.value ? el.value + ' · ' + t : t; }
+    try {
+      var r = await aiAsk(await fileToDataUrl(file, 1600), aiPrompt(k)) || {}, msg = 'Letto: controlla e salva.';
+      if (k === 'scad' || k === 'scadC') {
+        var d = /^\d{4}-\d{2}-\d{2}$/.test(aiStr(r.data)) ? aiStr(r.data) : '', ric = num(r.ricorrenzaMesi) > 0 ? String(Math.round(num(r.ricorrenzaMesi))) : '';
+        set(k === 'scad' ? 'f-tipoS' : 'f-sct', aiStr(r.tipo), true); set(k === 'scad' ? 'f-dataS' : 'f-scd', d, true); set(k === 'scad' ? 'f-ricM' : 'f-scm', ric);
+        addNote(k === 'scad' ? 'f-noteS' : 'f-scn', aiStr(r.dettagli));
+        if (!d) msg = 'Non ho letto la data di scadenza: scrivila tu.';
+      } else if (k === 'batt') {
+        var t = [[aiStr(r.marca), aiStr(r.modello)].filter(Boolean).join(' '), num(r.volt) ? fmtNum(num(r.volt), 1) + ' V' : '', num(r.ah) ? fmtNum(num(r.ah), 0) + ' Ah' : '', num(r.spunto) ? fmtNum(num(r.spunto), 0) + ' A spunto' : '', aiStr(r.tipo), r.data ? 'prodotta ' + aiStr(r.data) : ''].filter(Boolean).join(' ');
+        addNote('f-bnote', t); if (num(r.quante) > 1) set('f-bn', String(Math.round(num(r.quante))));
+        if (!t) msg = 'Non sono riuscito a leggere l’etichetta: prova più vicino.';
+      } else {
+        var tp = rifTipo(aiStr(r.tipo));
+        if (tp) { set('f-rt', tp.id, true); if (num(r.quantita) > 0 && tp.unita === 'pz') set('f-rq', String(Math.round(num(r.quantita)))); msg = tp.nome + ' (CER ' + tp.cer + ')' + (r.perche ? ': ' + aiStr(r.perche) : '') + '. Controlla: la scelta finale è tua.'; }
+        else msg = 'Non è tra i tuoi tipi di rifiuto' + (r.altro ? '. Secondo l’AI: ' + aiStr(r.altro) : '') + '. Chiedi alla ditta prima di aggiungerlo.';
+      }
+      if (st) st.textContent = msg;
+    } catch (e) { if (st) st.hidden = true; toast(aiErrMsg(e), true); }
+  }
   // Nel foglio del magazzino: codice a barre e «riconosci»
   async function magScan(f) {
     var file = await pickPhoto(); if (!file) return;
@@ -6519,7 +6661,8 @@ button.row:active, .row .hit:active { opacity: .65; }
       if (r.unita && UM.indexOf(r.unita) >= 0) set('f-mu', r.unita);
       var q0 = f.querySelector('#f-mq0'); if (q0 && !q0.value && num(r.quantita) > 0 && r.unita !== 'l') q0.value = String(r.quantita).replace('.', ',');
       if (r.note) { var nt = f.querySelector('#f-mnote'); if (nt && !nt.value) nt.value = (r.marca ? r.marca + ' · ' : '') + r.note; }
-      if (st) st.textContent = 'Riconosciuto: controlla e salva.';
+      var cc = code || aiStr(r.codice), gia = cc && magByCode(cc), mid = f.querySelector('#f-mid');
+      if (st) st.textContent = gia && (!mid || mid.value !== gia.id) ? 'Attenzione: il codice ' + cc + ' è già di «' + gia.nome + '» in magazzino. Forse è lo stesso articolo.' : 'Riconosciuto: controlla e salva.';
     } catch (e) { if (st) st.hidden = true; toast(aiErrMsg(e), true); }
   }
   // Nella mansione o lavorazione: ricambio dalla foto
@@ -6558,7 +6701,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var umL = { pz: 'pezzi', l: 'litri', kg: 'chili', m: 'metri', 'conf.': 'confezioni', latta: 'latte', tanica: 'taniche', rotolo: 'rotoli', paia: 'paia' };
     var catsP = CATEGORIE.filter(function (c) { return c !== 'Altro' && c !== 'Gestione cantiere'; });
     var body =
-      '<div class="rif-acts" style="margin-top:0;margin-bottom:10px"><button type="button" class="btn sec" data-act="mag-scan">' + I.camera + 'Codice a barre</button>' + (aiOn() ? '<button type="button" class="btn sec" data-act="mag-ai">✨ Riconosci dalla foto</button>' : '') + '</div><p class="cap t-acc" id="f-mai" hidden style="margin:-4px 2px 8px"></p>' +
+      '<div class="rif-acts" style="margin-top:0;margin-bottom:10px"><button type="button" class="btn sec" data-act="mag-scan">' + I.camera + 'Codice a barre</button>' + (aiOn() ? '<button type="button" class="btn sec" data-act="mag-ai">✨ Riconosci dalla foto</button>' : '') + '</div><p class="cap t-acc" id="f-mai" hidden style="margin:-4px 2px 8px"></p><input type="hidden" id="f-mid" value="' + esc(m.id || '') + '">' +
       field(lab('f-mn', 'Nome'), inp('f-mn', m.nome, 'type="text" required placeholder="es. Filtro olio Yamaha F200, Antivegetativa nera 2,5 l, Guanti nitrile"')) +
       field(lab('f-mcod', 'Codice o codice a barre (facoltativo)'), inp('f-mcod', m.codice, 'type="text" autocapitalize="characters" placeholder="es. 3840525 o 8001234567890"'), 'Su iPhone puoi anche tenere premuto nel campo e scegliere «Scansiona testo».') +
       field(lab('f-mt', 'Che cos’è (facoltativo)'), '<select id="f-mt">' + opts([['', 'Non specificato']].concat(TIPI_ART), m.tipo || '') + '</select><span class="hint" id="f-mtHint"></span>') +
@@ -6974,6 +7117,9 @@ button.row:active, .row .hit:active { opacity: .65; }
       case 'perc-edit': if (S.db && S.canWrite) percSheet(); break;
       case 'mag-scan': magScan(t.closest('form')); break;
       case 'mag-ai': magAI(t.closest('form')); break;
+      case 'boat-ai': boatAiList(); break;
+      case 'ai-fill': aiFill(t.closest('form'), t.getAttribute('data-k')); break;
+      case 'boat-ai-off': V.boatAi = null; var bl0 = $('#boat-list'); if (bl0) bl0.innerHTML = boatListHtml(); break;
       case 'rc-photo': rcFromPhoto(); break;
       case 'prev-ai': prevFromPhoto(); break;
       case 'mag-find': (async function () { var file = await pickPhoto(); if (!file) return; var code = await readBarcode(file), m = magByCode(code); if (m) magSheet(m); else if (code) { toast('Codice ' + code + ' non in magazzino: lo aggiungo come nuovo articolo'); magSheet(null); setTimeout(function () { var c = $('#f-mcod'); if (c) c.value = code; }, 80); } else toast('Codice a barre non trovato nella foto: prova più vicino e dritto.', true); })(); break;
@@ -7007,7 +7153,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     }
   });
   document.addEventListener('input', function (e) {
-    if (e.target && e.target.id === 'q') { V.q = e.target.value; var bl = $('#boat-list'); if (bl) bl.innerHTML = boatListHtml(); }
+    if (e.target && e.target.id === 'q') { V.q = e.target.value; V.boatAi = null; var bl = $('#boat-list'); if (bl) bl.innerHTML = boatListHtml(); }
     if (e.target && e.target.id === 'nome-in') V.nomeDraft = e.target.value;
     if (e.target && e.target.id === 'mq') { V.magQ = e.target.value; var mb = $('#mag-box'); if (mb) mb.innerHTML = magListHtml(); }
   });
