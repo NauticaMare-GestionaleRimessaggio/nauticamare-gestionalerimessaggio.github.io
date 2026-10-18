@@ -224,6 +224,8 @@ button.row:active, .row .hit:active { opacity: .65; }
 .search { position: relative; margin-top: 12px; }
 .search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); width: 18px; height: 18px; pointer-events: none; }
 .search input { width: 100%; font: inherit; font-size: 16px; color: var(--ink); background: var(--card); border: 1px solid transparent; border-radius: 10px; padding: 10px 12px 10px 38px; }
+.gq-bar { display: block; width: 100%; font: inherit; font-size: 16px; text-align: left; color: var(--muted); background: var(--card); border: 1px solid transparent; border-radius: 10px; padding: 10px 12px 10px 38px; cursor: pointer; }
+.gq-bar span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .search input:focus { outline: none; border-color: var(--accent); }
 .month-h { display: flex; justify-content: space-between; align-items: baseline; margin: 22px 2px 8px; color: var(--muted); font-size: .85rem; font-weight: 600; }
 .month-h span:first-child { text-transform: capitalize; color: var(--ink); font-size: .95rem; }
@@ -629,7 +631,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     trash: svg('<path d="M4.5 6.5h15M9.5 6.5V4h5v2.5"/><path d="M6.5 6.5l1 13.5h9l1-13.5"/><path d="M10 10.5v6M14 10.5v6"/>'),
     restore: svg('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4.2h4.2"/><path d="M12 8.5V12l2.5 1.8"/>')
   };
-  var ALTRO = ['altro', 'programma', 'pannello', 'batterie', 'scadenze', 'vari', 'magazzino', 'preventivi', 'rifiuti', 'scadcantiere', 'assenze', 'misure', 'ore', 'operazioni', 'backup', 'notifiche'];
+  var ALTRO = ['altro', 'programma', 'pannello', 'batterie', 'scadenze', 'vari', 'magazzino', 'preventivi', 'rifiuti', 'scadcantiere', 'assenze', 'misure', 'ore', 'operazioni', 'backup', 'notifiche', 'categorie'];
   var LOGO_SRC = document.getElementById('logo-src').getAttribute('src');
   var LOGO_IMG = document.createElement('img'); LOGO_IMG.className = 'logo'; LOGO_IMG.alt = 'Nautica Mare'; LOGO_IMG.src = document.getElementById('scritta-src').getAttribute('src');
   var splashT0 = Date.now();
@@ -970,6 +972,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       low.slice(0, 3).map(function (m) { return m.nome; }).join(', ') + (low.length > 3 ? '…' : ''), '', '<button type="button" class="btn sec" data-act="tab" data-tab="magazzino">Apri magazzino</button>'));
     if (!cards.length) cards.push(featCard('ok', I.check, 'Tutto in regola', 'Nessuna scadenza nei prossimi 30 giorni', '', ''));
     if (V.feat >= cards.length) V.feat = 0;
+    h += gqBar();
     h += secH('In primo piano') + '<div class="feat" id="feat">' + cards.join('') + '</div>';
     if (cards.length > 1) h += '<div class="dots" id="dots">' + cards.map(function (_, i) { return '<i' + (i === V.feat ? ' class="on"' : '') + '></i>'; }).join('') + '</div>';
     h += metHome();
@@ -1333,18 +1336,40 @@ button.row:active, .row .hit:active { opacity: .65; }
   ];
   function guessCat(t) {
     t = String(t || '').toLowerCase();
-    for (var i = 0; i < CAT_RULES.length; i++) if (CAT_RULES[i][0].test(t)) return CAT_RULES[i][1];
+    for (var i = 0; i < CAT_RULES.length; i++) if (CAT_RULES[i][0].test(t)) return catMap(CAT_RULES[i][1]);
     return 'Altro';
   }
-  function guessCatInfo(t, exceptId, cantiere) { // {cat, src: 'storico' | 'testo' | 'cantiere' | ''}
-    var k = normT(t); if (!k) return cantiere ? { cat: 'Gestione cantiere', src: 'cantiere' } : { cat: '', src: '' };
-    var prev = (S.lavoriAll || []).filter(function (x) { return x.id !== exceptId && !x.annullata && x.categoria && x.categoria !== 'Altro' && normT(x.titolo) === k; })
-      .sort(function (a, b) { return String(b.modificato || b.data || '').localeCompare(String(a.modificato || a.data || '')); })[0];
+  // Categorie modificabili dall'amministratore (Altro › Categorie). Quelle rinominate o tolte restano come
+  // «alias», così le regole del testo e lo storico portano alla categoria nuova (o ad «Altro»)
+  var CAT_DEF = CATEGORIE.slice();
+  function catApply() {
+    var c = S.catCfg, l = c && Array.isArray(c.lista) && c.lista.length ? c.lista.filter(function (x) { return x && x !== 'Altro'; }) : CAT_DEF.filter(function (x) { return x !== 'Altro'; });
+    CATEGORIE.length = 0; l.forEach(function (x) { CATEGORIE.push(x); }); CATEGORIE.push('Altro');
+  }
+  function catMap(c) {
+    var al = (S.catCfg && S.catCfg.alias) || {};
+    for (var i = 0; i < 6 && c && CATEGORIE.indexOf(c) < 0 && al[c]; i++) c = al[c];
+    return c && CATEGORIE.indexOf(c) >= 0 ? c : 'Altro';
+  }
+  function guessCatInfo(t, exceptId, cantiere, barcaId) { // {cat, src: 'cliente' | 'storico' | 'testo' | 'cantiere' | ''}
+    var k = normT(t); if (!k) return cantiere ? { cat: catMap('Gestione cantiere'), src: 'cantiere' } : { cat: '', src: '' };
+    var old = (S.lavoriAll || []).filter(function (x) { return x.id !== exceptId && !x.annullata && x.categoria && x.categoria !== 'Altro' && CATEGORIE.indexOf(x.categoria) >= 0; })
+      .sort(function (a, b) { return String(b.modificato || b.data || '').localeCompare(String(a.modificato || a.data || '')); });
+    // memoria per cliente: prima le lavorazioni simili della stessa barca o delle altre barche dello stesso proprietario
+    var bb = barcaId && !cantiere ? boatById(barcaId) : null;
+    if (bb) {
+      var own = normT(bb.proprietario), ids = {};
+      S.boats.forEach(function (x) { if (x.id === bb.id || (own && normT(x.proprietario) === own)) ids[x.id] = 1; });
+      var cl = old.filter(function (x) { return ids[x.barcaId]; });
+      var pc = cl.find(function (x) { return normT(x.titolo) === k; }) || (k.length >= 5 ? cl.find(function (x) { var n = normT(x.titolo); return n.length >= 5 && (n.indexOf(k) >= 0 || k.indexOf(n) >= 0); }) : null);
+      if (pc) return { cat: pc.categoria, src: 'cliente' };
+    }
+    var prev = old.find(function (x) { return normT(x.titolo) === k; });
     if (prev) return { cat: prev.categoria, src: 'storico' };
-    if (cantiere) return { cat: 'Gestione cantiere', src: 'cantiere' };
+    if (cantiere) return { cat: catMap('Gestione cantiere'), src: 'cantiere' };
     var g = guessCat(t); return { cat: g, src: g === 'Altro' ? '' : 'testo' };
   }
-  function catHintTxt(gi) { return !gi.src ? (gi.cat ? 'Non l’ho riconosciuta: scegli tu se non è “Altro”' : 'Si sceglie da sola mentre scrivi la lavorazione') : gi.src === 'storico' ? 'Come l’ultima volta per questa lavorazione' : gi.src === 'cantiere' ? 'Lavoro per il cantiere' : 'Riconosciuta dal testo'; }
+  function catHintTxt(gi) { return !gi.src ? (gi.cat ? 'Non l’ho riconosciuta: scegli tu se non è “Altro”' : 'Si sceglie da sola mentre scrivi la lavorazione') : gi.src === 'storico' ? 'Come l’ultima volta per questa lavorazione' : gi.src === 'cliente' ? 'Come l’ultima volta per questo cliente' : gi.src === 'cantiere' ? 'Lavoro per il cantiere' : 'Riconosciuta dal testo'; }
   function prevHtml(l) {
     return (l.storico || []).slice().reverse().map(function (v) {
       return '<span class="prev">Prima era: <s>' + esc(v.titolo || 'Mansione') + ' · ' + esc(fmtH(v.oreLavoro)) + ' · ' + esc(lavBoatLabel(v)) + (v.data !== l.data ? ' · ' + esc(fmtDate(v.data)) : '') + '</s>' +
@@ -3841,7 +3866,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   function progsOfLav(id) { return (S.prog || []).filter(function (x) { return x.lavId === id; }); }
   async function lavFromProg(d, progId) { // crea la lavorazione per una cosa da fare con la barca; torna l'id
     var now = new Date().toISOString(), ref = S.db.collection('lavori').doc();
-    var ld = { barcaId: d.barcaId, titolo: d.testo, data: d.data, stato: d.fatto ? 'fatto' : 'da_fare', categoria: guessCatInfo(d.testo).cat || 'Altro', descr: '', oreStima: null, oreLavoro: null, importo: null, oreMotore: null, ricambi: [], foto: [], progId: progId || '', creato: now, modificato: now };
+    var ld = { barcaId: d.barcaId, titolo: d.testo, data: d.data, stato: d.fatto ? 'fatto' : 'da_fare', categoria: guessCatInfo(d.testo, '', false, d.barcaId).cat || 'Altro', descr: '', oreStima: null, oreLavoro: null, importo: null, oreMotore: null, ricambi: [], foto: [], progId: progId || '', creato: now, modificato: now };
     return (await w(function () { return ref.set(ld); })) ? ref.id : '';
   }
   async function syncLav(d) { // dal programma alla lavorazione collegata
@@ -4186,7 +4211,7 @@ button.row:active, .row .hit:active { opacity: .65; }
         if (crea) {
           var ids = [];
           for (var i = 0; i < voci.length; i++) {
-            var v = voci[i], lr = S.db.collection('lavori').doc(), gi = guessCatInfo(v.titolo);
+            var v = voci[i], lr = S.db.collection('lavori').doc(), gi = guessCatInfo(v.titolo, '', false, data.barcaId);
             var ld = { barcaId: data.barcaId, titolo: v.titolo, data: todayISO(), stato: 'da_fare', categoria: gi.cat || 'Altro', descr: 'Dal preventivo' + (data.numero ? ' n. ' + data.numero : '') + ': ' + data.titolo,
               oreStima: v.ore, oreLavoro: null, importo: null, oreMotore: null, ricambi: [], foto: [], prevId: ref.id, creato: now, modificato: now };
             if (!(await w(function () { return lr.set(ld); }))) return false;
@@ -5250,6 +5275,87 @@ button.row:active, .row .hit:active { opacity: .65; }
       toast('Notifiche spente su questo telefono'); render();
     }
   }
+  /* ---------- Categorie dei lavori: le cambia l'amministratore ---------- */
+  function catUse(c) {
+    return { lav: (S.lavoriAll || []).filter(function (l) { return !l.annullata && l.categoria === c; }).length, mag: S.mag.filter(function (m) { return m.categoria === c; }).length };
+  }
+  function viewCategorie() {
+    var adm = S.isOwner && S.canWrite;
+    var h = '<p class="context" style="margin-top:12px">Le categorie dei lavori e degli articoli del magazzino. La categoria si sceglie da sola mentre scrivete: guarda il testo, lo storico e le lavorazioni dello stesso cliente.</p>';
+    h += '<div class="group">' + CATEGORIE.map(function (c, i) {
+      var u = catUse(c), fixed = c === 'Altro';
+      return '<div class="row"><span class="main"><span class="title">' + esc(c) + '</span><span class="sub">' + esc(u.lav + (u.lav === 1 ? ' lavoro' : ' lavori') + (u.mag ? ' · ' + u.mag + (u.mag === 1 ? ' articolo' : ' articoli') : '') + (fixed ? ' · quando non si riconosce' : '')) + '</span></span>' +
+        (adm && !fixed ? '<span class="side" style="flex-direction:row;gap:4px">' + (i > 0 ? '<button type="button" class="mini" data-act="cat-up" data-i="' + i + '" aria-label="Sposta su">↑</button>' : '') +
+          '<button type="button" class="mini" data-act="cat-ren" data-i="' + i + '">Rinomina</button><button type="button" class="mini" data-act="cat-del" data-i="' + i + '">Togli</button></span>' : '') + '</div>';
+    }).join('') + '</div>';
+    if (adm) h += '<div class="search" style="display:flex;gap:8px"><input id="cat-new" type="text" placeholder="Nuova categoria, es. Tappezzeria" autocapitalize="sentences" style="padding-left:12px"><button type="button" class="btn" data-act="cat-add">Aggiungi</button></div>' +
+      '<p class="cap" style="margin:8px 4px 0">Se rinomini una categoria, cambia anche nei lavori e negli articoli già segnati. Se la togli, quei lavori passano ad «Altro».</p>';
+    else h += '<p class="cap" style="margin:8px 4px 0">Le categorie le cambia l’amministratore.</p>';
+    return h;
+  }
+  async function catSave(lista, alias) {
+    var r = S.db.collection('impostazioni').doc('categorie');
+    var data = { lista: lista.filter(function (x) { return x !== 'Altro'; }), alias: alias, modificato: new Date().toISOString() };
+    var ok = await w(function () { return r.set(data); });
+    if (ok) { S.catCfg = data; catApply(); render(); }
+    return ok;
+  }
+  function catAlias() { return Object.assign({}, (S.catCfg && S.catCfg.alias) || {}); }
+  // cambia la categoria nei lavori e negli articoli già salvati
+  async function catMove(from, to) {
+    var refs = [];
+    (S.lavoriAll || []).forEach(function (l) { if (l.categoria === from) refs.push([S.db.collection('lavori').doc(l.id), { categoria: to }]); });
+    S.mag.forEach(function (m) { if (m.categoria === from) refs.push([S.db.collection('magazzino').doc(m.id), { categoria: to === 'Altro' ? '' : to }]); });
+    for (var i = 0; i < refs.length; i += 20) {
+      var part = refs.slice(i, i + 20);
+      if (!(await w(function () { return Promise.all(part.map(function (x) { return x[0].update(x[1]); })); }))) return false;
+    }
+    return true;
+  }
+  async function catAdd() {
+    var el = $('#cat-new'), n = el ? String(el.value).trim().replace(/\s+/g, ' ') : '';
+    if (!n) return;
+    n = n.charAt(0).toUpperCase() + n.slice(1);
+    if (CATEGORIE.some(function (c) { return c.toLowerCase() === n.toLowerCase(); })) { toast('C’è già la categoria ' + n, true); return; }
+    var al = catAlias(); delete al[n];
+    if (await catSave(CATEGORIE.filter(function (c) { return c !== 'Altro'; }).concat([n]), al)) toast('Categoria aggiunta');
+  }
+  function catRenSheet(i) {
+    var old = CATEGORIE[i]; if (!old || old === 'Altro') return;
+    var u = catUse(old);
+    openSheet({ title: 'Rinomina categoria', body: field(lab('f-catn', 'Nuovo nome'), inp('f-catn', old, 'type="text" required autocapitalize="sentences"')) +
+      '<p class="cap">Cambia anche in ' + u.lav + (u.lav === 1 ? ' lavoro' : ' lavori') + (u.mag ? ' e ' + u.mag + (u.mag === 1 ? ' articolo' : ' articoli') : '') + ' già segnati.</p>',
+      onSubmit: async function (f) {
+        var n = val(f, 'f-catn').replace(/\s+/g, ' ');
+        if (!n) { formErr('Scrivi il nome.'); return false; }
+        if (n === old) return true;
+        if (n.toLowerCase() === 'altro' || CATEGORIE.some(function (c) { return c !== old && c.toLowerCase() === n.toLowerCase(); })) { formErr('C’è già una categoria con questo nome.'); return false; }
+        var al = catAlias(); al[old] = n; delete al[n];
+        Object.keys(al).forEach(function (k) { if (al[k] === old) al[k] = n; });
+        var lista = CATEGORIE.filter(function (c) { return c !== 'Altro'; }).map(function (c) { return c === old ? n : c; });
+        if (!(await catSave(lista, al))) return false;
+        if (!(await catMove(old, n))) { toast('Categoria rinominata, ma alcuni lavori non sono stati aggiornati: riprova.', true); return true; }
+        toast('Categoria rinominata'); return true;
+      } });
+  }
+  function catDelSheet(i) {
+    var old = CATEGORIE[i]; if (!old || old === 'Altro') return;
+    var u = catUse(old);
+    openSheet({ title: 'Togli categoria', submitLabel: 'Togli', body: '<p class="context">Togli «' + esc(old) + '» dall’elenco. ' +
+      (u.lav || u.mag ? esc(u.lav + (u.lav === 1 ? ' lavoro passa' : ' lavori passano')) + ' ad «Altro»' + (u.mag ? ' e ' + u.mag + (u.mag === 1 ? ' articolo resta' : ' articoli restano') + ' senza categoria' : '') + '.' : 'Non è usata da nessun lavoro.') + '</p>',
+      onSubmit: async function () {
+        var al = catAlias(); al[old] = 'Altro';
+        Object.keys(al).forEach(function (k) { if (al[k] === old) al[k] = 'Altro'; });
+        if (!(await catSave(CATEGORIE.filter(function (c) { return c !== 'Altro' && c !== old; }), al))) return false;
+        if (!(await catMove(old, 'Altro'))) { toast('Categoria tolta, ma alcuni lavori non sono stati aggiornati: riprova.', true); return true; }
+        toast('Categoria tolta'); return true;
+      } });
+  }
+  async function catUp(i) {
+    var l = CATEGORIE.filter(function (c) { return c !== 'Altro'; }); if (i < 1 || i >= l.length) return;
+    var t = l[i - 1]; l[i - 1] = l[i]; l[i] = t;
+    await catSave(l, catAlias());
+  }
   function viewNotifiche() {
     var me = ntMine(), tok = ntDevTok(), on = !!(tok && me && (me.tokens || []).indexOf(tok) >= 0), why = ntSupport(), c = ntCfg();
     var h = '<p class="context" style="margin-top:12px">Ogni mattina alle ' + esc(c.ora) + ' un solo avviso con le scadenze che ti riguardano' + (c.weekend ? '' : ', nei giorni lavorativi') + '.</p>';
@@ -5301,11 +5407,12 @@ button.row:active, .row .hit:active { opacity: .65; }
       ['scadenze', I.alarm, 'late', 'Scadenze', 'Tagliandi, assicurazioni, contratti', late ? '<span class="pill late">' + late + ' scadute</span>' : ''],
       ['scadcantiere', I.alarm, 'soon', 'Scadenze del cantiere', 'Mezzi, attrezzature e sicurezza: revisioni, verifiche, estintori', scCounts().late ? '<span class="pill late">' + scCounts().late + (scCounts().late === 1 ? ' scaduta' : ' scadute') + '</span>' : scCounts().soon ? '<span class="pill soon">' + scCounts().soon + ' entro 30 giorni</span>' : ''],
       ['notifiche', I.bell, 'acc', 'Notifiche', 'Avvisi sul telefono per le scadenze', ''],
+      ['categorie', I.list, '', 'Categorie dei lavori', 'Motore, carena, coperta…: aggiungi, rinomina o togli', ''],
       ['backup', I.dl, 'ok', 'Copia dei dati', 'Scarica una copia di tutto o recupera ciò che è stato cancellato', '']
     ];
     var fbRows = window.__NM_FB && window.__NM_FB.altroRows ? window.__NM_FB.altroRows() : [];
     fbRows.forEach(function (r) { rows.push(['fb:' + r[0], I[r[1]] || I.list, r[2] || '', r[3], r[4], r[5] || '']); });
-    return exampleBanner() + '<div class="group" style="margin-top:14px">' + rows.map(function (r) {
+    return exampleBanner() + gqBar() + '<div class="group" style="margin-top:14px">' + rows.map(function (r) {
       if (r[0].slice(0, 3) === 'fb:') return '<button type="button" class="row" data-act="fb" data-k="' + esc(r[0].slice(3)) + '"><span class="ic-circle ' + r[2] + '">' + r[1] + '</span><span class="main"><span class="title">' + esc(r[3]) + '</span><span class="sub">' + esc(r[4]) + '</span></span>' +
         (r[5] ? '<span class="side">' + r[5] + '</span>' : '') + '<span style="color:var(--dim);width:18px;flex:none">' + I.right + '</span></button>';
       return '<button type="button" class="row" data-act="tab" data-tab="' + r[0] + '"><span class="ic-circle ' + r[2] + '">' + r[1] + '</span><span class="main"><span class="title">' + r[3] + '</span><span class="sub">' + r[4] + '</span></span>' +
@@ -5648,7 +5755,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (V.tab === 'barche' && V.boatId && boatById(V.boatId)) {
       var b = boatById(V.boatId);
       if (V.boatView === 'resoconto') { t.innerHTML = '<div class="l"><button type="button" class="icon-btn blue" data-act="res-back" aria-label="Torna alla scheda">' + I.back + '</button></div><h1>Resoconto</h1><div class="r"></div>'; return; }
-      t.innerHTML = '<div class="l"><button type="button" class="icon-btn blue" data-act="back" aria-label="Torna alle barche">' + I.back + '</button>' + '<button type="button" class="icon-btn" data-act="gq-open" aria-label="Cerca in tutto">' + I.search + '</button>' + '</div><h1>' + esc(b.nome || 'Barca') + '</h1>' +
+      t.innerHTML = '<div class="l"><button type="button" class="icon-btn blue" data-act="back" aria-label="Torna alle barche">' + I.back + '</button>' + '</div><h1>' + esc(b.nome || 'Barca') + '</h1>' +
         '<div class="r">' + (S.canWrite ? '<button type="button" class="icon-btn blue" data-act="edit-boat" data-id="' + esc(b.id) + '" aria-label="Modifica scheda">' + I.pencil + '</button>' : '') + '</div>';
       return;
     }
@@ -5657,14 +5764,14 @@ button.row:active, .row .hit:active { opacity: .65; }
         (S.canWrite && S.status === 'ready' && M.area !== 'porto' ? '<button type="button" class="icon-btn" data-act="m-cfg" aria-label="Misure del cantiere">' + I.ruler + '</button>' : '') + '</div>';
       return;
     }
-    var titles = { home: 'Nautica Mare', scheda: 'Scheda lavoro', scadenze: 'Scadenze', calendario: 'Calendario', barche: 'Barche', lavori: 'Lavorazioni da fare', altro: 'Altro', vari: 'Vari e alaggi', magazzino: 'Magazzino', preventivi: 'Preventivi', assenze: 'Ferie e permessi', misure: 'Misure mm e pollici', rifiuti: 'Rifiuti', scadcantiere: 'Scadenze del cantiere', ore: 'Ore del mese', checklist: 'Checklist', operazioni: 'Servizi di cantiere', backup: 'Copia dei dati', programma: 'Programma', pannello: 'Pannello', batterie: 'Batterie', notifiche: 'Notifiche' };
+    var titles = { home: 'Nautica Mare', scheda: 'Scheda lavoro', scadenze: 'Scadenze', calendario: 'Calendario', barche: 'Barche', lavori: 'Lavorazioni da fare', altro: 'Altro', vari: 'Vari e alaggi', magazzino: 'Magazzino', preventivi: 'Preventivi', assenze: 'Ferie e permessi', misure: 'Misure mm e pollici', rifiuti: 'Rifiuti', scadcantiere: 'Scadenze del cantiere', ore: 'Ore del mese', checklist: 'Checklist', operazioni: 'Servizi di cantiere', backup: 'Copia dei dati', programma: 'Programma', pannello: 'Pannello', batterie: 'Batterie', notifiche: 'Notifiche', categorie: 'Categorie' };
     var late = S.status === 'ready' ? lateCount() : 0;
     var left = V.tab === 'home' ? '<button type="button" class="icon-btn" data-act="tab" data-tab="scadenze" aria-label="Scadenze scadute: ' + late + '">' + I.bell + (late ? '<span class="dot">' + late + '</span>' : '') + '</button>'
       : (ALTRO.indexOf(V.tab) > 0 ? '<button type="button" class="icon-btn blue" data-act="tab" data-tab="altro" aria-label="Torna ad Altro">' + I.back + '</button>' : '');
-    var addAct = ({ scheda: S.myId ? 'new-entry' : '', lavori: 'new-lav', vari: 'new-vari', magazzino: 'new-mag', checklist: 'new-modello', operazioni: 'new-op', ore: '', backup: '', notifiche: '', programma: 'new-prog', pannello: '', batterie: '', rifiuti: 'rif-new', scadcantiere: 'sc-new', preventivi: 'prev-new', assenze: S.myId ? 'ass-new' : '', misure: '' })[V.tab];
+    var addAct = ({ scheda: S.myId ? 'new-entry' : '', lavori: 'new-lav', vari: 'new-vari', magazzino: 'new-mag', checklist: 'new-modello', operazioni: 'new-op', ore: '', backup: '', notifiche: '', categorie: '', programma: 'new-prog', pannello: '', batterie: '', rifiuti: 'rif-new', scadcantiere: 'sc-new', preventivi: 'prev-new', assenze: S.myId ? 'ass-new' : '', misure: '' })[V.tab];
     if (addAct == null) addAct = 'add-menu';
     var ro = S.status === 'ready' && !S.canWrite ? ' · sola lettura' : '';
-    t.innerHTML = '<div class="l">' + left + (S.status === 'ready' ? '<button type="button" class="icon-btn" data-act="gq-open" aria-label="Cerca in tutto">' + I.search + '</button>' : '') + '</div><h1' + (V.tab === 'home' ? ' id="logo-slot"' : '') + '>' + (V.tab === 'home' ? '' : titles[V.tab] + ro) + '</h1>' +
+    t.innerHTML = '<div class="l">' + left + '</div><h1' + (V.tab === 'home' ? ' id="logo-slot"' : '') + '>' + (V.tab === 'home' ? '' : titles[V.tab] + ro) + '</h1>' +
       '<div class="r">' + (S.status === 'ready' ? '<button type="button" class="icon-btn" data-act="go-map" aria-label="Mappa del cantiere">' + I.map + '</button>' : '') + (add && addAct ? '<button type="button" class="icon-btn" data-act="' + addAct + '" aria-label="Aggiungi">' + I.plus + '</button>' : '') + '</div>';
     if (V.tab === 'home') { var slot = $('#logo-slot'); if (slot) slot.appendChild(LOGO_IMG); }
   }
@@ -5694,7 +5801,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var html;
     if (S.status === 'absent') html = '<div class="notice" style="margin-top:14px">I dati del registro si aprono solo da Claude, con il tuo account. Apri il link della pagina da claude.ai o dall’app Claude per vedere e salvare barche, lavori e scadenze.</div>';
     else if (S.status === 'loading') html = '<div class="notice" style="margin-top:14px">Carico barche, lavori e scadenze…</div>';
-    else html = ({ programma: viewProgramma, pannello: viewPannello, batterie: viewBatterie, mappa: viewMappa, altro: viewAltro, backup: viewBackup, vari: viewVari, magazzino: viewMagazzino, preventivi: viewPreventivi, assenze: viewAssenze, misure: viewMisure, notifiche: viewNotifiche, rifiuti: viewRifiuti, scadcantiere: viewScadCantiere, ore: viewOre, checklist: viewChecklist, operazioni: viewOperazioni, home: viewHome, scheda: viewScheda, scadenze: viewScadenze, calendario: viewCalendario, lavori: viewLavori, barche: function () { return V.boatId ? viewBoat() : viewBarche(); } })[V.tab]();
+    else html = ({ programma: viewProgramma, pannello: viewPannello, batterie: viewBatterie, mappa: viewMappa, altro: viewAltro, backup: viewBackup, vari: viewVari, magazzino: viewMagazzino, preventivi: viewPreventivi, assenze: viewAssenze, misure: viewMisure, notifiche: viewNotifiche, categorie: viewCategorie, rifiuti: viewRifiuti, scadcantiere: viewScadCantiere, ore: viewOre, checklist: viewChecklist, operazioni: viewOperazioni, home: viewHome, scheda: viewScheda, scadenze: viewScadenze, calendario: viewCalendario, lavori: viewLavori, barche: function () { return V.boatId ? viewBoat() : viewBarche(); } })[V.tab]();
     $('#view').innerHTML = html;
     renderTop(); renderTabs(); bindFeat();
     if (V.tab === 'misure') misUpdate();
@@ -5768,6 +5875,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     }));
     return groups.length ? groups.join('') : '<p class="context">Nessun risultato per “' + esc(q) + '”.</p>';
   }
+  function gqBar() { return '<button type="button" class="search gq-bar" data-act="gq-open">' + I.search + '<span>Cerca barca, cliente, articolo, lavoro…</span></button>'; }
   function gqOpen() {
     openSheet({ title: 'Cerca', menu: true, body: '<div class="search">' + I.search + '<input id="gq" type="search" placeholder="Barca, cliente, articolo, lavoro, scadenza…" value="' + esc(V.gq || '') + '" autocomplete="off" aria-label="Cerca in tutto"></div><div id="gq-res" style="margin-top:12px">' + gqResults(V.gq || '') + '</div>',
       onOpen: function (f) {
@@ -6183,10 +6291,11 @@ button.row:active, .row .hit:active { opacity: .65; }
         var cs = f.querySelector('#f-categoria'), ti = f.querySelector('#f-titolo'), catAuto = true;
         function cat() {
           if (!catAuto) return;
-          var gi = guessCatInfo(ti.value), h = $('#f-catHint');
+          var bq = f.querySelector('#f-barca'), gi = guessCatInfo(ti.value, l.id, false, bq && bq.value), h = $('#f-catHint');
           cs.value = gi.cat || 'Altro'; if (h) h.textContent = catHintTxt(gi);
         }
         ti.addEventListener('input', cat);
+        var bq0 = f.querySelector('#f-barca'); if (bq0) bq0.addEventListener('change', cat);
         cs.addEventListener('change', function () { catAuto = false; var h = $('#f-catHint'); if (h) h.textContent = 'Scelta a mano'; });
         cat();
       },
@@ -6375,9 +6484,9 @@ button.row:active, .row .hit:active { opacity: .65; }
         });
         fill();
         var ce = f.querySelector('#f-catE');
-        function catE() { var gi = guessCatInfo(ms.value, l.id, bs.value === '__cantiere'), o0 = ce && ce.options[0]; if (o0) o0.textContent = gi.cat ? 'Automatica: ' + gi.cat : 'Automatica in base al testo'; }
+        function catE() { var gi = guessCatInfo(ms.value, l.id, bs.value === '__cantiere', bs.value), o0 = ce && ce.options[0]; if (o0) o0.textContent = gi.cat ? 'Automatica: ' + gi.cat : 'Automatica in base al testo'; }
         ms.addEventListener('input', catE); os.addEventListener('change', catE); bs.addEventListener('change', catE); catE();
-        var lk = attrLinkBind(f, function () { return bs.value; }, function () { return ce.value || guessCatInfo(ms.value, l.id, bs.value === '__cantiere').cat; }, l.attrId);
+        var lk = attrLinkBind(f, function () { return bs.value; }, function () { return ce.value || guessCatInfo(ms.value, l.id, bs.value === '__cantiere', bs.value).cat; }, l.attrId);
         bs.addEventListener('change', function () { lk.fill(); lk.autoOpen(); }); ce.addEventListener('change', lk.autoOpen); ms.addEventListener('input', lk.autoOpen);
         var abW = f.querySelector('#f-abW'), abB = f.querySelector('#f-abBtn'), ab = f.querySelector('#f-ab');
         function abSync() { Array.prototype.forEach.call(ab.children, function (c) { c.hidden = c.getAttribute('data-ab') === bs.value; }); }
@@ -6407,7 +6516,7 @@ button.row:active, .row .hit:active { opacity: .65; }
           if (!(await w(function () { return nref.set(nb); }))) return false;
           bv = nref.id;
         }
-        var data = { barcaId: bv === '__cantiere' ? '' : bv, titolo: mans, data: giorno, categoria: val(f, 'f-catE') || guessCatInfo(mans, l.id, bv === '__cantiere').cat || 'Altro', oreLavoro: ore, ricambi: rcRead(f), foto: SHEET.foto.slice(), modificato: now };
+        var data = { barcaId: bv === '__cantiere' ? '' : bv, titolo: mans, data: giorno, categoria: val(f, 'f-catE') || guessCatInfo(mans, l.id, bv === '__cantiere', bv).cat || 'Altro', oreLavoro: ore, ricambi: rcRead(f), foto: SHEET.foto.slice(), modificato: now };
         data.altreBarche = Array.prototype.filter.call(f.querySelectorAll('#f-ab [data-ab][aria-pressed="true"]'), function (c) { return c.getAttribute('data-ab') !== bv; }).map(function (c) { return c.getAttribute('data-ab'); });
         if (bv !== '__cantiere') { var aid = await attrLinkSave(f, bv); if (aid === null) return false; if (aid !== undefined) data.attrId = aid; } else data.attrId = '';
         data.opId = bv === '__cantiere' ? '' : val(f, 'f-opE');
@@ -6425,7 +6534,7 @@ button.row:active, .row .hit:active { opacity: .65; }
           if (isConfirmed(S.myId, giorno)) data.aggiuntaDopoConferma = true;
           var ref = S.db.collection('lavori').doc(); ok = await w(function () { return ref.set(data); });
           for (var ri = 0; ok && ri < righe.length; ri++) {
-            var rd = Object.assign({}, data, { titolo: righe[ri].titolo, oreLavoro: righe[ri].ore, categoria: guessCatInfo(righe[ri].titolo, '', bv === '__cantiere').cat || 'Altro', ricambi: [], foto: [], attrId: '', opId: '' });
+            var rd = Object.assign({}, data, { titolo: righe[ri].titolo, oreLavoro: righe[ri].ore, categoria: guessCatInfo(righe[ri].titolo, '', bv === '__cantiere', bv).cat || 'Altro', ricambi: [], foto: [], attrId: '', opId: '' });
             var rr = S.db.collection('lavori').doc(); ok = await w(function () { return rr.set(rd); });
           }
         } else { var r2 = S.db.collection('lavori').doc(l.id); ok = await w(function () { return r2.update(data); }); }
@@ -7018,6 +7127,10 @@ button.row:active, .row .hit:active { opacity: .65; }
       case 'bk-save': bkSave(); break;
       case 'back': V.boatId = null; V.boatView = null; render(); window.scrollTo(0, 0); break;
       case 'open-boat': closeLightbox(); V.tab = 'barche'; V.boatId = id; V.boatView = null; V.boatLavAll = false; render(); window.scrollTo(0, 0); break;
+      case 'cat-add': if (S.isOwner) catAdd(); break;
+      case 'cat-ren': if (S.isOwner) catRenSheet(+t.getAttribute('data-i')); break;
+      case 'cat-del': if (S.isOwner) catDelSheet(+t.getAttribute('data-i')); break;
+      case 'cat-up': if (S.isOwner) catUp(+t.getAttribute('data-i')); break;
       case 'gq-open': if (S.status === 'ready') gqOpen(); break;
       case 'gq-go': gqGo(t.getAttribute('data-k'), id); break;
       case 'gq-cli': x = $('#gq'); if (x) { x.value = V.gq = t.getAttribute('data-q'); $('#gq-res').innerHTML = gqResults(V.gq); } break;
@@ -7287,6 +7400,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (S.db && S.status === 'ready') saveNome(n);
   });
   window.addEventListener('resize', function () { if (V.tab === 'mappa' && M.area === 'porto') { Porto.resize(); return; } if (V.tab === 'mappa' && M.mode === '2d' && $('#map-root')) { sizeMap(); applyView(); } });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target && e.target.id === 'cat-new') { e.preventDefault(); if (S.isOwner) catAdd(); } });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('#lightbox')) closeLightbox(); else if ($('#sheet-wrap')) closeSheet(); } });
 
   /* ---------- Avvio ---------- */
@@ -7322,9 +7436,9 @@ button.row:active, .row .hit:active { opacity: .65; }
     sub('conferme', function (x) { S.conf = toMap(x); });
     db.collection('impostazioni').onSnapshot(function (snap) {
       var m = null, b = null;
-      snap.docs.forEach(function (d) { if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); else if (d.id === 'rifiuti') S.rifCfg = d.data(); else if (d.id === 'notifiche') S.notifCfg = d.data(); else if (d.id === 'meteo') S.meteoCfg = d.data(); else if (d.id === 'percorso') S.percorso = d.data(); });
+      snap.docs.forEach(function (d) { if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); else if (d.id === 'rifiuti') S.rifCfg = d.data(); else if (d.id === 'notifiche') S.notifCfg = d.data(); else if (d.id === 'meteo') S.meteoCfg = d.data(); else if (d.id === 'percorso') S.percorso = d.data(); else if (d.id === 'categorie') { S.catCfg = d.data(); catApply(); } });
       var mc = m !== S.mapCfg; S.mapCfg = m; S.bkInfo = b;
-      if ((V.tab === 'mappa' && mc) || V.tab === 'backup' || V.tab === 'batterie' || V.tab === 'rifiuti' || V.tab === 'notifiche' || V.tab === 'home' || V.tab === 'barche') render();
+      if ((V.tab === 'mappa' && mc) || V.tab === 'backup' || V.tab === 'batterie' || V.tab === 'rifiuti' || V.tab === 'notifiche' || V.tab === 'categorie' || V.tab === 'home' || V.tab === 'barche') render();
     }, function () { });
     sub('magazzino', function (x) { S.mag = x; });
     sub('movimenti', function (x) { S.mov = x; });
