@@ -686,7 +686,7 @@ button.row:active, .row .hit:active { opacity: .65; }
 
   /* ---------- Stato ---------- */
   var S = { posti: {}, richieste: [], db: null, status: 'loading', canWrite: true, writeUnknown: false, boats: [], lavori: [], lavoriAll: [], scadenze: [], got: {}, pendingBoat: null, user: null, myId: null, me: {}, isOwner: false, dip: {}, prof: {},
-    conf: {}, mag: [], mov: [], vari: [], modelli: [], ckBarca: {}, check: [], assets: null, opModelli: [], ops: [], mezzi: [], attr: [], prog: [], cariche: [], isEditor: false, battCfg: null, dl: undefined, bkInfo: null, rif: [], ritiri: [], rifCfg: null, meteoCfg: null, scadC: [], prev: [], assenze: [] };
+    conf: {}, mag: [], mov: [], vari: [], modelli: [], ckBarca: {}, check: [], assets: null, opModelli: [], ops: [], mezzi: [], attr: [], prog: [], cariche: [], isEditor: false, battCfg: null, dl: undefined, bkInfo: null, rif: [], ritiri: [], rifCfg: null, meteoCfg: null, scadC: [], prev: [], kit: [], inv: [], assenze: [] };
   var V = { tab: 'home', boatId: null, q: '', lavFilter: 'aperti', showDone: false, exConfirm: false, calMonth: todayISO().slice(0, 7), calDay: todayISO(), feat: 0, boatLavAll: false, schedaDay: todayISO(), nomeDraft: null,
     boatView: null, resRange: 'anno', oreMonth: todayISO().slice(0, 7), oreOpen: null, magQ: '', magGroup: 'tipo', progDay: null, progView: 'ora', panPer: 'sett', panBy: 'persona', variDone: false, rifTab: 'deposito', rifEuro: false, scShowDone: false, prevFilter: 'aperti' };
   var SHEET = { onDelete: null, foto: [], run: null };
@@ -5281,6 +5281,100 @@ button.row:active, .row .hit:active { opacity: .65; }
       toast('Notifiche spente su questo telefono'); render();
     }
   }
+  /* ---------- Inventario guidato: si conta un posto alla volta, anche in più persone ----------
+     Ogni conta è un documento a parte (così due persone non si sovrascrivono). Alla fine l'amministratore
+     vede le differenze e le corregge: diventano «correzioni di giacenza» nello storico dell'articolo. */
+  function invOpen() { return (S.inv || []).find(function (x) { return x.tipo === 'sessione' && x.stato === 'aperto'; }) || null; }
+  function invCounts(sid) { var m = {}; (S.inv || []).forEach(function (x) { if (x.tipo === 'conta' && x.sessione === sid) m[x.articoloId] = x; }); return m; }
+  function invPosOf(m) { return String(m.posizione || '').trim() || '—'; }
+  function invPositions() {
+    var o = {}; S.mag.forEach(function (m) { o[invPosOf(m)] = 1; });
+    return Object.keys(o).sort(function (a, b) { return a === '—' ? 1 : b === '—' ? -1 : a.localeCompare(b, 'it', { numeric: true }); });
+  }
+  function invDiffs(sid) {
+    var c = invCounts(sid), st = stockMap();
+    return S.mag.filter(function (m) { return c[m.id] && num(c[m.id].q) != null; }).map(function (m) { var q = num(c[m.id].q), s0 = st[m.id] || 0; return { m: m, q: q, st: s0, d: Math.round((q - s0) * 1000) / 1000 }; }).filter(function (x) { return x.d !== 0; });
+  }
+  function viewInventario() {
+    var s = invOpen(), adm = S.isOwner && S.canWrite, h = '';
+    if (!s) {
+      h += '<p class="context" style="margin-top:12px">Contate gli articoli un posto alla volta (scaffale, armadio, container), anche in più persone dal proprio telefono. Alla fine l’amministratore controlla le differenze e corregge le giacenze.</p>';
+      if (!S.mag.some(function (m) { return m.posizione; })) h += '<div class="notice">Gli articoli non hanno ancora un posto: puoi scriverlo nella scheda di ogni articolo («Dove si trova»), oppure contare tutto insieme.</div>';
+      if (S.canWrite) h += '<button type="button" class="btn" data-act="inv-start" style="width:100%;margin-top:12px">' + I.check + 'Inizia l’inventario</button>';
+      var old = (S.inv || []).filter(function (x) { return x.tipo === 'sessione' && x.stato === 'chiuso'; }).sort(function (a, b) { return String(b.chiusoIl || '').localeCompare(String(a.chiusoIl || '')); });
+      if (old.length) h += secH('Inventari fatti') + '<div class="group">' + old.slice(0, 10).map(function (x) {
+        return '<div class="row"><span class="main"><span class="title">' + esc(fmtDate(String(x.chiusoIl || x.creato || '').slice(0, 10))) + '</span><span class="sub">' + esc((x.contati || 0) + ' articoli contati · ' + (x.correzioni || 0) + ' giacenze corrette' + (x.chiusoDa ? ' · ' + nameOf(x.chiusoDa) : '')) + '</span></span></div>';
+      }).join('') + '</div>';
+      return h;
+    }
+    var c = invCounts(s.id), pos = invPositions(), done = S.mag.filter(function (m) { return c[m.id]; }).length, st = stockMap();
+    if (!V.invPos || pos.indexOf(V.invPos) < 0) V.invPos = pos.find(function (p) { return S.mag.some(function (m) { return invPosOf(m) === p && !c[m.id]; }); }) || pos[0];
+    h += '<div class="preview" style="margin-top:12px">Inventario iniziato il ' + esc(fmtDate(String(s.creato || '').slice(0, 10))) + (s.creatoDa ? ' da ' + esc(nameOf(s.creatoDa)) : '') + '<br><b>Contati ' + done + ' di ' + S.mag.length + ' articoli</b></div>';
+    h += '<button type="button" class="btn sec" data-act="inv-scan" style="width:100%;margin-top:10px">' + I.camera + 'Trova l’articolo col codice a barre</button>';
+    h += '<div class="chips" role="group" aria-label="Posto" style="margin-top:12px;flex-wrap:wrap">' + pos.map(function (p) {
+      var all = S.mag.filter(function (m) { return invPosOf(m) === p; }), dn = all.filter(function (m) { return c[m.id]; }).length;
+      return '<button type="button" data-act="inv-pos" data-p="' + esc(p) + '" aria-pressed="' + (p === V.invPos) + '">' + esc(p === '—' ? 'Senza posto' : p) + ' ' + dn + '/' + all.length + (dn === all.length ? ' ✓' : '') + '</button>';
+    }).join('') + '</div>';
+    var list = S.mag.filter(function (m) { return invPosOf(m) === V.invPos; }).sort(byName);
+    var ae = document.activeElement, typing = ae && ae.classList && ae.classList.contains('inv-q') ? ae : null; // non perdo quello che si sta scrivendo
+    h += '<div class="group" style="margin-top:10px">' + list.map(function (m) {
+      var x = c[m.id], q = x ? num(x.q) : null, s0 = st[m.id] || 0, d = q != null ? Math.round((q - s0) * 1000) / 1000 : null;
+      var stt = d == null ? '' : d === 0 ? '<span class="t-ok">✓ giusto</span>' : '<span class="t-soon">' + (d > 0 ? '+' : '') + esc(fmtQ(d, m.um)) + ' rispetto all’app</span>';
+      return '<div class="row"><span class="main"><span class="title">' + esc(m.nome) + '</span><span class="sub">' + esc('nell’app ' + fmtQ(s0, m.um) + (m.codice ? ' · ' + m.codice : '')) + '</span>' +
+        (stt || x ? '<span class="sub">' + stt + (x && x.da ? ' <span class="cap">· ' + esc(nameOf(x.da)) + '</span>' : '') + '</span>' : '') + '</span>' +
+        '<input id="iq-' + esc(m.id) + '" class="inv-q" data-id="' + esc(m.id) + '" type="text" inputmode="decimal" enterkeyhint="next" value="' + esc(typing && typing.id === 'iq-' + m.id ? typing.value : q != null ? String(q).replace('.', ',') : '') + '" placeholder="conta" aria-label="Quanti ' + esc(m.nome) + '"' + (S.canWrite ? '' : ' disabled') + ' style="width:84px;flex:none;font:inherit;font-size:16px;text-align:right;color:var(--ink);background:var(--card-2);border:1px solid transparent;border-radius:8px;padding:8px 10px"></div>';
+    }).join('') + '</div>';
+    h += '<p class="cap" style="margin:8px 4px 0">Scrivi quanti ne vedi davvero e passa al successivo: si salva da solo. Gli articoli non contati restano come sono.</p>';
+    if (adm) h += '<div class="grid2" style="margin-top:14px"><button type="button" class="btn" data-act="inv-close">Chiudi e correggi</button><button type="button" class="btn sec" data-act="inv-cancel">Annulla l’inventario</button></div>';
+    else h += '<p class="cap" style="margin:8px 4px 0">Alla fine l’amministratore controlla le differenze e corregge le giacenze.</p>';
+    return h;
+  }
+  async function invStart() {
+    if (invOpen()) return;
+    var now = new Date().toISOString(), r = S.db.collection('inventari').doc();
+    if (await w(function () { return r.set({ tipo: 'sessione', stato: 'aperto', creato: now, creatoDa: S.myId || '' }); })) { V.invPos = null; toast('Inventario iniziato'); }
+  }
+  async function invSaveCount(inpq) {
+    var s = invOpen(); if (!s || !S.canWrite) return;
+    var id = inpq.getAttribute('data-id'), raw = String(inpq.value).trim(), q = raw === '' ? null : parseDec(raw);
+    if (raw !== '' && (q == null || q < 0)) { toast('Scrivi un numero', true); return; }
+    var c = invCounts(s.id)[id]; if (!c && q == null) return;
+    if (c && num(c.q) === q) return;
+    var r = S.db.collection('inventari').doc(s.id + '_' + id);
+    await w(function () { return r.set({ tipo: 'conta', sessione: s.id, articoloId: id, q: q, da: S.myId || '', il: new Date().toISOString() }); });
+  }
+  function invCloseSheet() {
+    var s = invOpen(); if (!s) return;
+    var ds = invDiffs(s.id), n = Object.keys(invCounts(s.id)).length;
+    openSheet({ title: 'Chiudi l’inventario', submitLabel: ds.length ? 'Correggi' : 'Chiudi',
+      body: '<p class="context">Contati ' + n + ' articoli su ' + S.mag.length + '. ' + (ds.length ? 'Queste giacenze cambiano:' : 'Nessuna differenza: tutto torna.') + '</p>' +
+        (ds.length ? '<div class="group">' + ds.map(function (x) { return '<div class="kv-row"><span class="k">' + esc(x.m.nome) + '</span><span class="v">' + esc(fmtQ(x.st, x.m.um)) + ' → <b>' + esc(fmtQ(x.q, x.m.um)) + '</b></span></div>'; }).join('') + '</div>' : '') +
+        '<p class="cap">Gli articoli non contati restano come sono. Ogni correzione resta nello storico dell’articolo.</p>',
+      onSubmit: async function () {
+        var now = new Date().toISOString(), t0 = todayISO(), ok = 0;
+        for (var i = 0; i < ds.length; i++) {
+          var x = ds[i], cur = stockMap()[x.m.id] || 0, d = Math.round((x.q - cur) * 1000) / 1000; if (!d) continue;
+          var mr = S.db.collection('movimenti').doc();
+          if (!(await w(function () { return mr.set({ articoloId: x.m.id, qta: d, tipo: 'rettifica', inventario: s.id, data: t0, utente: S.myId || '', creato: now, creatoDa: S.myId || '' }); }))) { toast('Corrette ' + ok + ' giacenze su ' + ds.length + ': riprova per le altre.', true); return false; }
+          ok++;
+        }
+        var r = S.db.collection('inventari').doc(s.id);
+        if (!(await w(function () { return r.update({ stato: 'chiuso', chiusoIl: now, chiusoDa: S.myId || '', contati: n, correzioni: ok }); }))) return false;
+        toast(ok ? 'Inventario chiuso: ' + ok + (ok === 1 ? ' giacenza corretta' : ' giacenze corrette') : 'Inventario chiuso'); return true;
+      } });
+  }
+  function invCancelSheet() {
+    var s = invOpen(); if (!s) return;
+    openSheet({ title: 'Annulla l’inventario', submitLabel: 'Annulla inventario', body: '<p class="context">Le conte fatte finora si buttano e le giacenze restano come sono.</p>',
+      onSubmit: async function () { var r = S.db.collection('inventari').doc(s.id); if (!(await w(function () { return r.update({ stato: 'annullato', chiusoIl: new Date().toISOString(), chiusoDa: S.myId || '' }); }))) return false; toast('Inventario annullato'); return true; } });
+  }
+  async function invScan() {
+    var file = await pickPhoto(); if (!file) return;
+    var code = await readBarcode(file), m = magByCode(code);
+    if (!m) { toast(code ? 'Codice ' + code + ' non in magazzino' : 'Codice a barre non trovato nella foto: prova più vicino e dritto.', true); return; }
+    V.invPos = invPosOf(m); render();
+    var el = document.getElementById('iq-' + m.id); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); el.select(); }
+  }
   /* ---------- Categorie dei lavori: le cambia l'amministratore ---------- */
   function catUse(c) {
     return { lav: (S.lavoriAll || []).filter(function (l) { return !l.annullata && l.categoria === c; }).length, mag: S.mag.filter(function (m) { return m.categoria === c; }).length };
@@ -5447,7 +5541,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       operazioni: S.ops.length, opModelli: S.opModelli.length, mezzi: S.mezzi.length, conferme: Object.keys(S.conf).length, dipendenti: Object.keys(S.dip).length,
       impostazioni: S.mapCfg ? 1 : 0, checklist: S.check.length, checkBarca: Object.keys(S.ckBarca).length, modelli: S.modelli.length,
       posti: Object.keys(S.posti || {}).length, attrezzatura: (S.attr || []).length, programma: (S.prog || []).length,
-      cariche: (S.cariche || []).length, richieste: (S.richieste || []).length, rifiuti: (S.rif || []).length, ritiri: (S.ritiri || []).length, scadCantiere: (S.scadC || []).length, preventivi: (S.prev || []).length, assenze: (S.assenze || []).length
+      cariche: (S.cariche || []).length, richieste: (S.richieste || []).length, rifiuti: (S.rif || []).length, ritiri: (S.ritiri || []).length, scadCantiere: (S.scadC || []).length, preventivi: (S.prev || []).length, assenze: (S.assenze || []).length, kit: (S.kit || []).length, inventari: (S.inv || []).length
     };
   }
   async function bkGet(name) {
@@ -5664,6 +5758,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     return exampleBanner() + '<div class="search">' + I.search + '<input id="mq" type="search" placeholder="Cerca articolo, tipo o categoria" value="' + esc(V.magQ) + '" autocomplete="off" aria-label="Cerca nel magazzino"></div>' +
       (S.canWrite ? '<button type="button" class="btn" data-act="mag-carico" style="width:100%;margin-top:10px">' + I.plus + 'Carico di più articoli (bolla)</button>' : '') +
       (S.mag.length ? '<button type="button" class="btn sec" data-act="' + (S.canWrite ? 'mag-move' : 'mag-find') + '" style="width:100%;margin-top:10px">' + I.camera + (S.canWrite ? 'Carico o scarico col codice a barre' : 'Trova col codice a barre') + '</button>' : '') +
+      (S.mag.length ? '<div class="grid2" style="margin-top:10px"><button type="button" class="btn sec" data-act="kit-list">' + I.list + 'Kit ricambi' + ((S.kit || []).length ? ' · ' + S.kit.length : '') + '</button><button type="button" class="btn sec" data-act="tab" data-tab="inventario">' + I.check + 'Inventario' + (invOpen() ? ' · in corso' : '') + '</button></div>' : '') +
       (S.mag.length ? '<button type="button" class="btn sec" data-act="mag-shop" style="width:100%;margin-top:10px">' + I.cart + 'Lista della spesa' + (shopList().length ? ' · ' + shopList().length + (shopList().length === 1 ? ' articolo' : ' articoli') : '') + '</button>' : '') +
       (S.mag.length ? '<div class="chips" role="group" aria-label="Raggruppa gli articoli" style="margin-top:10px"><button type="button" data-act="mag-group" data-g="tipo" aria-pressed="' + (V.magGroup !== 'cat') + '">Per tipo</button><button type="button" data-act="mag-group" data-g="cat" aria-pressed="' + (V.magGroup === 'cat') + '">Per categoria</button><button type="button" data-act="mag-group" data-g="forn" aria-pressed="' + (V.magGroup === 'forn') + '">Per fornitore</button></div>' : '') +
       '<div id="mag-box">' + magListHtml() + '</div>';
@@ -5770,11 +5865,12 @@ button.row:active, .row .hit:active { opacity: .65; }
         (S.canWrite && S.status === 'ready' && M.area !== 'porto' ? '<button type="button" class="icon-btn" data-act="m-cfg" aria-label="Misure del cantiere">' + I.ruler + '</button>' : '') + '</div>';
       return;
     }
-    var titles = { home: 'Nautica Mare', scheda: 'Scheda lavoro', scadenze: 'Scadenze', calendario: 'Calendario', barche: 'Barche', lavori: 'Lavorazioni da fare', altro: 'Altro', vari: 'Vari e alaggi', magazzino: 'Magazzino', preventivi: 'Preventivi', assenze: 'Ferie e permessi', misure: 'Misure mm e pollici', rifiuti: 'Rifiuti', scadcantiere: 'Scadenze del cantiere', ore: 'Ore del mese', checklist: 'Checklist', operazioni: 'Servizi di cantiere', backup: 'Copia dei dati', programma: 'Programma', pannello: 'Pannello', batterie: 'Batterie', notifiche: 'Notifiche', categorie: 'Categorie' };
+    var titles = { home: 'Nautica Mare', scheda: 'Scheda lavoro', scadenze: 'Scadenze', calendario: 'Calendario', barche: 'Barche', lavori: 'Lavorazioni da fare', altro: 'Altro', vari: 'Vari e alaggi', magazzino: 'Magazzino', preventivi: 'Preventivi', assenze: 'Ferie e permessi', misure: 'Misure mm e pollici', rifiuti: 'Rifiuti', scadcantiere: 'Scadenze del cantiere', ore: 'Ore del mese', checklist: 'Checklist', operazioni: 'Servizi di cantiere', backup: 'Copia dei dati', programma: 'Programma', pannello: 'Pannello', batterie: 'Batterie', notifiche: 'Notifiche', categorie: 'Categorie', inventario: 'Inventario' };
     var late = S.status === 'ready' ? lateCount() : 0;
     var left = V.tab === 'home' ? '<button type="button" class="icon-btn" data-act="tab" data-tab="scadenze" aria-label="Scadenze scadute: ' + late + '">' + I.bell + (late ? '<span class="dot">' + late + '</span>' : '') + '</button>'
+      : V.tab === 'inventario' ? '<button type="button" class="icon-btn blue" data-act="tab" data-tab="magazzino" aria-label="Torna al magazzino">' + I.back + '</button>'
       : (ALTRO.indexOf(V.tab) > 0 ? '<button type="button" class="icon-btn blue" data-act="tab" data-tab="altro" aria-label="Torna ad Altro">' + I.back + '</button>' : '');
-    var addAct = ({ scheda: S.myId ? 'new-entry' : '', lavori: 'new-lav', vari: 'new-vari', magazzino: 'new-mag', checklist: 'new-modello', operazioni: 'new-op', ore: '', backup: '', notifiche: '', categorie: '', programma: 'new-prog', pannello: '', batterie: '', rifiuti: 'rif-new', scadcantiere: 'sc-new', preventivi: 'prev-new', assenze: S.myId ? 'ass-new' : '', misure: '' })[V.tab];
+    var addAct = ({ scheda: S.myId ? 'new-entry' : '', lavori: 'new-lav', vari: 'new-vari', magazzino: 'new-mag', checklist: 'new-modello', operazioni: 'new-op', ore: '', backup: '', notifiche: '', categorie: '', inventario: '', programma: 'new-prog', pannello: '', batterie: '', rifiuti: 'rif-new', scadcantiere: 'sc-new', preventivi: 'prev-new', assenze: S.myId ? 'ass-new' : '', misure: '' })[V.tab];
     if (addAct == null) addAct = 'add-menu';
     var ro = S.status === 'ready' && !S.canWrite ? ' · sola lettura' : '';
     t.innerHTML = '<div class="l">' + left + '</div><h1' + (V.tab === 'home' ? ' id="logo-slot"' : '') + '>' + (V.tab === 'home' ? '' : titles[V.tab] + ro) + '</h1>' +
@@ -5783,7 +5879,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
   function renderTabs() {
     var items = [['home', 'Home', I.home], ['scheda', 'Scheda lavoro', I.clip], ['lavori', 'Lavorazioni', I.wrench], ['calendario', 'Calendario', I.cal], ['barche', 'Barche', I.boat], ['altro', 'Altro', I.more]];
-    var cur = ALTRO.indexOf(V.tab) >= 0 ? 'altro' : V.tab;
+    var cur = ALTRO.indexOf(V.tab) >= 0 || V.tab === 'inventario' ? 'altro' : V.tab;
     $('#tabs').innerHTML = '<div class="tabs-inner">' + items.map(function (it) {
       return '<button type="button" class="tab" data-act="tab" data-tab="' + it[0] + '"' + (cur === it[0] ? ' aria-current="page"' : '') + '>' + it[2] + '<span>' + it[1] + '</span></button>';
     }).join('') + '</div>';
@@ -5807,7 +5903,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var html;
     if (S.status === 'absent') html = '<div class="notice" style="margin-top:14px">I dati del registro si aprono solo da Claude, con il tuo account. Apri il link della pagina da claude.ai o dall’app Claude per vedere e salvare barche, lavori e scadenze.</div>';
     else if (S.status === 'loading') html = '<div class="notice" style="margin-top:14px">Carico barche, lavori e scadenze…</div>';
-    else html = ({ programma: viewProgramma, pannello: viewPannello, batterie: viewBatterie, mappa: viewMappa, altro: viewAltro, backup: viewBackup, vari: viewVari, magazzino: viewMagazzino, preventivi: viewPreventivi, assenze: viewAssenze, misure: viewMisure, notifiche: viewNotifiche, categorie: viewCategorie, rifiuti: viewRifiuti, scadcantiere: viewScadCantiere, ore: viewOre, checklist: viewChecklist, operazioni: viewOperazioni, home: viewHome, scheda: viewScheda, scadenze: viewScadenze, calendario: viewCalendario, lavori: viewLavori, barche: function () { return V.boatId ? viewBoat() : viewBarche(); } })[V.tab]();
+    else html = ({ programma: viewProgramma, pannello: viewPannello, batterie: viewBatterie, mappa: viewMappa, altro: viewAltro, backup: viewBackup, vari: viewVari, magazzino: viewMagazzino, preventivi: viewPreventivi, assenze: viewAssenze, misure: viewMisure, notifiche: viewNotifiche, categorie: viewCategorie, inventario: viewInventario, rifiuti: viewRifiuti, scadcantiere: viewScadCantiere, ore: viewOre, checklist: viewChecklist, operazioni: viewOperazioni, home: viewHome, scheda: viewScheda, scadenze: viewScadenze, calendario: viewCalendario, lavori: viewLavori, barche: function () { return V.boatId ? viewBoat() : viewBarche(); } })[V.tab]();
     $('#view').innerHTML = html;
     renderTop(); renderTabs(); bindFeat();
     if (V.tab === 'misure') misUpdate();
@@ -6095,14 +6191,72 @@ button.row:active, .row .hit:active { opacity: .65; }
     return false;
   }
   function rcRow(r) {
-    return '<div class="rc-row"><input class="rc-n" type="text" list="mag-list" value="' + esc(r && r.nome || '') + '" placeholder="Ricambio o materiale" aria-label="Ricambio o materiale">' +
+    return '<div class="rc-row"' + (r && r.kit ? ' data-kit="' + esc(r.kit) + '"' : '') + '><input class="rc-n" type="text" list="mag-list" value="' + esc(r && r.nome || '') + '" placeholder="Ricambio o materiale" aria-label="Ricambio o materiale">' +
       '<input class="rc-q" type="text" inputmode="decimal" value="' + esc(r && num(r.qta) != null ? String(r.qta).replace('.', ',') : '') + '" placeholder="Q.tà" aria-label="Quantità">' +
       '<button type="button" class="rc-x" data-act="rc-del" aria-label="Togli ricambio">×</button></div>';
+  }
+  /* ---------- Kit ricambi: pezzi che si usano sempre insieme (es. tagliando di un motore) ----------
+     Nelle mansioni, nei lavori, nel programma e nei preventivi si aggiungono con «Aggiungi un kit»:
+     entrano tutti i pezzi, poi si tolgono quelli che non servono. Ogni pezzo si ricorda da quale kit viene. */
+  function kitLastFor(boatId) {
+    if (!boatId) return null;
+    var best = null;
+    S.lavori.forEach(function (l) { if (l.barcaId !== boatId) return; (l.ricambi || []).forEach(function (r) { if (r.kit && (!best || String(l.data) > String(best.d))) best = { d: l.data, k: r.kit }; }); });
+    return best ? best.k : null;
+  }
+  function kitSelect() {
+    var ks = (S.kit || []).slice().sort(byName);
+    return ks.length ? '<select class="rc-kit" aria-label="Aggiungi un kit"><option value="">＋ Aggiungi un kit…</option>' + ks.map(function (k) { return '<option value="' + esc(k.id) + '">' + esc(k.nome) + ' (' + (k.righe || []).length + ' pezzi)</option>'; }).join('') + '</select>' : '';
+  }
+  function kitListSheet() {
+    var ks = (S.kit || []).slice().sort(byName);
+    openSheet({ title: 'Kit ricambi', menu: true, body: '<p class="context">Un kit è un gruppo di pezzi che usate sempre insieme, per esempio il tagliando di un motore. Nella mansione scegli «Aggiungi un kit» e i pezzi entrano tutti: si scalano dal magazzino quando salvi.</p>' +
+      (ks.length ? '<div class="group">' + ks.map(function (k) {
+        return '<button type="button" class="row" data-act="kit-edit" data-id="' + esc(k.id) + '"><span class="main"><span class="title">' + esc(k.nome) + '</span><span class="sub">' + esc(fmtRic(k.righe || [])) + '</span></span></button>';
+      }).join('') + '</div>' : '<p class="context">Nessun kit, per ora.</p>') +
+      (S.canWrite ? '<button type="button" class="btn" data-act="kit-new" style="width:100%;margin-top:12px">' + I.plus + 'Nuovo kit</button>' : '') });
+  }
+  function kitSheet(k) {
+    var isNew = !k; k = k || { righe: [] };
+    openSheet({ title: isNew ? 'Nuovo kit' : 'Kit', item: k,
+      body: field(lab('f-kn', 'Nome del kit'), inp('f-kn', k.nome, 'type="text" required autocapitalize="sentences" placeholder="es. Tagliando Yamaha F150"')) +
+        rcBlock(k.righe, { lbl: 'Pezzi del kit', add: 'Aggiungi pezzo', more: 'Aggiungi un altro pezzo', noKit: true, hint: 'Scegli i pezzi dal magazzino e la quantità per un tagliando.' }) +
+        field(lab('f-knote', 'Note (facoltative)'), '<textarea id="f-knote" placeholder="es. per i motori dal 2015 in poi">' + esc(k.note || '') + '</textarea>'),
+      deleteLabel: 'Elimina il kit', deleteText: 'Elimini il kit ' + (k.nome || '') + '. Le mansioni già segnate non cambiano.',
+      onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('kit').doc(k.id)])) { closeSheet(); toast('Kit eliminato'); } },
+      onSubmit: async function (f) {
+        var nome = val(f, 'f-kn'), righe = rcRead(f).map(function (r) { return { nome: r.nome, qta: r.qta, articoloId: r.articoloId, um: r.um }; }), now = new Date().toISOString();
+        if (!nome) { formErr('Scrivi il nome del kit.'); return false; }
+        if (!righe.length) { formErr('Aggiungi almeno un pezzo.'); return false; }
+        if ((S.kit || []).some(function (x) { return x.id !== k.id && String(x.nome).trim().toLowerCase() === nome.toLowerCase(); })) { formErr('C’è già un kit con questo nome.'); return false; }
+        var data = { nome: nome, righe: righe, note: val(f, 'f-knote'), modificato: now };
+        var r = S.db.collection('kit').doc(isNew ? undefined : k.id);
+        if (isNew) { data.creato = now; data.creatoDa = S.myId || ''; }
+        if (!(await w(function () { return isNew ? r.set(data) : r.update(data); }))) return false;
+        toast(isNew ? 'Kit creato' : 'Kit salvato'); return true;
+      } });
+  }
+  function kitApply(sel) {
+    var k = (S.kit || []).find(function (x) { return x.id === sel.value; }); sel.value = ''; if (!k) return;
+    var box = $('#rc-box'); if (!box) return;
+    // tolgo le righe vuote, poi aggiungo i pezzi del kit
+    Array.prototype.forEach.call(box.querySelectorAll('.rc-row'), function (row) { if (!String(row.querySelector('.rc-n').value || '').trim()) row.remove(); });
+    (k.righe || []).forEach(function (r) { var m = r.articoloId ? S.mag.find(function (x) { return x.id === r.articoloId; }) : null; box.insertAdjacentHTML('beforeend', rcRow({ nome: m ? m.nome : r.nome, qta: r.qta, kit: k.id })); });
+    var ad = $('#rc-add'); if (ad) ad.innerHTML = I.plus + esc(ad.getAttribute('data-more') || 'Aggiungi un altro ricambio');
+    toast('Aggiunti i pezzi di ' + k.nome + ': togli quelli che non servono');
+  }
+  function kitLabels(sel) {
+    var f = sel.closest('form'), bs = f && (f.querySelector('#f-barca') || f.querySelector('#f-barcaE')), last = kitLastFor(bs && bs.value);
+    Array.prototype.forEach.call(sel.options, function (o) {
+      if (!o.value) return; var k = (S.kit || []).find(function (x) { return x.id === o.value; }); if (!k) return;
+      o.textContent = (o.value === last ? '★ ' : '') + k.nome + ' (' + (k.righe || []).length + ' pezzi)' + (o.value === last ? ' · l’ultimo usato su questa barca' : '');
+    });
   }
   function rcBlock(list, o) {
     var has = list && list.length; o = o || {};
     return '<div class="lbl">' + esc(o.lbl || 'Ricambi usati (facoltativi)') + '</div><datalist id="mag-list">' + S.mag.map(function (m) { return '<option value="' + esc(m.nome) + '">'; }).join('') + '</datalist>' +
       '<div class="field rc-box" id="rc-box">' + (list || []).map(rcRow).join('') + '</div>' +
+      (o.noKit ? '' : kitSelect()) +
       '<button type="button" class="btn sec self-start" data-act="rc-photo">' + I.camera + 'Ricambio dalla foto</button>' +
       '<button type="button" class="btn sec self-start" data-act="rc-add" id="rc-add" data-more="' + esc(o.more || 'Aggiungi un altro ricambio') + '">' + I.plus + esc(has ? (o.more || 'Aggiungi un altro ricambio') : (o.add || 'Aggiungi ricambio')) + '</button>' +
       '<span class="hint">' + esc(o.hint || 'Scegli dalla lista del magazzino oppure scrivi tu il materiale usato. Se è in magazzino, la quantità si scala da sola.') + '</span>';
@@ -6113,7 +6267,9 @@ button.row:active, .row .hit:active { opacity: .65; }
       var n = String(row.querySelector('.rc-n').value || '').trim(); if (!n) return;
       var q = parseDec(row.querySelector('.rc-q').value); if (q == null || q <= 0) q = 1;
       var m = magByName(n);
-      out.push({ nome: m ? m.nome : n, qta: q, articoloId: m ? m.id : null, um: m ? (m.um || '') : '' });
+      var it = { nome: m ? m.nome : n, qta: q, articoloId: m ? m.id : null, um: m ? (m.um || '') : '' }, kt = row.getAttribute('data-kit');
+      if (kt) it.kit = kt;
+      out.push(it);
     });
     return out;
   }
@@ -7221,6 +7377,14 @@ button.row:active, .row .hit:active { opacity: .65; }
       })(); break;
       case 'mv-open': x = S.mag.find(function (m) { return m.id === id; }); if (x) magSheet(x); break;
       case 'ric-all': V.boatRicAll = true; render(); break;
+      case 'kit-list': kitListSheet(); break;
+      case 'kit-new': if (S.canWrite) kitSheet(null); break;
+      case 'kit-edit': x = (S.kit || []).find(function (k) { return k.id === id; }); if (x && S.canWrite) kitSheet(x); break;
+      case 'inv-start': if (S.canWrite) invStart(); break;
+      case 'inv-pos': V.invPos = t.getAttribute('data-p'); render(); break;
+      case 'inv-scan': invScan(); break;
+      case 'inv-close': if (S.isOwner) invCloseSheet(); break;
+      case 'inv-cancel': if (S.isOwner) invCancelSheet(); break;
       case 'gq-open': if (S.status === 'ready') gqOpen(); break;
       case 'gq-go': gqGo(t.getAttribute('data-k'), id); break;
       case 'gq-cli': x = $('#gq'); if (x) { x.value = V.gq = t.getAttribute('data-q'); $('#gq-res').innerHTML = gqResults(V.gq); } break;
@@ -7453,6 +7617,9 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (e.target && e.target.id === 'nome-in') V.nomeDraft = e.target.value;
     if (e.target && e.target.id === 'mq') { V.magQ = e.target.value; var mb = $('#mag-box'); if (mb) mb.innerHTML = magListHtml(); }
   });
+  document.addEventListener('change', function (e) { if (e.target && e.target.classList && e.target.classList.contains('rc-kit')) kitApply(e.target); });
+  document.addEventListener('change', function (e) { if (e.target && e.target.classList && e.target.classList.contains('inv-q')) invSaveCount(e.target); });
+  document.addEventListener('focusin', function (e) { if (e.target && e.target.classList && e.target.classList.contains('rc-kit')) kitLabels(e.target); });
   document.addEventListener('change', function (e) {
     var t = e.target; if (!t || t.getAttribute('data-act2') !== 'passa-m') return;
     V.passaM = V.passaM || {}; V.passaM[t.getAttribute('data-id')] = t.value; render();
@@ -7490,6 +7657,11 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (S.db && S.status === 'ready') saveNome(n);
   });
   window.addEventListener('resize', function () { if (V.tab === 'mappa' && M.area === 'porto') { Porto.resize(); return; } if (V.tab === 'mappa' && M.mode === '2d' && $('#map-root')) { sizeMap(); applyView(); } });
+  document.addEventListener('keydown', function (e) { // inventario: Invio passa all'articolo successivo
+    if (e.key !== 'Enter' || !e.target || !e.target.classList || !e.target.classList.contains('inv-q')) return;
+    e.preventDefault(); var all = Array.prototype.slice.call(document.querySelectorAll('.inv-q')), i = all.indexOf(e.target);
+    if (all[i + 1]) all[i + 1].focus(); else e.target.blur();
+  });
   document.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target && e.target.id === 'cat-new') { e.preventDefault(); if (S.isOwner) catAdd(); } });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('#lightbox')) closeLightbox(); else if ($('#sheet-wrap')) closeSheet(); } });
 
@@ -7548,6 +7720,8 @@ button.row:active, .row .hit:active { opacity: .65; }
     sub('ritiri', function (x) { S.ritiri = x; });
     sub('scadCantiere', function (x) { S.scadC = x; });
     sub('preventivi', function (x) { S.prev = x; });
+    sub('kit', function (x) { S.kit = x; });
+    sub('inventari', function (x) { S.inv = x; });
     sub('assenze', function (x) { S.assenze = x; });
     sub('notifiche', function (x) { S.notif = toMap(x); });
     CLD().use('assets').then(function (a) { S.assets = a || null; if (a) render(); }, function () { });
