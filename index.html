@@ -1196,6 +1196,11 @@ button.row:active, .row .hit:active { opacity: .65; }
     h += secH('Attrezzatura di bordo', S.canWrite ? 'new-attr' : '', '+ Aggiungi', ' data-boat="' + esc(b.id) + '"');
     h += atb.length ? '<div class="group">' + atb.map(attrRow).join('') + '</div>' : '<div class="notice">Niente segnato. Aggiungi salpancora, verricelli, cuscineria, tendalino, teli e coperture: marca, misure e colori restano qui per la prossima volta.</div>';
 
+    var ricB = ricOfBoat(b);
+    h += secH('Ricambi montati' + (ricB.length ? ' (' + ricB.length + ')' : ''));
+    h += ricB.length ? '<div class="group">' + ricB.slice(0, V.boatRicAll ? 999 : 8).map(ricRow).join('') + '</div>' + (ricB.length > 8 && !V.boatRicAll ? '<button type="button" class="link" data-act="ric-all" style="margin:8px 4px">Mostra tutti i ' + ricB.length + '</button>' : '')
+      : '<div class="notice">Nessun ricambio segnato. Si riempie da solo con i ricambi delle mansioni e con gli scarichi dal magazzino per questa barca.</div>';
+
     if (b.stato !== 'In acqua' || num(b.batterie) > 0) {
       var bi = battInfo(b);
       h += secH('Batterie', S.canWrite ? 'batt-open' : '', 'Segna carica', ' data-id="' + esc(b.id) + '"');
@@ -1316,6 +1321,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   function lowStock() { var st = stockMap(); return S.mag.filter(function (m) { return num(m.minimo) != null && (st[m.id] || 0) <= m.minimo; }); }
   function fmtQ(q, um) { return fmtNum(num(q) || 0, 2) + (um ? ' ' + um : ''); }
   function fmtRic(list) { return (list || []).map(function (r) { return r.nome + ' ×' + fmtQ(r.qta, r.um); }).join(', '); }
+  function magPosizioni() { var o = {}; S.mag.forEach(function (m) { var p = String(m.posizione || '').trim(); if (p) o[p] = 1; }); return Object.keys(o).sort(function (a, b) { return a.localeCompare(b, 'it', { numeric: true }); }); }
   function magByName(n) { n = String(n || '').trim().toLowerCase(); for (var i = 0; i < S.mag.length; i++) if (String(S.mag[i].nome || '').trim().toLowerCase() === n) return S.mag[i]; return null; }
   function mondayOf(iso) { var t = isoToUTC(iso), d = new Date(t).getUTCDay(); return t - ((d + 6) % 7) * 86400000; }
   function byPerson(a, b) { return a === S.myId ? -1 : b === S.myId ? 1 : nameOf(a).localeCompare(nameOf(b), 'it'); }
@@ -5657,7 +5663,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   function viewMagazzino() {
     return exampleBanner() + '<div class="search">' + I.search + '<input id="mq" type="search" placeholder="Cerca articolo, tipo o categoria" value="' + esc(V.magQ) + '" autocomplete="off" aria-label="Cerca nel magazzino"></div>' +
       (S.canWrite ? '<button type="button" class="btn" data-act="mag-carico" style="width:100%;margin-top:10px">' + I.plus + 'Carico di più articoli (bolla)</button>' : '') +
-      (S.mag.length ? '<button type="button" class="btn sec" data-act="mag-find" style="width:100%;margin-top:10px">' + I.camera + 'Trova col codice a barre</button>' : '') +
+      (S.mag.length ? '<button type="button" class="btn sec" data-act="' + (S.canWrite ? 'mag-move' : 'mag-find') + '" style="width:100%;margin-top:10px">' + I.camera + (S.canWrite ? 'Carico o scarico col codice a barre' : 'Trova col codice a barre') + '</button>' : '') +
       (S.mag.length ? '<button type="button" class="btn sec" data-act="mag-shop" style="width:100%;margin-top:10px">' + I.cart + 'Lista della spesa' + (shopList().length ? ' · ' + shopList().length + (shopList().length === 1 ? ' articolo' : ' articoli') : '') + '</button>' : '') +
       (S.mag.length ? '<div class="chips" role="group" aria-label="Raggruppa gli articoli" style="margin-top:10px"><button type="button" data-act="mag-group" data-g="tipo" aria-pressed="' + (V.magGroup !== 'cat') + '">Per tipo</button><button type="button" data-act="mag-group" data-g="cat" aria-pressed="' + (V.magGroup === 'cat') + '">Per categoria</button><button type="button" data-act="mag-group" data-g="forn" aria-pressed="' + (V.magGroup === 'forn') + '">Per fornitore</button></div>' : '') +
       '<div id="mag-box">' + magListHtml() + '</div>';
@@ -5902,7 +5908,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
 
   /* ---------- Fogli ---------- */
-  function closeSheet() { $('#sheet-root').innerHTML = ''; document.body.classList.remove('locked'); SHEET.onDelete = null; SHEET.foto = []; SHEET.run = null; SHEET.op = null; }
+  function closeSheet() { $('#sheet-root').innerHTML = ''; document.body.classList.remove('locked'); SHEET.onDelete = null; SHEET.foto = []; SHEET.run = null; SHEET.op = null; SHEET.mv = null; }
   function openSheet(o) {
     closeSheet();
     // sul sito: cancella solo l'amministratore, tranne ciò che è proprio (ownDel); ciò che si cancella va nel cestino
@@ -6683,9 +6689,78 @@ button.row:active, .row .hit:active { opacity: .65; }
       }
     });
   }
+  /* ---------- Storico ricambi per barca: cosa è stato montato e quando va cambiato ----------
+     Viene dai ricambi delle mansioni e lavori, e dagli scarichi col codice a barre legati alla barca.
+     Il prossimo cambio si calcola se nell'articolo c'è «si cambia ogni … mesi / … ore motore». */
+  function ricOfBoat(b) {
+    var g = {}, keys = [];
+    function add(r, data, ore, t) {
+      var m = r.articoloId ? S.mag.find(function (x) { return x.id === r.articoloId; }) : magByName(r.nome);
+      var k = m ? 'm:' + m.id : 'n:' + String(r.nome || '').trim().toLowerCase(); if (k === 'n:') return;
+      if (!g[k]) { g[k] = { m: m, nome: m ? m.nome : r.nome, um: m ? m.um : (r.um || ''), volte: [], qta: 0 }; keys.push(k); }
+      g[k].volte.push({ data: data || '', ore: num(ore), t: t }); g[k].qta += num(r.qta) || 0;
+    }
+    S.lavori.forEach(function (l) { if (l.barcaId === b.id) (l.ricambi || []).forEach(function (r) { add(r, l.data, l.oreMotore, l.titolo || 'Lavoro'); }); });
+    S.mov.forEach(function (x) { if (x.barcaId === b.id && x.tipo === 'scarico') add({ articoloId: x.articoloId, qta: -(num(x.qta) || 0) }, x.data, x.oreMotore, 'Scarico dal magazzino'); });
+    var oreNow = num(b.oreMotore), t0 = todayISO();
+    return keys.map(function (k) {
+      var x = g[k]; x.volte.sort(function (a, c) { return String(c.data).localeCompare(String(a.data)); });
+      var last = x.volte[0], mesi = x.m ? num(x.m.cambioMesi) : null, oreC = x.m ? num(x.m.cambioOre) : null, lvl = '', txt = '';
+      var next = mesi && last.data ? addMonths(last.data, mesi) : null, d = next ? daysUntil(next) : null;
+      var oreOn = last.ore; if (oreOn == null && oreC) { var lo = x.volte.find(function (v) { return v.ore != null; }); oreOn = lo && lo.data === last.data ? lo.ore : null; }
+      var oreLeft = oreC && oreOn != null && oreNow != null ? oreOn + oreC - oreNow : null;
+      if ((d != null && d < 0) || (oreLeft != null && oreLeft <= 0)) lvl = 'late'; else if ((d != null && d <= 30) || (oreLeft != null && oreLeft <= 20)) lvl = 'soon'; else if (d != null || oreLeft != null) lvl = 'ok';
+      var parts = [];
+      if (d != null) parts.push(d < 0 ? 'scaduto il ' + fmtDate(next) : 'entro il ' + fmtDate(next));
+      if (oreLeft != null) parts.push(oreLeft <= 0 ? 'ore superate di ' + fmtNum(-oreLeft) : 'tra ' + fmtNum(oreLeft) + ' ore motore');
+      txt = parts.join(' o ');
+      return { k: k, m: x.m, nome: x.nome, um: x.um, volte: x.volte, last: last, lvl: lvl, txt: txt, next: next };
+    }).sort(function (a, c) { var o = { late: 0, soon: 1 }; return (o[a.lvl] != null ? o[a.lvl] : 2) - (o[c.lvl] != null ? o[c.lvl] : 2) || String(c.last.data).localeCompare(String(a.last.data)); });
+  }
+  function ricRow(r) {
+    var sub = 'Ultimo: ' + (r.last.data ? fmtDate(r.last.data) : 'senza data') + ' · ' + r.last.t + (r.last.ore != null ? ' · a ' + fmtNum(r.last.ore) + ' h' : '') + (r.volte.length > 1 ? ' · ' + r.volte.length + ' volte' : '');
+    var side = r.lvl === 'late' || r.lvl === 'soon' ? '<span class="side"><span class="pill ' + r.lvl + '">' + (r.lvl === 'late' ? 'Da cambiare' : 'Presto') + '</span></span>' : '';
+    var inner = '<span class="main"><span class="title">' + esc(r.nome) + '</span><span class="sub">' + esc(sub) + '</span>' + (r.txt ? '<span class="sub t-' + (r.lvl === 'ok' ? 'acc' : r.lvl) + '">' + esc('Prossimo cambio ' + r.txt) + '</span>' : '') + '</span>' + side;
+    return r.m && S.canWrite ? '<button type="button" class="row" data-act="edit-mag" data-id="' + esc(r.m.id) + '">' + inner + '</button>' : '<div class="row">' + inner + '</div>';
+  }
+  function ricDueCount(b) { return ricOfBoat(b).filter(function (r) { return r.lvl === 'late' || r.lvl === 'soon'; }).length; }
+
+  /* ---------- Carico e scarico col codice a barre ---------- */
+  async function scanMove(pp) {
+    var file = await (pp || pickPhoto()); if (!file) return;
+    var code = await readBarcode(file), m = magByCode(code);
+    if (m) movSheet(m);
+    else if (code) { toast('Codice ' + code + ' non in magazzino: lo aggiungo come nuovo articolo'); magSheet(null); setTimeout(function () { var c = $('#f-mcod'); if (c) c.value = code; }, 80); }
+    else toast('Codice a barre non trovato nella foto: prova più vicino e dritto.', true);
+  }
+  function movSheet(m) {
+    var st = stockMap()[m.id] || 0, tipo = V.movTipo === 'carico' ? 'carico' : 'scarico';
+    var boats = S.boats.slice().sort(byName);
+    var body = '<div class="preview">In magazzino adesso: <b>' + esc(fmtQ(st, m.um)) + '</b>' + (m.posizione ? ' · ' + esc(m.posizione) : '') + (m.codice ? '<br><span class="cap">Codice ' + esc(m.codice) + '</span>' : '') + '</div>' +
+      '<div class="chips" role="group" aria-label="Carico o scarico" style="margin:12px 0"><button type="button" data-act="mv-tipo" data-t="scarico" aria-pressed="' + (tipo === 'scarico') + '">Scarico (lo prendo)</button><button type="button" data-act="mv-tipo" data-t="carico" aria-pressed="' + (tipo === 'carico') + '">Carico (è arrivato)</button></div>' +
+      '<input type="hidden" id="f-mvt" value="' + tipo + '">' +
+      field(lab('f-mvq', 'Quantità (' + (m.um || 'pz') + ')'), inp('f-mvq', '1', 'type="text" inputmode="decimal" required')) +
+      '<div id="f-mvbW"' + (tipo === 'carico' ? ' hidden' : '') + '>' + field(lab('f-barca', 'Per quale barca (facoltativo)'), '<select id="f-barca"><option value="">Nessuna, uso di cantiere</option>' + boats.map(function (b) { return '<option value="' + esc(b.id) + '">' + esc(boatLabel(b)) + '</option>'; }).join('') + '</select>', 'Se scegli la barca, il pezzo entra nel suo storico ricambi.') + '</div>' +
+      '<button type="button" class="btn sec" data-act="mv-next" style="width:100%;margin-top:6px">' + I.camera + 'Salva e inquadra il prossimo</button>' +
+      '<button type="button" class="link" data-act="mv-open" data-id="' + esc(m.id) + '" style="margin-top:12px">Apri la scheda dell’articolo</button>';
+    openSheet({ title: m.nome, body: body, submitLabel: 'Salva', onSubmit: function (f) { return movSave(f, m); } });
+    SHEET.mv = m;
+  }
+  async function movSave(f, m) {
+    var q = parseDec(val(f, 'f-mvq')), tipo = val(f, 'f-mvt') === 'carico' ? 'carico' : 'scarico', bid = tipo === 'scarico' ? val(f, 'f-barca') : '';
+    if (!q || q <= 0) { formErr('Scrivi la quantità.'); return false; }
+    var now = new Date().toISOString(), b = bid ? boatById(bid) : null;
+    var data = { articoloId: m.id, qta: tipo === 'scarico' ? -q : q, tipo: tipo, data: todayISO(), utente: S.myId || '', creato: now, creatoDa: S.myId || '' };
+    if (b) { data.barcaId = b.id; if (num(b.oreMotore) != null) data.oreMotore = num(b.oreMotore); }
+    var r = S.db.collection('movimenti').doc();
+    if (!(await w(function () { return r.set(data); }))) return false;
+    V.movTipo = tipo;
+    toast((tipo === 'scarico' ? 'Scaricato ' : 'Caricato ') + fmtQ(q, m.um) + (b ? ' per ' + b.nome : ''));
+    return true;
+  }
   function movesFor(id) {
     var out = [];
-    S.mov.forEach(function (x) { if (x.articoloId === id) out.push({ data: x.data, t: x.tipo === 'rettifica' ? 'Correzione giacenza' : ['Carico', x.bolla ? 'bolla ' + x.bolla : '', x.fornitore].filter(Boolean).join(' · '), q: num(x.qta) || 0 }); });
+    S.mov.forEach(function (x) { if (x.articoloId === id) out.push({ data: x.data, t: x.tipo === 'rettifica' ? 'Correzione giacenza' + (x.inventario ? ' (inventario)' : '') : x.tipo === 'scarico' ? 'Scarico' + (x.barcaId ? ' · ' + boatLabel(boatById(x.barcaId)) : ' · uso di cantiere') : ['Carico', x.bolla ? 'bolla ' + x.bolla : '', x.fornitore].filter(Boolean).join(' · '), q: num(x.qta) || 0 }); });
     S.lavori.forEach(function (l) { (l.ricambi || []).forEach(function (r) { if (r.articoloId === id) out.push({ data: l.data, t: (l.titolo || 'Lavoro') + ' · ' + lavBoatLabel(l), q: -(num(r.qta) || 0) }); }); });
     return out.sort(function (a, b) { return String(b.data || '').localeCompare(String(a.data || '')); }).slice(0, 15);
   }
@@ -6914,6 +6989,11 @@ button.row:active, .row .hit:active { opacity: .65; }
       '<datalist id="forn-list">' + fornitori().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
       '<div class="grid2">' + field(lab('f-mf', 'Fornitore (facoltativo)'), inp('f-mf', m.fornitore, 'type="text" list="forn-list" autocapitalize="words" placeholder="es. Nautica Rossi"')) +
       field(lab('f-mqo', 'Di solito ne ordinate'), inp('f-mqo', num(m.qtaOrdine) != null ? String(m.qtaOrdine).replace('.', ',') : '', 'type="text" inputmode="decimal" placeholder="es. 6"')) + '</div>' +
+      '<datalist id="pos-list">' + magPosizioni().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
+      field(lab('f-mpos', 'Dove si trova (facoltativo)'), inp('f-mpos', m.posizione, 'type="text" list="pos-list" autocapitalize="sentences" placeholder="es. Scaffale A, Armadio officina, Container"'), 'Serve per l’inventario: si conta un posto alla volta.') +
+      '<div class="lbl">Si cambia ogni (facoltativo, per i ricambi)</div><div class="grid2">' + field(lab('f-mcm', 'Mesi'), inp('f-mcm', num(m.cambioMesi) != null ? String(m.cambioMesi) : '', 'type="text" inputmode="numeric" placeholder="es. 12"')) +
+      field(lab('f-mco', 'Ore motore'), inp('f-mco', num(m.cambioOre) != null ? String(m.cambioOre) : '', 'type="text" inputmode="numeric" placeholder="es. 100"')) + '</div>' +
+      '<span class="hint" style="margin-top:-6px">Nella scheda di ogni barca dove è montato vedi quando va cambiato di nuovo.</span>' +
       '<label class="check"><input type="checkbox" id="f-mil"' + (m.inLista ? ' checked' : '') + '> Mettilo nella lista della spesa anche se non è sotto scorta</label>' +
       field(lab('f-mnote', 'Note'), '<textarea id="f-mnote" placeholder="Codice, dove si trova…">' + esc(m.note || '') + '</textarea>') +
       (hist.length ? '<div class="lbl">Ultimi movimenti</div><div class="group">' + hist.map(function (x) {
@@ -6950,7 +7030,7 @@ button.row:active, .row .hit:active { opacity: .65; }
         if (!nome) { formErr('Scrivi il nome dell’articolo.'); return false; }
         var dup = magByName(nome);
         if (dup && (isNew || dup.id !== m.id)) { formErr('C’è già un articolo con questo nome.'); return false; }
-        var data = { nome: nome, tipo: val(f, 'f-mt'), categoria: val(f, 'f-mc'), um: val(f, 'f-mu'), minimo: parseDec(val(f, 'f-mmin')), fornitore: val(f, 'f-mf'), qtaOrdine: parseDec(val(f, 'f-mqo')), inLista: !!f.querySelector('#f-mil').checked, note: val(f, 'f-mnote'), codice: val(f, 'f-mcod'), modificato: now };
+        var data = { nome: nome, tipo: val(f, 'f-mt'), categoria: val(f, 'f-mc'), um: val(f, 'f-mu'), minimo: parseDec(val(f, 'f-mmin')), fornitore: val(f, 'f-mf'), qtaOrdine: parseDec(val(f, 'f-mqo')), inLista: !!f.querySelector('#f-mil').checked, note: val(f, 'f-mnote'), codice: val(f, 'f-mcod'), posizione: val(f, 'f-mpos'), cambioMesi: parseIntS(val(f, 'f-mcm')), cambioOre: parseIntS(val(f, 'f-mco')), modificato: now };
         function mov(id, q, tipo) { var mr = S.db.collection('movimenti').doc(); return w(function () { return mr.set({ articoloId: id, qta: q, tipo: tipo, data: todayISO(), utente: S.myId || '', creato: now }); }); }
         if (isNew) {
           data.creato = now;
@@ -7126,11 +7206,21 @@ button.row:active, .row .hit:active { opacity: .65; }
       case 'tab': if (t.getAttribute('data-tab') === 'mappa' && V.tab !== 'mappa') { M.prevTab = V.tab; M.prevBoat = null; } V.tab = t.getAttribute('data-tab'); V.boatId = null; V.boatView = null; V.exConfirm = false; window.scrollTo(0, 0); render(); break;
       case 'bk-save': bkSave(); break;
       case 'back': V.boatId = null; V.boatView = null; render(); window.scrollTo(0, 0); break;
-      case 'open-boat': closeLightbox(); V.tab = 'barche'; V.boatId = id; V.boatView = null; V.boatLavAll = false; render(); window.scrollTo(0, 0); break;
+      case 'open-boat': closeLightbox(); V.tab = 'barche'; V.boatId = id; V.boatView = null; V.boatLavAll = false; V.boatRicAll = false; render(); window.scrollTo(0, 0); break;
       case 'cat-add': if (S.isOwner) catAdd(); break;
       case 'cat-ren': if (S.isOwner) catRenSheet(+t.getAttribute('data-i')); break;
       case 'cat-del': if (S.isOwner) catDelSheet(+t.getAttribute('data-i')); break;
       case 'cat-up': if (S.isOwner) catUp(+t.getAttribute('data-i')); break;
+      case 'mag-move': if (S.canWrite) scanMove(); break;
+      case 'mv-tipo': x = t.getAttribute('data-t'); $('#f-mvt').value = x; Array.prototype.forEach.call(t.parentNode.children, function (c) { c.setAttribute('aria-pressed', String(c === t)); }); $('#f-mvbW').hidden = x === 'carico'; break;
+      case 'mv-next': (function () { // la fotocamera si apre subito (serve il tocco), intanto salvo
+        var f = $('#sheet-form'), mm = SHEET.mv; if (!f || !mm) return;
+        var qq = parseDec(val(f, 'f-mvq')); if (!qq || qq <= 0) { formErr('Scrivi la quantità.'); return; }
+        var pp = pickPhoto(); t.disabled = true;
+        movSave(f, mm).then(function (ok) { if (ok) { closeSheet(); scanMove(pp); } else t.disabled = false; });
+      })(); break;
+      case 'mv-open': x = S.mag.find(function (m) { return m.id === id; }); if (x) magSheet(x); break;
+      case 'ric-all': V.boatRicAll = true; render(); break;
       case 'gq-open': if (S.status === 'ready') gqOpen(); break;
       case 'gq-go': gqGo(t.getAttribute('data-k'), id); break;
       case 'gq-cli': x = $('#gq'); if (x) { x.value = V.gq = t.getAttribute('data-q'); $('#gq-res').innerHTML = gqResults(V.gq); } break;
