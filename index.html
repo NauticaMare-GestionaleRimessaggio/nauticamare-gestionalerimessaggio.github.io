@@ -409,6 +409,9 @@ button.row:active, .row .hit:active { opacity: .65; }
 
 /* Ricambi nelle mansioni */
 .rc-box { display: flex; flex-direction: column; gap: 8px; }
+.sr-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 40px; gap: 8px; align-items: center; }
+.sr-row input, .car-row input { width: 100%; min-width: 0; min-height: 44px; font: inherit; font-size: 16px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+#f-righe:not(:empty) { display: flex; flex-direction: column; gap: 8px; margin-top: -4px; }
 .rc-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 40px; gap: 8px; align-items: center; }
 .rc-x { height: 44px; border: 0; border-radius: 8px; background: var(--card-2); color: var(--muted); font-size: 1.2rem; }
 .self-start { align-self: flex-start; }
@@ -510,6 +513,27 @@ button.row:active, .row .hit:active { opacity: .65; }
 .check input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
 .preview { background: var(--card); border-radius: 8px; padding: 10px 12px; font-size: .92rem; }
 .form-err { margin: 0; color: var(--late); font-weight: 600; font-size: .9rem; }
+/* Scelta barca con ricerca */
+.bp-native { position: absolute !important; width: 1px !important; height: 1px !important; min-height: 0 !important; padding: 0 !important; border: 0 !important; opacity: 0; pointer-events: none; }
+.bp-btn { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; font: inherit; font-size: 16px; color: var(--ink); text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.bp-btn .bp-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-btn .bp-t.ph { color: var(--muted); }
+.bp-btn svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.bp-pan { border: 1px solid var(--accent); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--card); }
+.bp-pan[hidden] { display: none; }
+.bp-pan input[type="search"] { width: 100%; min-height: 44px; font: inherit; font-size: 16px; color: var(--ink); background: var(--bg, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.bp-pan .chips { margin-top: 0; }
+.bp-pan .chips button { padding: 6px 12px; font-size: .84rem; border: 1px solid var(--line); }
+.bp-list { max-height: 46vh; overflow-y: auto; display: flex; flex-direction: column; }
+.bp-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; font: inherit; text-align: left; color: var(--ink); background: none; border: 0; border-top: 1px solid var(--line); padding: 10px 4px; }
+.bp-row:first-child { border-top: 0; }
+.bp-row[aria-selected="true"] .bp-rt { color: var(--accent); font-weight: 650; }
+.bp-row .bp-rs { font-size: .82rem; color: var(--muted); }
+.bp-none { color: var(--muted); font-size: .9rem; padding: 8px 4px; }
+#f-nbWrap:not([hidden]) { display: flex; flex-direction: column; gap: 14px; }
+.dup-ask { border: 1px solid var(--soon); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.dup-ask p { margin: 0; font-size: .92rem; }
+.dup-ask .acts { display: flex; gap: 8px; flex-wrap: wrap; }
 .danger-zone { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 6px; display: flex; flex-direction: column; gap: 10px; }
 .danger-zone p { margin: 0; font-size: .92rem; }
 .danger-zone .acts { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -836,7 +860,8 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
   function boatRow(b) {
     var next = openScad(b.id)[0], pill = '';
-    if (b.daCompletare) pill = '<span class="pill soon">Dati da completare</span>';
+    var miss = b.daCompletare ? boatMissing(b) : [];
+    if (miss.length) pill = '<span class="pill soon">Da completare</span>';
     if (next && next.i.level === 'late') pill = '<span class="pill late">Scaduta</span>';
     else if (next && next.i.level === 'soon') pill = '<span class="pill soon">In arrivo</span>';
     var sub1 = [b.modello, num(b.lunghezza) != null ? fmtNum(b.lunghezza, 2) + ' m' : ''].filter(Boolean).map(esc).join(' · ');
@@ -844,7 +869,8 @@ button.row:active, .row .hit:active { opacity: .65; }
     return '<button type="button" class="row" data-act="open-boat" data-id="' + esc(b.id) + '">' +
       '<span class="posto' + (b.posto ? '' : ' empty') + '">' + esc(b.posto || 'posto') + '</span>' +
       '<span class="main"><span class="title" style="font-size:1.08rem">' + esc(b.nome || 'Senza nome') + '</span>' +
-      (sub1 ? '<span class="sub">' + sub1 + '</span>' : '') + (sub2 ? '<span class="sub">' + sub2 + '</span>' : '') + '</span>' +
+      (sub1 ? '<span class="sub">' + sub1 + '</span>' : '') + (sub2 ? '<span class="sub">' + sub2 + '</span>' : '') +
+      (miss.length ? '<span class="sub t-soon">Manca: ' + esc(miss.join(', ')) + '</span>' : '') + '</span>' +
       (pill ? '<span class="side">' + pill + '</span>' : '') + '</button>';
   }
   function featCard(lvl, icon, title, sub, status, acts) {
@@ -1026,7 +1052,8 @@ button.row:active, .row .hit:active { opacity: .65; }
       else if (s.fattaIl) add(s.fattaIl, { k: 's', cls: 'grey', o: s });
     });
     S.vari.forEach(function (v) { add(v.fatto ? (v.fattoIl || v.data) : v.data, { k: 'v', cls: v.fatto ? 'grey' : 'vio', o: v }); });
-    S.lavori.forEach(function (l) { add(l.data, { k: 'l', cls: l.stato === 'fatto' ? '' : l.stato === 'in_corso' ? 'stripe' : 'grey', o: l }); });
+    var inProg = {}; (S.prog || []).forEach(function (x) { if (x.lavId) inProg[x.lavId] = 1; });
+    S.lavori.forEach(function (l) { if (l.fonte !== 'scheda' && inProg[l.id]) return; add(l.data, { k: 'l', cls: l.stato === 'fatto' ? '' : l.stato === 'in_corso' ? 'stripe' : 'grey', o: l }); }); // le lavorazioni nel programma si vedono una volta sola
     (S.prog || []).forEach(function (x) { add(x.data, { k: 'p', cls: x.fatto ? 'grey' : 'teal', o: x }); });
     (S.scadC || []).forEach(function (x) { if (!x.fatta) add(x.data, { k: 'z', cls: scInfo(x).level, o: x }); else if (x.fattaIl) add(x.fattaIl, { k: 'z', cls: 'grey', o: x }); });
     return m;
@@ -1100,6 +1127,9 @@ button.row:active, .row .hit:active { opacity: .65; }
       (Porto.berthLabel(b.id) ? '<span class="pill teal">Porto · ' + esc(Porto.berthLabel(b.id)) + '</span>' : '') + (b.vendita && b.vendita.attiva ? '<span class="pill vio">In vendita</span>' : '') + '</div>' +
       '<h2>' + esc(b.nome || 'Senza nome') + '</h2>' + (b.modello ? '<div class="model">' + esc(b.modello) + '</div>' : '') + '</div>' +
       '<span class="posto' + (b.posto ? '' : ' empty') + '">' + esc(b.posto || 'posto') + '</span></section>';
+    var missD = b.daCompletare ? boatMissing(b) : [];
+    if (missD.length) h += '<div class="notice" style="margin-top:12px"><span class="t-soon" style="font-weight:600">Barca creata al volo: manca ' + esc(missD.join(', ')) + '.</span>' +
+      (S.canWrite ? ' <button type="button" class="link" data-act="edit-boat" data-id="' + esc(b.id) + '">Completa la scheda</button>' : '') + '</div>';
 
     var hasMotor = b.motoreTipo !== 'Nessuno', ore = num(b.oreMotore), oreTile;
     var hourScad = openScad(b.id).filter(function (x) { return x.i.oreLeft != null; }).sort(function (a, c) { return a.i.oreLeft - c.i.oreLeft; })[0];
@@ -1117,6 +1147,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     }
     var sv = [];
     if (num(b.lunghezza) != null) { var bbm = beamOf(b); sv.push([fmtNum(b.lunghezza, 2) + ' × ' + fmtNum(bbm.B, 2) + ' m', bbm.est ? 'Lunghezza × larghezza (stimata)' : 'Lunghezza × larghezza']); }
+    var oreB = boatOre(b.id); if (oreB) sv.push([fmtH(oreB), 'Ore lavorate, tutti']);
     if (b.anno) sv.push([b.anno, 'Anno']);
     if (num(b.potenza) != null) sv.push([fmtNum(b.potenza) + ' cv' + (num(b.nMotori) > 1 ? ' ×' + b.nMotori : ''), 'Potenza']);
     var schedaTile = '<div class="tile"><span class="tile-h"><span class="t-ok">' + I.boat + '</span>Scheda</span>' +
@@ -3645,7 +3676,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
   function progLinkTxt(x) {
     if (x.opId) { var o = S.ops.find(function (q) { return q.id === x.opId; }); if (o) return 'Servizio: ' + opTitle(o); }
-    if (x.lavId) { var l = S.lavori.find(function (q) { return q.id === x.lavId; }); if (l) return 'Lavorazione: ' + (l.titolo || ''); }
+    if (x.lavId) { var l = S.lavori.find(function (q) { return q.id === x.lavId; }); if (l) return l.titolo === x.testo ? 'Anche tra le lavorazioni' : 'Lavorazione: ' + (l.titolo || ''); }
     return '';
   }
   function progRow(x, list, withPeople) {
@@ -3719,7 +3750,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var canDel = !isNew && (S.isEditor || S.isOwner || !!window.__NM_FB), more = !!(x.mezzi && x.mezzi.length || x.dove || (x.materiali || []).length || x.urgente || x.avvisare || x.note || x.ripeti);
     var b0 = x.barcaId ? boatById(x.barcaId) : null;
     openSheet({
-      title: isNew ? 'Da fare' : 'Cosa da fare', submitLabel: 'Salva', deleteLabel: 'Elimina dal programma', deleteText: 'La togli dal programma. Lavorazioni e servizi collegati restano.',
+      title: isNew ? 'Da fare' : 'Cosa da fare', submitLabel: 'Salva', deleteLabel: 'Elimina dal programma', deleteText: x.lavId && x.lavId === lavCreataDa(x) ? 'La togli dal programma insieme alla sua lavorazione da fare.' : 'La togli dal programma. Lavorazioni e servizi già esistenti collegati restano.',
       body: (ops.length || lavs.length ? field(lab('f-pl', 'Parti da un lavoro aperto (facoltativo)'), '<select id="f-pl">' + linkOpts + '</select>') : '') +
         field(lab('f-pt', 'Cosa c’è da fare'), '<textarea id="f-pt" required placeholder="es. Alaggio Lulu con il travel lift">' + esc(x.testo || '') + '</textarea>') +
         '<div class="grid2">' + field(lab('f-pd', 'Giorno'), inp('f-pd', x.data, 'type="date" required')) + field(lab('f-po', 'Ora d’inizio (facoltativa)'), inp('f-po', x.ora, 'type="time" step="900"')) + '</div>' +
@@ -3742,7 +3773,11 @@ button.row:active, .row .hit:active { opacity: .65; }
         (!isNew && x.fatto && S.myId ? '<button type="button" class="btn sec self-start" data-act="prog-ore" data-id="' + esc(x.id) + '">' + I.clip + 'Segna le ore nella scheda lavoro</button>' : '') +
         (!isNew ? '<button type="button" class="btn sec self-start" data-act="prog-dup" data-id="' + esc(x.id) + '">' + I.plus + 'Copia al giorno dopo</button>' : '') +
         (!isNew && !canDel ? '<p class="cap">Per eliminarla serve il permesso da editor: puoi segnarla fatta o spostarla a un altro giorno.</p>' : ''),
-      item: x, onDelete: canDel ? async function () { if (await delSeq([S.db.collection('programma').doc(x.id)])) { closeSheet(); toast('Tolta dal programma'); } } : null,
+      item: x, onDelete: canDel ? async function () {
+        var refs = [S.db.collection('programma').doc(x.id)], lc = lavCreataDa(x);
+        if (lc && progsOfLav(lc).length === 1) refs.push(S.db.collection('lavori').doc(lc));
+        if (await delSeq(refs)) { closeSheet(); toast(refs.length > 1 ? 'Tolta dal programma e dalle lavorazioni' : 'Tolta dal programma'); }
+      } : null,
       onOpen: function (f) {
         var pl = f.querySelector('#f-pl'), pt = f.querySelector('#f-pt'), pb = f.querySelector('#f-pb'), du = f.querySelector('#f-pdu'), pn = f.querySelector('#f-pn'), auto = '', autoD = '';
         function tog(box, attr) { box.addEventListener('click', function (e) { var c = e.target.closest('[' + attr + ']'); if (c) { c.setAttribute('aria-pressed', String(c.getAttribute('aria-pressed') !== 'true')); ppHint(); } }); }
@@ -3776,16 +3811,59 @@ button.row:active, .row .hit:active { opacity: .65; }
           if (rp === 'd5') { var cur = d.data; for (var i = 0; i < 6; i++) { cur = addDays(cur, 1); var wd = new Date(isoToUTC(cur)).getUTCDay(); if (wd === 6 || wd === 0) break; days.push(cur); } }
           if (rp === 'w4') for (var j = 1; j < 4; j++) days.push(addDays(d.data, 7 * j));
           ok = true;
-          for (var k = 0; k < days.length; k++) { var dd = Object.assign({}, d, { data: days[k], fatto: false, creato: d.modificato, creatoDa: S.myId || '' }), r = S.db.collection('programma').doc(); ok = (await w(function () { return r.set(dd); })) && ok; }
-        } else { var r2 = S.db.collection('programma').doc(x.id); ok = await w(function () { return r2.update(d); }); }
+          var conLav = d.barcaId && !d.lavId && !d.opId && days.length === 1;
+          for (var k = 0; k < days.length; k++) { var dd = Object.assign({}, d, { data: days[k], fatto: false, creato: d.modificato, creatoDa: S.myId || '' }), r = S.db.collection('programma').doc();
+            if (conLav) { dd.lavId = await lavFromProg(dd, r.id); if (!dd.lavId) return false; } ok = (await w(function () { return r.set(dd); })) && ok; }
+        } else {
+          if (d.barcaId && !d.lavId && !d.opId && !x.lavId) { d.lavId = await lavFromProg(Object.assign({}, d, { fatto: !!x.fatto }), x.id); if (!d.lavId) return false; }
+          var r2 = S.db.collection('programma').doc(x.id); ok = await w(function () { return r2.update(d); });
+          if (ok && d.lavId) await syncLav(Object.assign({}, d, { fatto: !!x.fatto }));
+        }
         if (ok) { V.progDay = d.data; toast(isNew ? 'Aggiunto al programma di ' + progDayLabel(d.data).toLowerCase() : 'Programma aggiornato'); }
         return ok;
       }
     });
   }
+  // Programma ↔ lavorazioni: una cosa da fare con la barca è anche una lavorazione da fare, e viceversa.
+  // Creare, spostare, segnare fatto e cancellare da una parte vale anche per l'altra.
+  function lavCreataDa(x) { var l = x.lavId && S.lavori.find(function (q) { return q.id === x.lavId; }); return l && (l.progId === x.id || progsOfLav(l.id).some(function (p) { return p.id === x.id && p.daLavorazione; })) ? l.id : ''; }
+  function progsOfLav(id) { return (S.prog || []).filter(function (x) { return x.lavId === id; }); }
+  async function lavFromProg(d, progId) { // crea la lavorazione per una cosa da fare con la barca; torna l'id
+    var now = new Date().toISOString(), ref = S.db.collection('lavori').doc();
+    var ld = { barcaId: d.barcaId, titolo: d.testo, data: d.data, stato: d.fatto ? 'fatto' : 'da_fare', categoria: guessCatInfo(d.testo).cat || 'Altro', descr: '', oreStima: null, oreLavoro: null, importo: null, oreMotore: null, ricambi: [], foto: [], progId: progId || '', creato: now, modificato: now };
+    return (await w(function () { return ref.set(ld); })) ? ref.id : '';
+  }
+  async function syncLav(d) { // dal programma alla lavorazione collegata
+    var l = d.lavId && S.lavori.find(function (q) { return q.id === d.lavId; }); if (!l) return;
+    var u = {};
+    if (d.data && d.data !== l.data) u.data = d.data;
+    if (d.testo && d.testo !== l.titolo) u.titolo = d.testo;
+    if (d.barcaId && d.barcaId !== l.barcaId) u.barcaId = d.barcaId;
+    if (d.fatto != null) { var st = d.fatto ? 'fatto' : (l.stato === 'fatto' ? 'da_fare' : l.stato); if (st !== l.stato) u.stato = st; }
+    if (!Object.keys(u).length) return;
+    u.modificato = new Date().toISOString(); var r = S.db.collection('lavori').doc(l.id); await w(function () { return r.update(u); });
+  }
+  async function syncProg(l) { // dalla lavorazione alle cose da fare collegate
+    var list = progsOfLav(l.id);
+    for (var i = 0; i < list.length; i++) {
+      var x = list[i], u = {};
+      if (list.length === 1 && l.data && l.data !== x.data) u.data = l.data;
+      if (l.titolo && l.titolo !== x.testo) u.testo = l.titolo;
+      if (l.barcaId && l.barcaId !== x.barcaId) u.barcaId = l.barcaId;
+      var on = l.stato === 'fatto'; if (on !== !!x.fatto) Object.assign(u, on ? { fatto: true, fattoDa: S.myId || '', fattoIl: new Date().toISOString() } : { fatto: false, fattoDa: '', fattoIl: '' });
+      if (!Object.keys(u).length) continue;
+      u.modificato = new Date().toISOString(); var r = S.db.collection('programma').doc(x.id); await w(function () { return r.update(u); });
+    }
+  }
+  async function progFromLav(l, id) { // una lavorazione da fare nuova va anche nel programma del suo giorno
+    var now = new Date().toISOString(), r = S.db.collection('programma').doc();
+    var d = { testo: l.titolo, data: l.data, ora: '', durata: l.oreStima || null, nPers: null, pers: [], chi: '', barcaId: l.barcaId, opId: '', lavId: id, mezzi: [], dove: '', materiali: [], urgente: false, avvisare: false, note: '', fatto: false, creato: now, modificato: now, creatoDa: S.myId || '', daLavorazione: true };
+    await w(function () { return r.set(d); });
+  }
   async function progTick(x) {
     var r = S.db.collection('programma').doc(x.id), now = new Date().toISOString(), on = !x.fatto;
     if (!(await w(function () { return r.update(on ? { fatto: true, fattoDa: S.myId || '', fattoIl: now } : { fatto: false, fattoDa: '', fattoIl: '' }); }))) return;
+    if (x.lavId) await syncLav({ lavId: x.lavId, fatto: on });
     if (on && S.myId) toast('Fatto! Ricordati di segnare le ore nella scheda lavoro');
   }
   async function progDup(x) {
@@ -3794,7 +3872,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
   async function progBring() {
     var t = todayISO(), list = progLeft(t), ok = true;
-    for (var i = 0; i < list.length; i++) { var r = S.db.collection('programma').doc(list[i].id); ok = (await w(function () { return r.update({ data: t, modificato: new Date().toISOString() }); })) && ok; }
+    for (var i = 0; i < list.length; i++) { var r = S.db.collection('programma').doc(list[i].id); ok = (await w(function () { return r.update({ data: t, modificato: new Date().toISOString() }); })) && ok; if (list[i].lavId && progsOfLav(list[i].lavId).length === 1) await syncLav({ lavId: list[i].lavId, data: t }); }
     if (ok) toast(list.length === 1 ? 'Portato a oggi' : list.length + ' cose portate a oggi');
   }
   function homeProgHtml() {
@@ -5384,6 +5462,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
   function viewMagazzino() {
     return exampleBanner() + '<div class="search">' + I.search + '<input id="mq" type="search" placeholder="Cerca articolo, tipo o categoria" value="' + esc(V.magQ) + '" autocomplete="off" aria-label="Cerca nel magazzino"></div>' +
+      (S.canWrite ? '<button type="button" class="btn" data-act="mag-carico" style="width:100%;margin-top:10px">' + I.plus + 'Carico di più articoli (bolla)</button>' : '') +
       (S.mag.length ? '<button type="button" class="btn sec" data-act="mag-find" style="width:100%;margin-top:10px">' + I.camera + 'Trova col codice a barre</button>' : '') +
       (S.mag.length ? '<button type="button" class="btn sec" data-act="mag-shop" style="width:100%;margin-top:10px">' + I.cart + 'Lista della spesa' + (shopList().length ? ' · ' + shopList().length + (shopList().length === 1 ? ' articolo' : ' articoli') : '') + '</button>' : '') +
       (S.mag.length ? '<div class="chips" role="group" aria-label="Raggruppa gli articoli" style="margin-top:10px"><button type="button" data-act="mag-group" data-g="tipo" aria-pressed="' + (V.magGroup !== 'cat') + '">Per tipo</button><button type="button" data-act="mag-group" data-g="cat" aria-pressed="' + (V.magGroup === 'cat') + '">Per categoria</button><button type="button" data-act="mag-group" data-g="forn" aria-pressed="' + (V.magGroup === 'forn') + '">Per fornitore</button></div>' : '') +
@@ -5564,6 +5643,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       if (ok) closeSheet(); else if (btn && document.getElementById('sheet-save')) btn.disabled = false;
     });
     $('#sheet-wrap').addEventListener('click', function (e) { if (e.target.id === 'sheet-wrap') closeSheet(); });
+    boatPickAll(form);
     if (o.onOpen) o.onOpen(form);
   }
   function formErr(msg) { var p = $('#form-err'); p.textContent = msg; p.hidden = false; }
@@ -5574,6 +5654,121 @@ button.row:active, .row .hit:active { opacity: .65; }
   function boatSelect(cur) {
     var list = S.boats.slice().sort(byName);
     return '<select id="f-barca" required>' + (cur ? '' : '<option value="">Scegli la barca</option>') + list.map(function (b) { return '<option value="' + esc(b.id) + '"' + (b.id === cur ? ' selected' : '') + '>' + esc(boatLabel(b)) + '</option>'; }).join('') + '</select>';
+  }
+  // Scelta barca con ricerca: la tendina resta (per il salvataggio), sopra c'è un pulsante che apre la ricerca
+  var BP_IDS = ['f-barca', 'f-barcaE', 'f-rb', 'f-pb'];
+  var BP_MIS = [[-1, 7, 'fino a 7 m'], [7, 9, '7–9 m'], [9, 11, '9–11 m'], [11, 13, '11–13 m'], [13, 15, '13–15 m'], [15, 18, '15–18 m'], [18, 999, 'oltre 18 m']]; // lunghezza della barca, come le misure dei pontili
+  function bpInMis(L, r) { return L != null && L > r[0] && L <= r[1]; }
+  function boatPontile(b) {
+    for (var k in (S.posti || {})) if (S.posti[k] && S.posti[k].barcaId === b.id) { var m = /^([A-Z]+)-\d/.exec(k); if (m) return m[1] === 'Z' ? 'Darsena' : m[1]; }
+    var m2 = /^([A-Z])\s*-?\s*\d/.exec(String(b.posto || '').trim().toUpperCase());
+    return m2 ? m2[1] : /darsena/i.test(b.posto || '') ? 'Darsena' : '';
+  }
+  function boatMissing(b) {
+    var m = [];
+    if (!b.modello) m.push('modello');
+    if (num(b.lunghezza) == null) m.push('misura');
+    if (!b.posto && !Porto.berthLabel(b.id)) m.push('posto');
+    if (!b.motore && b.motoreTipo !== 'Nessuno') m.push('motore');
+    if (!b.proprietario) m.push('cliente');
+    return m;
+  }
+  function bpNorm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+  function bpMatch(b, q) {
+    var hay = bpNorm([b.nome, b.proprietario, b.posto, Porto.berthLabel(b.id), b.modello, b.immatricolazione].join(' ')), L = num(b.lunghezza);
+    return q.split(/\s+/).filter(Boolean).every(function (t) {
+      var n = parseFloat(t.replace(',', '.'));
+      if (/^\d+([.,]\d+)?m?$/.test(t) && L != null && Math.abs(L - n) <= 1) return true;
+      return hay.indexOf(t) >= 0;
+    });
+  }
+  function boatPickAll(form) { BP_IDS.forEach(function (id) { var el = form.querySelector('select#' + id); if (el) boatPick(el); }); }
+  function boatPick(sel) {
+    var isBoat = function (v) { return !!boatById(v); };
+    if (!Array.prototype.some.call(sel.options, function (o) { return isBoat(o.value); })) return;
+    var st = { q: '', pon: '', mis: -1 };
+    var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'bp-btn'; btn.setAttribute('aria-haspopup', 'listbox');
+    var pan = document.createElement('div'); pan.className = 'bp-pan'; pan.hidden = true;
+    sel.classList.add('bp-native'); sel.tabIndex = -1; sel.setAttribute('aria-hidden', 'true');
+    sel.parentNode.insertBefore(btn, sel); sel.parentNode.insertBefore(pan, sel.nextSibling);
+    var lbl = sel.id && sel.form ? sel.form.querySelector('label[for="' + sel.id + '"]') : null;
+    if (lbl) lbl.addEventListener('click', function (e) { e.preventDefault(); open(); });
+    function label() {
+      var o = sel.options[sel.selectedIndex], ph = !o || !o.value;
+      btn.innerHTML = '<span class="bp-t' + (ph ? ' ph' : '') + '">' + esc(o ? o.textContent : 'Scegli la barca') + '</span>' + I.search;
+    }
+    var boats = Array.prototype.filter.call(sel.options, function (o) { return isBoat(o.value); }).map(function (o) { return { o: o, b: boatById(o.value) }; });
+    var pons = []; boats.forEach(function (x) { x.pon = boatPontile(x.b); if (x.pon && pons.indexOf(x.pon) < 0) pons.push(x.pon); });
+    pons.sort(function (a, c) { return a === 'Darsena' ? 1 : c === 'Darsena' ? -1 : a.localeCompare(c); });
+    var mis = BP_MIS.filter(function (r) { return boats.some(function (x) { return bpInMis(num(x.b.lunghezza), r); }); });
+    function chips(kind, list, cur) {
+      return '<div class="chips" data-k="' + kind + '">' + list.map(function (v, i) { var key = kind === 'pon' ? v : String(i), t = kind === 'pon' ? (v === 'Darsena' ? v : 'Pontile ' + v) : v[2];
+        return '<button type="button" data-v="' + esc(key) + '" aria-pressed="' + (key === String(cur)) + '">' + esc(t) + '</button>'; }).join('') + '</div>';
+    }
+    function rows() {
+      var q = bpNorm(st.q.trim()), out = '';
+      if (!q && !st.pon && st.mis < 0) Array.prototype.forEach.call(sel.options, function (o) {
+        if (isBoat(o.value) || o.disabled) return;
+        out += '<button type="button" class="bp-row" data-v="' + esc(o.value) + '" aria-selected="' + (o.value === sel.value) + '"><span class="bp-rt">' + esc(o.textContent) + '</span></button>';
+      });
+      var r = st.mis >= 0 ? mis[st.mis] : null, n = 0;
+      boats.forEach(function (x) {
+        var L = num(x.b.lunghezza);
+        if (st.pon && x.pon !== st.pon) return;
+        if (r && !bpInMis(L, r)) return;
+        if (q && !bpMatch(x.b, q)) return;
+        n++;
+        var sub = [L != null ? fmtNum(L, 2) + ' m' : '', x.b.proprietario, x.b.modello].filter(Boolean).join(' · ');
+        out += '<button type="button" class="bp-row" data-v="' + esc(x.o.value) + '" aria-selected="' + (x.o.value === sel.value) + '"><span class="bp-rt">' + esc(x.o.textContent) + '</span>' + (sub ? '<span class="bp-rs">' + esc(sub) + '</span>' : '') + '</button>';
+      });
+      if (!n && (q || st.pon || st.mis >= 0)) out += '<div class="bp-none">Nessuna barca trovata' + (Array.prototype.some.call(sel.options, function (o) { return o.value === '__nuova'; }) ? ': puoi crearla con «＋ Nuova barca».' : '.') + '</div>';
+      pan.querySelector('.bp-list').innerHTML = out;
+    }
+    function open() {
+      if (!pan.hidden) { close(); return; }
+      pan.innerHTML = '<input type="search" placeholder="Nome, cliente, posto o misura (es. 12)" aria-label="Cerca la barca" enterkeyhint="search">' +
+        (pons.length > 1 ? chips('pon', pons, st.pon) : '') + (mis.length > 1 ? chips('mis', mis, st.mis) : '') + '<div class="bp-list" role="listbox"></div>';
+      pan.hidden = false; rows();
+      var qi = pan.querySelector('input'); qi.value = st.q;
+      qi.addEventListener('input', function () { st.q = qi.value; rows(); });
+      qi.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); var first = pan.querySelector('.bp-row'); if (first) first.click(); } });
+      if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches || !sel.value) qi.focus();
+    }
+    function close() { pan.hidden = true; pan.innerHTML = ''; }
+    pan.addEventListener('click', function (e) {
+      var c = e.target.closest('.chips button');
+      if (c) { var k = c.parentNode.getAttribute('data-k'), v = c.getAttribute('data-v');
+        if (k === 'pon') st.pon = st.pon === v ? '' : v; else st.mis = st.mis === +v ? -1 : +v;
+        Array.prototype.forEach.call(c.parentNode.children, function (x) { x.setAttribute('aria-pressed', String(k === 'pon' ? x.getAttribute('data-v') === st.pon : +x.getAttribute('data-v') === st.mis)); });
+        rows(); return; }
+      var r = e.target.closest('.bp-row'); if (!r) return;
+      sel.value = r.getAttribute('data-v'); close(); label();
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    btn.addEventListener('click', open);
+    sel.addEventListener('change', label);
+    label();
+  }
+  // Barca con lo stesso nome: chiede se è la stessa. Torna true se si può andare avanti a crearla.
+  function dupAsk(f, nome, onSame) {
+    var k = bpNorm(nome).trim(); if (!k) return true;
+    if (f.getAttribute('data-dup-ok') === k) return true;
+    var gia = S.boats.filter(function (x) { return bpNorm(x.nome).trim() === k; });
+    if (!gia.length) return true;
+    var old = f.querySelector('.dup-ask'); if (old) old.remove();
+    var box = document.createElement('div'); box.className = 'dup-ask';
+    box.innerHTML = '<p>C’è già ' + (gia.length > 1 ? gia.length + ' barche che si chiamano' : 'una barca che si chiama') + ' «' + esc(gia[0].nome || '') + '»' +
+      gia.slice(0, 3).map(function (x) { var d = [x.posto || Porto.berthLabel(x.id), x.proprietario, num(x.lunghezza) != null ? fmtNum(x.lunghezza, 2) + ' m' : ''].filter(Boolean).join(', '); return d ? ' (' + esc(d) + ')' : ''; }).join(' e') + '. È la stessa?</p>' +
+      '<div class="acts"><button type="button" class="btn" data-dup="same">Sì, è quella</button><button type="button" class="btn sec" data-dup="new">No, è un’altra</button></div>';
+    var err = f.querySelector('#form-err'); err.parentNode.insertBefore(box, err);
+    box.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-dup]'); if (!b) return;
+      box.remove();
+      if (b.getAttribute('data-dup') === 'same') onSame(gia[0]);
+      else { f.setAttribute('data-dup-ok', k); if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit', { cancelable: true })); }
+    });
+    box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    return false;
   }
   function rcRow(r) {
     return '<div class="rc-row"><input class="rc-n" type="text" list="mag-list" value="' + esc(r && r.nome || '') + '" placeholder="Ricambio o materiale" aria-label="Ricambio o materiale">' +
@@ -5710,6 +5905,7 @@ button.row:active, .row .hit:active { opacity: .65; }
           daCompletare: false, modificato: new Date().toISOString()
         };
         if (!data.nome) { formErr('Scrivi il nome della barca.'); return false; }
+        if (isNew && !dupAsk(f, data.nome, function (gia) { closeSheet(); V.tab = 'barche'; V.boatId = gia.id; window.scrollTo(0, 0); render(); toast('Ti ho aperto la scheda di ' + (gia.nome || 'questa barca')); })) return false;
         if (isNew) {
           data.creato = data.modificato;
           var ref = S.db.collection('barche').doc(); S.pendingBoat = ref.id;
@@ -5755,7 +5951,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     openSheet({
       title: isNew ? 'Nuova lavorazione' : 'Modifica lavorazione', body: body, deleteLabel: 'Elimina lavorazione', foto: l.foto,
       deleteText: 'Elimini “' + (l.titolo || 'questa lavorazione') + '”. Non si può annullare.',
-      item: l, onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('lavori').doc(l.id)])) { closeSheet(); toast('Lavorazione eliminata'); } },
+      item: l, onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('lavori').doc(l.id)].concat(progsOfLav(l.id).map(function (x) { return S.db.collection('programma').doc(x.id); })))) { closeSheet(); toast('Lavorazione eliminata'); } },
       onOpen: function (f) {
         var se = f.querySelector('#f-oreStima'), auto = null;
         function upd() {
@@ -5795,8 +5991,8 @@ button.row:active, .row .hit:active { opacity: .65; }
         var aid = await attrLinkSave(f, data.barcaId); if (aid === null) return false; if (aid !== undefined) data.attrId = aid === '__nuova' ? '' : aid;
         var ok;
         var lid = null;
-        if (isNew) { data.creato = data.modificato; var ref = S.db.collection('lavori').doc(); lid = ref.id; ok = await w(function () { return ref.set(data); }); }
-        else { lid = l.id; var r2 = S.db.collection('lavori').doc(l.id); ok = await w(function () { return r2.update(data); }); }
+        if (isNew) { data.creato = data.modificato; var ref = S.db.collection('lavori').doc(); lid = ref.id; ok = await w(function () { return ref.set(data); }); if (ok && data.stato !== 'fatto') await progFromLav(data, lid); }
+        else { lid = l.id; var r2 = S.db.collection('lavori').doc(l.id); ok = await w(function () { return r2.update(data); }); if (ok) await syncProg(Object.assign({ id: l.id }, data)); }
         if (ok) { await bumpOre(data.barcaId, data.oreMotore); toast(isNew ? 'Lavorazione aggiunta' : 'Lavorazione salvata'); if (data.stato === 'fatto') rifSuggest(data, lid, isNew ? [] : l.ricambi, isNew || l.stato !== 'fatto'); }
         return ok;
       }
@@ -5916,9 +6112,12 @@ button.row:active, .row .hit:active { opacity: .65; }
       field(lab('f-barcaE', 'Barca'), sel) +
       '<button type="button" class="link self-start" id="f-abBtn"' + ((l.altreBarche || []).length ? ' hidden' : '') + '>＋ Altre barche coinvolte (facoltativo)</button>' +
       '<div id="f-abW"' + ((l.altreBarche || []).length ? '' : ' hidden') + '><div class="lbl">Altre barche coinvolte</div><div class="chips wrap" id="f-ab">' + boats.map(function (b) { return '<button type="button" data-ab="' + esc(b.id) + '" aria-pressed="' + ((l.altreBarche || []).indexOf(b.id) >= 0) + '">' + esc(b.nome || 'Barca') + '</button>'; }).join('') + '</div><span class="hint">Le ore restano su questa voce; nelle schede delle barche compare come lavoro condiviso.</span></div>' +
-      '<div id="f-nbWrap" hidden>' + field(lab('f-nbNome', 'Nome della nuova barca'), inp('f-nbNome', '', 'type="text" autocapitalize="words" placeholder="es. Libeccio"'), 'Basta il nome: misure e altri dati si aggiungono quando vuoi dalla scheda della barca.') + '</div>' +
+      '<div id="f-nbWrap" hidden>' + field(lab('f-nbNome', 'Nome della nuova barca'), inp('f-nbNome', '', 'type="text" autocapitalize="words" placeholder="es. Libeccio"'), 'Basta il nome: misure e altri dati si aggiungono quando vuoi dalla scheda della barca.') +
+        field(lab('f-nbCli', 'Cliente (facoltativo)'), inp('f-nbCli', '', 'type="text" autocapitalize="words" placeholder="es. Mario Rossi"')) + '</div>' +
       '<div id="f-opWrap">' + field(lab('f-opE', 'Servizio di cantiere'), '<select id="f-opE"></select>', 'Se scegli un servizio, compari tra chi ci ha lavorato.') + '<p class="cap" id="f-opStima" style="margin:-4px 2px 0" hidden></p></div>' +
       field(lab('f-mans', 'Cosa hai fatto'), '<textarea id="f-mans" required placeholder="es. lucidatura paratie esterne in gelcoat blu">' + esc(l.titolo || '') + '</textarea>') +
+      (isNew ? '<div id="f-righe"></div><button type="button" class="link self-start" id="f-addRiga" style="margin-top:-6px">＋ Aggiungi riga: altra lavorazione con le sue ore</button>' : '') +
+      '<p class="cap t-acc" id="f-totB" style="margin:-4px 2px 0" hidden></p>' +
       field(lab('f-catE', 'Categoria'), '<select id="f-catE">' + opts([['', 'Automatica in base al testo']].concat(CATEGORIE), isNew ? '' : (l.categoria || '')) + '</select>') +
       attrLinkBlock(l.attrId) +
       rcBlock(l.ricambi) + photoBlock(l.foto);
@@ -5935,6 +6134,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       },
       onOpen: function (f) {
         var bs = f.querySelector('#f-barcaE'), os = f.querySelector('#f-opE'), ds = f.querySelector('#f-dataE'), ms = f.querySelector('#f-mans'), oe = f.querySelector('#f-oreE');
+        righeInit(f, isNew ? null : l);
         var auto = l.opId ? (ms.value === opTitle(S.ops.find(function (x) { return x.id === l.opId; }) || {}) ? ms.value : null) : null;
         function stima() {
           var o = S.ops.find(function (x) { return x.id === os.value; }), p = $('#f-opStima'), tx = o ? opStima(o).txt : '';
@@ -5981,15 +6181,17 @@ button.row:active, .row .hit:active { opacity: .65; }
         var nbNome = bv === '__nuova' ? val(f, 'f-nbNome') : '';
         if (bv === '__nuova') {
           if (!nbNome) { formErr('Scrivi il nome della nuova barca.'); return false; }
-          var gia = S.boats.find(function (x) { return String(x.nome || '').trim().toLowerCase() === nbNome.toLowerCase(); });
-          if (gia) { formErr('C’è già una barca che si chiama “' + (gia.nome || '') + '”: sceglila dall’elenco.'); return false; }
+          if (!dupAsk(f, nbNome, function (gia) { var bs = f.querySelector('#f-barcaE'); bs.value = gia.id; bs.dispatchEvent(new Event('change')); toast('Ho scelto ' + (gia.nome || 'la barca') + ': ora salva la mansione'); })) return false;
         }
         if (!mans) { formErr('Scrivi cosa hai fatto.'); return false; }
         if (ore == null || ore <= 0 || ore > 24) { formErr('Scrivi le ore lavorate, per esempio 8 oppure 2,5.'); return false; }
+        var righe = isNew ? righeRead(f) : [];
+        if (righe === null) return false;
+        if (ore + righe.reduce(function (t, r) { return t + r.ore; }, 0) > 24) { formErr('In tutto fanno più di 24 ore nella stessa giornata: controlla le righe.'); return false; }
         var now = new Date().toISOString();
         if (bv === '__nuova') {
           var nref = S.db.collection('barche').doc();
-          var nb = { nome: nbNome, modello: '', tipo: 'Altro', stato: 'In rimessaggio', lunghezza: null, larghezza: null, posto: '', proprietario: '', note: '', daCompletare: true, creatoDa: S.myId || '', creato: now, modificato: now };
+          var nb = { nome: nbNome, modello: '', tipo: 'Altro', stato: 'In rimessaggio', lunghezza: null, larghezza: null, posto: '', proprietario: val(f, 'f-nbCli'), note: '', daCompletare: true, creatoDa: S.myId || '', creato: now, modificato: now };
           if (!(await w(function () { return nref.set(nb); }))) return false;
           bv = nref.id;
         }
@@ -6010,11 +6212,53 @@ button.row:active, .row .hit:active { opacity: .65; }
           data.stato = 'fatto'; data.descr = ''; data.importo = null; data.oreMotore = null; data.utente = S.myId; data.fonte = 'scheda'; data.creato = now;
           if (isConfirmed(S.myId, giorno)) data.aggiuntaDopoConferma = true;
           var ref = S.db.collection('lavori').doc(); ok = await w(function () { return ref.set(data); });
+          for (var ri = 0; ok && ri < righe.length; ri++) {
+            var rd = Object.assign({}, data, { titolo: righe[ri].titolo, oreLavoro: righe[ri].ore, categoria: guessCatInfo(righe[ri].titolo, '', bv === '__cantiere').cat || 'Altro', ricambi: [], foto: [], attrId: '', opId: '' });
+            var rr = S.db.collection('lavori').doc(); ok = await w(function () { return rr.set(rd); });
+          }
         } else { var r2 = S.db.collection('lavori').doc(l.id); ok = await w(function () { return r2.update(data); }); }
-        if (ok) { V.schedaDay = giorno; toast(isNew ? 'Mansione salvata' : 'Mansione aggiornata'); render(); rifSuggest(data, isNew ? ref.id : l.id, isNew ? [] : l.ricambi, isNew || !!l.daSegnare); }
+        if (ok) { V.schedaDay = giorno; toast(isNew ? (righe.length ? 'Salvate ' + (righe.length + 1) + ' righe' : 'Mansione salvata') : 'Mansione aggiornata'); render(); rifSuggest(data, isNew ? ref.id : l.id, isNew ? [] : l.ricambi, isNew || !!l.daSegnare); }
         return ok;
       }
     });
+  }
+  // Scheda a righe: altre lavorazioni con le loro ore sulla stessa barca e giornata; ognuna diventa una mansione
+  function boatOre(boatId, exceptId) {
+    var t = 0; if (!boatId) return 0;
+    S.lavori.forEach(function (x) { if (x.fonte === 'scheda' && x.barcaId === boatId && x.id !== exceptId && !x.daSegnare && num(x.oreLavoro) > 0) t += num(x.oreLavoro); });
+    return t;
+  }
+  function righeInit(f, l) {
+    var box = f.querySelector('#f-righe'), add = f.querySelector('#f-addRiga'), bs = f.querySelector('#f-barcaE');
+    function tot() {
+      var p = f.querySelector('#f-totB'), b = boatById(bs.value); if (!p) return;
+      if (!b) { p.hidden = true; return; }
+      var qui = parseDec(val(f, 'f-oreE')) || 0;
+      if (box) Array.prototype.forEach.call(box.querySelectorAll('.sr-o'), function (i) { qui += parseDec(i.value.trim()) || 0; });
+      var prima = boatOre(b.id, l && l.id);
+      p.hidden = false;
+      p.textContent = 'Totale ore su ' + (b.nome || 'questa barca') + ', di tutti e in tutti i giorni: ' + fmtH(prima + qui) + (qui && prima ? ' (' + fmtH(qui) + ' in questa scheda)' : '');
+    }
+    function row() {
+      var d = document.createElement('div'); d.className = 'sr-row';
+      d.innerHTML = '<input class="sr-t" type="text" placeholder="Altra lavorazione" aria-label="Altra lavorazione"><input class="sr-o" type="text" inputmode="decimal" placeholder="Ore" aria-label="Ore"><button type="button" class="rc-x" aria-label="Togli riga">×</button>';
+      d.querySelector('.rc-x').addEventListener('click', function () { d.remove(); tot(); });
+      box.appendChild(d); d.querySelector('.sr-t').focus();
+    }
+    if (add) add.addEventListener('click', row);
+    f.addEventListener('input', function (e) { if (e.target.id === 'f-oreE' || (e.target.classList && e.target.classList.contains('sr-o'))) tot(); });
+    bs.addEventListener('change', tot);
+    tot();
+  }
+  function righeRead(f) {
+    var out = [], bad = false;
+    Array.prototype.forEach.call(f.querySelectorAll('#f-righe .sr-row'), function (d) {
+      var t = d.querySelector('.sr-t').value.trim(), o = parseDec(d.querySelector('.sr-o').value.trim());
+      if (!t && o == null) return;
+      if (!t || o == null || o <= 0 || o > 24) bad = true; else out.push({ titolo: t, ore: o });
+    });
+    if (bad) { formErr('In ogni riga in più scrivi la lavorazione e le ore, oppure togli la riga con ×.'); return null; }
+    return out;
   }
   async function saveNome(n) {
     if (!S.myId) return false;
@@ -6057,9 +6301,70 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
 
   /* Magazzino */
+  // Carico di più articoli insieme (per esempio da una bolla): una riga per articolo; un nome nuovo crea l'articolo
+  function umGuess(n) { var t = String(n || '').toLowerCase(); return /tanica/.test(t) ? 'tanica' : /latta/.test(t) ? 'latta' : /guant/.test(t) ? 'paia' : /nastr|scotch|rotol/.test(t) ? 'rotolo' : /\d\s?(l|lt|litri)\b/.test(t) ? 'l' : 'pz'; }
+  function caricoSheet() {
+    function row() {
+      return '<div class="car-row"><div class="rc-row"><input class="car-n" type="text" list="car-list" placeholder="Articolo" aria-label="Articolo"><input class="car-q" type="text" inputmode="decimal" placeholder="Q.tà" aria-label="Quantità" enterkeyhint="next">' +
+        '<button type="button" class="rc-x" aria-label="Togli riga">×</button></div><span class="hint car-h"></span></div>';
+    }
+    var body = '<p class="context">Una riga per articolo con la quantità arrivata. Se scrivi un articolo che non c’è, lo crea in magazzino.</p>' +
+      '<datalist id="car-list">' + S.mag.slice().sort(byName).map(function (m) { return '<option value="' + esc(m.nome) + '">'; }).join('') + '</datalist>' +
+      '<datalist id="forn-list">' + fornitori().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
+      '<div id="car-rows" style="display:flex;flex-direction:column;gap:10px">' + row() + row() + row() + '</div>' +
+      '<button type="button" class="link self-start" id="car-add">＋ Aggiungi riga</button>' +
+      '<div class="lbl">Dettagli (facoltativi)</div>' +
+      '<div class="grid2">' + field(lab('f-cf', 'Fornitore'), inp('f-cf', '', 'type="text" list="forn-list" autocapitalize="words" placeholder="es. Nautica Rossi"')) +
+      field(lab('f-cb', 'Numero bolla'), inp('f-cb', '', 'type="text" placeholder="es. 1234"')) + '</div>' +
+      field(lab('f-cd', 'Giorno'), inp('f-cd', todayISO(), 'type="date"'));
+    openSheet({
+      title: 'Carico di più articoli', submitLabel: 'Carica', body: body,
+      onOpen: function (f) {
+        var box = f.querySelector('#car-rows');
+        function hint(d) {
+          var n = d.querySelector('.car-n').value.trim(), h = d.querySelector('.car-h'), m = magByName(n);
+          h.className = 'hint car-h' + (n && !m ? ' t-soon' : '');
+          h.textContent = !n ? '' : m ? 'In magazzino adesso: ' + fmtQ(stockMap()[m.id] || 0, m.um) : 'Articolo nuovo: lo aggiungo al magazzino (' + umGuess(n) + ')';
+        }
+        function add() { box.insertAdjacentHTML('beforeend', row()); var ns = box.querySelectorAll('.car-n'); ns[ns.length - 1].focus(); }
+        f.querySelector('#car-add').addEventListener('click', add);
+        box.addEventListener('input', function (e) { var d = e.target.closest('.car-row'); if (d && e.target.classList.contains('car-n')) hint(d); });
+        box.addEventListener('click', function (e) { var x = e.target.closest('.rc-x'); if (x) { x.closest('.car-row').remove(); if (!box.children.length) add(); } });
+        box.addEventListener('keydown', function (e) {
+          if (e.key !== 'Enter' || !e.target.classList.contains('car-q')) return;
+          e.preventDefault(); var d = e.target.closest('.car-row');
+          if (d.nextElementSibling) d.nextElementSibling.querySelector('.car-n').focus(); else add();
+        });
+      },
+      onSubmit: async function (f) {
+        var rows = [], bad = '';
+        Array.prototype.forEach.call(f.querySelectorAll('#car-rows .car-row'), function (d) {
+          var n = d.querySelector('.car-n').value.trim(), q = parseDec(d.querySelector('.car-q').value.trim());
+          if (!n && q == null) return;
+          if (!n) bad = 'Manca il nome dell’articolo in una riga.'; else if (q == null || q <= 0) bad = 'Scrivi la quantità arrivata di ' + n + '.'; else rows.push({ n: n, q: q, el: d });
+        });
+        if (bad) { formErr(bad); return false; }
+        if (!rows.length) { formErr('Scrivi almeno un articolo con la quantità.'); return false; }
+        var forn = val(f, 'f-cf'), bolla = val(f, 'f-cb'), giorno = val(f, 'f-cd') || todayISO(), now = new Date().toISOString(), nuovi = 0, nuoviId = {};
+        for (var i = 0; i < rows.length; i++) {
+          var r = rows[i], m = magByName(r.n), id = m ? m.id : nuoviId[r.n.toLowerCase()];
+          if (!id) {
+            var ref = S.db.collection('magazzino').doc(), d = { nome: r.n, tipo: guessTipo(r.n), categoria: guessProdCat(r.n), um: umGuess(r.n), minimo: null, fornitore: forn, qtaOrdine: null, inLista: false, note: '', codice: '', creato: now, modificato: now };
+            if (!(await w(function () { return ref.set(d); }))) return false;
+            id = ref.id; nuoviId[r.n.toLowerCase()] = id; nuovi++;
+          }
+          var mr = S.db.collection('movimenti').doc(), mv = { articoloId: id, qta: r.q, tipo: 'carico', data: giorno, utente: S.myId || '', creato: now, fornitore: forn, bolla: bolla };
+          if (!(await w(function () { return mr.set(mv); }))) { formErr('Caricati ' + i + ' articoli su ' + rows.length + ': li ho tolti dall’elenco, controlla la connessione e carica gli altri.'); return false; }
+          r.el.remove();
+        }
+        toast('Caricati ' + rows.length + (rows.length === 1 ? ' articolo' : ' articoli') + (nuovi ? ', ' + nuovi + (nuovi === 1 ? ' nuovo' : ' nuovi') : ''));
+        return true;
+      }
+    });
+  }
   function movesFor(id) {
     var out = [];
-    S.mov.forEach(function (x) { if (x.articoloId === id) out.push({ data: x.data, t: x.tipo === 'rettifica' ? 'Correzione giacenza' : 'Carico', q: num(x.qta) || 0 }); });
+    S.mov.forEach(function (x) { if (x.articoloId === id) out.push({ data: x.data, t: x.tipo === 'rettifica' ? 'Correzione giacenza' : ['Carico', x.bolla ? 'bolla ' + x.bolla : '', x.fornitore].filter(Boolean).join(' · '), q: num(x.qta) || 0 }); });
     S.lavori.forEach(function (l) { (l.ricambi || []).forEach(function (r) { if (r.articoloId === id) out.push({ data: l.data, t: (l.titolo || 'Lavoro') + ' · ' + lavBoatLabel(l), q: -(num(r.qta) || 0) }); }); });
     return out.sort(function (a, b) { return String(b.data || '').localeCompare(String(a.data || '')); }).slice(0, 15);
   }
@@ -6372,7 +6677,7 @@ button.row:active, .row .hit:active { opacity: .65; }
 
   async function markLavDone(l) {
     var r = S.db.collection('lavori').doc(l.id);
-    if (await w(function () { return r.update({ stato: 'fatto', modificato: new Date().toISOString() }); })) toast('Lavorazione segnata come fatta');
+    if (await w(function () { return r.update({ stato: 'fatto', modificato: new Date().toISOString() }); })) { await syncProg(Object.assign({}, l, { stato: 'fatto' })); toast('Lavorazione segnata come fatta'); }
   }
   async function deleteExamples() {
     var refs = [];
@@ -6433,6 +6738,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       case 'vari-done': V.variDone = !V.variDone; render(); break;
       case 'new-mag': magSheet(null); break;
       case 'mag-shop': shopSheet(); break;
+      case 'mag-carico': caricoSheet(); break;
       case 'demo-reset': if (window.__NM_DEMO && window.__NM_DEMO.reset) window.__NM_DEMO.reset(); break;
       case 'pan-per': V.panPer = t.getAttribute('data-p'); render(); break;
       case 'pan-by': V.panBy = t.getAttribute('data-b'); render(); break;
