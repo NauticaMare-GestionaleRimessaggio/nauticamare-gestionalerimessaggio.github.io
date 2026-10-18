@@ -44,9 +44,10 @@ service cloud.firestore {
     }
 
     // Tutti i dati del cantiere: solo per chi lavora al cantiere ed è stato approvato.
-    // Nell'app «cancellare» vuol dire scrivere { _del: true }: lo può fare solo l'amministratore,
-    // tranne che per le cose proprie (mansioni della scheda, giornate confermate, richieste di ferie
-    // non ancora decise) e per i posti al porto, che si liberano spostando le barche.
+    // Nell'app «cancellare» vuol dire scrivere { _del: true }. L'amministratore cancella tutto; gli altri
+    // ciò che hanno aggiunto loro (creatoDa), le proprie mansioni della scheda, le proprie giornate
+    // confermate, le proprie richieste di ferie non ancora decise, e i posti al porto (spostare le barche).
+    // Chi ha aggiunto una cosa non si può cambiare.
     // Le mansioni della scheda, le giornate confermate e le ferie si modificano solo se sono proprie.
     match /{coll}/{id} {
       function nuovo() { return request.resource.data; }
@@ -62,17 +63,21 @@ service cloud.firestore {
       function ferieOk(d) { return coll != 'assenze' || cancellato(d) || d.get('stato', '') == 'richiesta' || (d.get('stato', '') == 'approvata' && d.get('tipo', '') == 'malattia'); }
       function puoCancellare(d) {
         return coll == 'posti'
+          || (coll != 'assenze' && d.get('creatoDa', '') == request.auth.uid)
           || (coll == 'lavori' && d.get('fonte', '') == 'scheda' && mio(d))
           || (coll == 'conferme' && mio(d))
           || (coll == 'assenze' && mio(d) && d.get('stato', '') == 'richiesta');
       }
+      function autoreOk(d) { return d.get('creatoDa', request.auth.uid) == request.auth.uid; }
+      function autoreUguale() { return cancellato(resource.data) || nuovo().get('creatoDa', '') == resource.data.get('creatoDa', ''); }
       function datiCantiere() { return !(coll in ['utenti', 'config', 'cestino']); }
 
       allow read: if staff() && datiCantiere();
-      allow create: if datiCantiere() && (admin() || (staff() && !cancellato(nuovo()) && proprio(nuovo()) && ferieOk(nuovo())));
+      allow create: if datiCantiere() && (admin() || (staff() && !cancellato(nuovo()) && proprio(nuovo()) && ferieOk(nuovo()) && autoreOk(nuovo())));
       allow update: if datiCantiere() && (admin() || (staff() && (
         cancellato(nuovo()) ? (cancellato(resource.data) || puoCancellare(resource.data))
           : (proprio(resource.data) && proprio(nuovo()) && ferieOk(nuovo())
+            && (cancellato(resource.data) ? autoreOk(nuovo()) : autoreUguale())
             && (coll != 'assenze' || cancellato(resource.data) || resource.data.get('stato', '') == 'richiesta')))));
       allow delete: if datiCantiere() && admin();
     }

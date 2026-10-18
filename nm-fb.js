@@ -7,7 +7,7 @@
   var CFG = window.NM_FIREBASE_CONFIG || null;
   var COLLS = ['barche', 'lavori', 'scadenze', 'dipendenti', 'conferme', 'impostazioni', 'magazzino', 'movimenti', 'vari', 'modelli',
     'checkBarca', 'checklist', 'opModelli', 'operazioni', 'mezzi', 'attrezzatura', 'programma', 'cariche', 'posti', 'richieste', 'rifiuti', 'ritiri', 'scadCantiere', 'preventivi', 'assenze'];
-  var RUOLI = { base: 'Dipendente', editor: 'Può cancellare', admin: 'Amministratore', cliente: 'Cliente' };
+  var RUOLI = { base: 'Dipendente', editor: 'Dipendente', admin: 'Amministratore', cliente: 'Cliente' }; // «editor» era «Può cancellare»: ora vale come Dipendente
   var FULL_EVERY = 7 * 864e5;            // una rilettura completa a settimana per sicurezza
   var GIF0 = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 
@@ -214,11 +214,17 @@
       setTimeout(function () { if (!done) { done = true; res(); } }, 1200);
     });
   }
+  var DELG = { id: '', t: 0 };
   function write(name, id, kind, data) {
     var L = live(name), r = fs.collection(name).doc(id), ts = FV.serverTimestamp(), p;
     L.pend = L.pend || {};
     if (kind === 'set') {
-      var x = enc(clone(data) || {}); x._ts = ts; p = r.set(x); L.map[id] = clone(data); L.pend[id] = 'set';
+      data = Object.assign({}, data || {});
+      // chi l'ha aggiunto: serve per sapere chi può cancellarlo. Si conserva quando si riscrive.
+      var prev = L.map[id];
+      if (prev && prev.creatoDa) data.creatoDa = prev.creatoDa;
+      else if (!prev && L.ready && !data.creatoDa && ME && name !== 'portale') data.creatoDa = ME.uid;
+      var x = enc(clone(data)); x._ts = ts; p = r.set(x); L.map[id] = clone(data); L.pend[id] = 'set';
     } else if (kind === 'update') {
       if (L.ready && !L.map[id]) return Promise.reject({ code: 'not_found', message: 'Elemento non trovato' });
       var u = {}, d = data || {};
@@ -232,7 +238,8 @@
       if (!canDel(name, old)) return Promise.reject({ code: 'permission_denied', message: 'Può cancellarlo solo un amministratore' });
       if (old) { // una copia va nel cestino, nella stessa scrittura
         var b = fs.batch();
-        b.set(fs.collection('cestino').doc(rid('c')), { coll: name, docId: id, dati: enc(clone(old)), da: ME.uid, daNome: ME.nome || '', il: nowISO(), _ts: ts });
+        if (Date.now() - DELG.t > 3000) DELG.id = rid('g'); DELG.t = Date.now(); // cancellate di seguito (una barca con i suoi lavori): stesso gruppo
+        b.set(fs.collection('cestino').doc(rid('c')), { coll: name, docId: id, dati: enc(clone(old)), gruppo: DELG.id, da: ME.uid, daNome: ME.nome || '', il: nowISO(), _ts: ts });
         b.set(r, { _del: true, _ts: ts }); p = b.commit();
       } else p = r.set({ _del: true, _ts: ts });
       delete L.map[id]; L.pend[id] = 'del';
@@ -241,14 +248,15 @@
     emit(L); save(L);
     return settle(p, L);
   }
-  // chi può cancellare: l'amministratore tutto; gli altri le proprie mansioni della scheda, le proprie
-  // giornate confermate, le proprie richieste di ferie non ancora decise, e i posti al porto (spostare le barche).
+  // chi può cancellare: l'amministratore tutto; gli altri ciò che hanno aggiunto loro, le proprie mansioni della
+  // scheda, le proprie giornate confermate, le proprie richieste di ferie non ancora decise, e i posti al porto.
   // Le stesse regole stanno in firestore.rules.
   function canDel(name, d) {
     if (!ME) return false;
     if (ME.ruolo === 'admin') return true;
     if (!d) return false;
     if (name === 'posti') return true;
+    if (name !== 'assenze' && d.creatoDa === ME.uid) return true; // l'ha aggiunto chi cancella
     if (name === 'lavori') return d.fonte === 'scheda' && d.utente === ME.uid;
     if (name === 'conferme') return d.utente === ME.uid;
     if (name === 'assenze') return d.utente === ME.uid && d.stato === 'richiesta';
@@ -543,11 +551,11 @@
     CEST = { loading: true, items: [] };
     purgeCestino().then(function () { return fs.collection('cestino').orderBy('il', 'desc').limit(400).get(); }).then(function (s) {
       var cut = cestCutoff(), items = s.docs.map(function (d) { var x = d.data(); x.id = d.id; x.dati = dec(x.dati || {}); return x; }).filter(function (x) { return x.il >= cut; });
-      // raggruppo ciò che la stessa persona ha cancellato a pochi secondi di distanza
+      // raggruppo ciò che è stato cancellato insieme
       var groups = [];
       items.forEach(function (x) {
         var g = groups[groups.length - 1];
-        if (g && g.da === x.da && Date.parse(g.last) - Date.parse(x.il) < 15000) { g.items.push(x); g.last = x.il; } else groups.push({ da: x.da, daNome: x.daNome, il: x.il, last: x.il, items: [x] });
+        if (g && g.da === x.da && (x.gruppo ? x.gruppo === g.gruppo : Date.parse(g.last) - Date.parse(x.il) < 15000)) { g.items.push(x); g.last = x.il; } else groups.push({ da: x.da, daNome: x.daNome, gruppo: x.gruppo, il: x.il, last: x.il, items: [x] });
       });
       CEST = { items: items, groups: groups }; renderPanel();
     }, function (e) { CEST = { err: errOf(e).code, items: [] }; renderPanel(); });
@@ -602,7 +610,7 @@
         var u = UT[id], self = id === ME.uid, a = '', isCl = u.ruolo === 'cliente';
         if (u.stato === 'in_attesa') a = '<button class="b pri" data-nm="ok" data-id="' + id + '">' + (u.tipo === 'cliente' ? 'Approva come cliente' : 'Approva') + '</button><button class="b red" data-nm="no" data-id="' + id + '">Rifiuta</button>';
         else if (u.stato === 'attivo') a = self ? '<span class="note" style="margin:0">Sei tu</span>' :
-          '<select data-nm="ruolo" data-id="' + id + '">' + Object.keys(RUOLI).map(function (r) { return '<option value="' + r + '"' + (u.ruolo === r ? ' selected' : '') + '>' + RUOLI[r] + '</option>'; }).join('') + '</select>' +
+          '<select data-nm="ruolo" data-id="' + id + '">' + ['base', 'admin', 'cliente'].map(function (r) { return '<option value="' + r + '"' + ((u.ruolo === 'editor' ? 'base' : u.ruolo) === r ? ' selected' : '') + '>' + RUOLI[r] + '</option>'; }).join('') + '</select>' +
           '<button class="b red" data-nm="block" data-id="' + id + '">Sospendi</button>';
         else a = '<button class="b" data-nm="ok" data-id="' + id + '">Riattiva</button>';
         if (isCl && u.stato === 'attivo') {
@@ -617,7 +625,7 @@
       h = '<div class="top"><button class="back" data-nm="close">‹ Indietro</button><h3>Utenti e permessi</h3><span style="min-width:64px"></span></div>' +
         sec('In attesa di approvazione', by('in_attesa')) + sec('Cantiere', by('attivo').filter(function (id) { return UT[id].ruolo !== 'cliente'; })) +
         sec('Clienti', by('attivo').filter(function (id) { return UT[id].ruolo === 'cliente'; })) + sec('Sospesi', by('bloccato')) +
-        '<p class="note"><b>Dipendente</b> e <b>Può cancellare</b>: usano tutta l’app; cancellano e modificano solo le proprie mansioni e richieste di ferie (oltre a liberare i posti al porto). <b>Amministratore</b>: in più cancella tutto, recupera dal cestino, approva le ferie e i colleghi e cambia i permessi. ' +
+        '<p class="note"><b>Dipendente</b>: usa tutta l’app; cancella solo ciò che ha aggiunto, modifica solo le proprie mansioni e richieste di ferie. <b>Amministratore</b>: in più cancella tutto, vede il cestino, approva le ferie e i colleghi e cambia i permessi. ' +
         '<b>Cliente</b>: vede solo le barche che gli colleghi, con stato, posto e lavori eseguiti, senza ore né nomi dei dipendenti.</p>' +
         (olds.length ? '<p class="note"><b>Collega ai dati vecchi</b>: dopo aver ripristinato la copia presa da Claude, scegli chi era quella persona. Mansioni, ore e giornate confermate passano al nuovo account.</p>' : '') +
         '<p class="note">Per far entrare un collega mandagli il link dell’app: si registra da solo e compare qui sopra, in attesa.</p>';
