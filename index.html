@@ -5648,7 +5648,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (V.tab === 'barche' && V.boatId && boatById(V.boatId)) {
       var b = boatById(V.boatId);
       if (V.boatView === 'resoconto') { t.innerHTML = '<div class="l"><button type="button" class="icon-btn blue" data-act="res-back" aria-label="Torna alla scheda">' + I.back + '</button></div><h1>Resoconto</h1><div class="r"></div>'; return; }
-      t.innerHTML = '<div class="l"><button type="button" class="icon-btn blue" data-act="back" aria-label="Torna alle barche">' + I.back + '</button></div><h1>' + esc(b.nome || 'Barca') + '</h1>' +
+      t.innerHTML = '<div class="l"><button type="button" class="icon-btn blue" data-act="back" aria-label="Torna alle barche">' + I.back + '</button>' + '<button type="button" class="icon-btn" data-act="gq-open" aria-label="Cerca in tutto">' + I.search + '</button>' + '</div><h1>' + esc(b.nome || 'Barca') + '</h1>' +
         '<div class="r">' + (S.canWrite ? '<button type="button" class="icon-btn blue" data-act="edit-boat" data-id="' + esc(b.id) + '" aria-label="Modifica scheda">' + I.pencil + '</button>' : '') + '</div>';
       return;
     }
@@ -5664,7 +5664,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var addAct = ({ scheda: S.myId ? 'new-entry' : '', lavori: 'new-lav', vari: 'new-vari', magazzino: 'new-mag', checklist: 'new-modello', operazioni: 'new-op', ore: '', backup: '', notifiche: '', programma: 'new-prog', pannello: '', batterie: '', rifiuti: 'rif-new', scadcantiere: 'sc-new', preventivi: 'prev-new', assenze: S.myId ? 'ass-new' : '', misure: '' })[V.tab];
     if (addAct == null) addAct = 'add-menu';
     var ro = S.status === 'ready' && !S.canWrite ? ' · sola lettura' : '';
-    t.innerHTML = '<div class="l">' + left + '</div><h1' + (V.tab === 'home' ? ' id="logo-slot"' : '') + '>' + (V.tab === 'home' ? '' : titles[V.tab] + ro) + '</h1>' +
+    t.innerHTML = '<div class="l">' + left + (S.status === 'ready' ? '<button type="button" class="icon-btn" data-act="gq-open" aria-label="Cerca in tutto">' + I.search + '</button>' : '') + '</div><h1' + (V.tab === 'home' ? ' id="logo-slot"' : '') + '>' + (V.tab === 'home' ? '' : titles[V.tab] + ro) + '</h1>' +
       '<div class="r">' + (S.status === 'ready' ? '<button type="button" class="icon-btn" data-act="go-map" aria-label="Mappa del cantiere">' + I.map + '</button>' : '') + (add && addAct ? '<button type="button" class="icon-btn" data-act="' + addAct + '" aria-label="Aggiungi">' + I.plus + '</button>' : '') + '</div>';
     if (V.tab === 'home') { var slot = $('#logo-slot'); if (slot) slot.appendChild(LOGO_IMG); }
   }
@@ -5701,6 +5701,96 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (V.tab === 'mappa' && S.status === 'ready') { if (M.area === 'porto') { M.mounted = null; Porto.mount(); } else { M.mounted = M.mode; mapMount(); } } else M.mounted = null;
     if (S.status !== 'loading') hideSplash();
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (sel) el.setSelectionRange(sel[0], sel[1]); } catch (e) { } } }
+  }
+
+  /* ---------- Ricerca unica: la lente in alto cerca in tutto ---------- */
+  function gqNorm(s) { return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
+  // punteggio: 0 = non trovato; più alto se le parole sono all'inizio del nome
+  function gqScore(words, title, rest) {
+    var t = gqNorm(title), all = t + ' ' + gqNorm(rest.filter(Boolean).join(' ')), sc = 1;
+    for (var i = 0; i < words.length; i++) {
+      var w = words[i];
+      if (all.indexOf(w) < 0) return 0;
+      if (t.indexOf(w) === 0) sc += 4; else if ((' ' + t).indexOf(' ' + w) >= 0) sc += 2; else if (t.indexOf(w) >= 0) sc += 1;
+    }
+    return sc;
+  }
+  function gqRow(act, id, title, sub, side) {
+    return '<button type="button" class="row" data-act="gq-go" data-k="' + act + '" data-id="' + esc(id) + '"><span class="main"><span class="title">' + esc(title) + '</span>' +
+      (sub ? '<span class="sub">' + esc(sub) + '</span>' : '') + '</span>' + (side ? '<span class="side"><span class="cap">' + esc(side) + '</span></span>' : '') + '</button>';
+  }
+  function gqResults(q) {
+    var words = gqNorm(q).split(' ').filter(Boolean);
+    if (!words.length || gqNorm(q).length < 2) return '<p class="context">Scrivi il nome di una barca o di un cliente, un articolo, un codice, un lavoro o una scadenza.</p>';
+    var groups = [], MAX = 8;
+    function grp(title, items) {
+      items = items.filter(function (x) { return x.s > 0; }).sort(function (a, b) { return b.s - a.s || (a.o || 0) - (b.o || 0); });
+      if (items.length) groups.push('<div class="lbl">' + esc(title) + ' (' + items.length + ')</div><div class="group">' + items.slice(0, MAX).map(function (x) { return x.h; }).join('') + '</div>' +
+        (items.length > MAX ? '<p class="cap">Altri ' + (items.length - MAX) + ': aggiungi una parola per restringere.</p>' : ''));
+    }
+    grp('Barche', S.boats.map(function (b) {
+      return { s: gqScore(words, b.nome, [b.modello, b.posto, b.proprietario, b.immatricolazione, b.motore, b.matricolaMotore, b.telefono, b.email, b.coloreScafo]),
+        h: gqRow('boat', b.id, b.nome || 'Senza nome', [b.modello, b.posto, b.proprietario].filter(Boolean).join(' · '), b.stato || '') };
+    }));
+    var cli = {};
+    S.boats.forEach(function (b) { var p = String(b.proprietario || '').trim(); if (!p) return; var k = gqNorm(p); (cli[k] = cli[k] || { nome: p, boats: [], tel: b.telefono || '' }).boats.push(b); });
+    grp('Clienti', Object.keys(cli).map(function (k) {
+      var c = cli[k];
+      return { s: gqScore(words, c.nome, [c.tel]), h: '<button type="button" class="row" data-act="gq-cli" data-q="' + esc(c.nome) + '"><span class="main"><span class="title">' + esc(c.nome) + '</span><span class="sub">' +
+        esc(c.boats.map(function (b) { return b.nome; }).join(', ') + (c.tel ? ' · ' + c.tel : '')) + '</span></span></button>' };
+    }));
+    var st = stockMap();
+    grp('Magazzino', S.mag.map(function (m) {
+      return { s: gqScore(words, m.nome, [m.codice, m.categoria, m.fornitore, m.note, tipoLabel(m.tipo)]),
+        h: gqRow('mag', m.id, m.nome, [m.codice, m.fornitore].filter(Boolean).join(' · '), 'in magazzino ' + fmtQ(st[m.id] || 0, m.um)) };
+    }));
+    var lv = S.lavori.filter(function (l) { return !l.annullata; });
+    grp('Lavorazioni e scheda lavoro', lv.map(function (l) {
+      var b = l.barcaId && boatById(l.barcaId), open = (l.stato || 'fatto') !== 'fatto';
+      return { s: gqScore(words, l.titolo, [l.descr, b && b.nome, b && b.proprietario, l.categoria, l.utente && nameOf(l.utente), fmtRic(l.ricambi || [])]), o: (open ? 0 : 1e13) - (isoToUTC(l.data) || 0),
+        h: gqRow('lav', l.id, l.titolo || 'Lavoro', [lavBoatLabel(l), l.fonte === 'scheda' && l.utente ? nameOf(l.utente) : '', fmtDate(l.data)].filter(Boolean).join(' · '), open ? (l.stato === 'in_corso' ? 'in corso' : 'da fare') : 'fatto') };
+    }));
+    grp('Scadenze delle barche', S.scadenze.map(function (s) {
+      var b = boatById(s.barcaId), i = scadInfo(s);
+      return { s: gqScore(words, s.tipo, [b && b.nome, b && b.proprietario, s.note]), o: isoToUTC(s.data) || 0, h: gqRow('scad', s.id, (s.tipo || 'Scadenza') + (b ? ' · ' + b.nome : ''), i.text, '') };
+    }));
+    grp('Scadenze del cantiere', (S.scadC || []).map(function (s) {
+      return { s: gqScore(words, s.tipo, [s.rif, scGruppo(s.gruppo), s.note]), o: isoToUTC(s.data) || 0, h: gqRow('scc', s.id, (s.tipo || 'Scadenza') + (s.rif ? ' · ' + s.rif : ''), scGruppo(s.gruppo) + (s.data ? ' · ' + fmtDate(s.data) : ''), '') };
+    }));
+    grp('Preventivi', (S.prev || []).map(function (p) {
+      var b = boatById(p.barcaId);
+      return { s: gqScore(words, p.titolo, [p.numero, b && b.nome, b && b.proprietario, (p.voci || []).map(function (v) { return v.titolo; }).join(' ')]), o: -(isoToUTC(p.data) || 0),
+        h: gqRow('prev', p.id, p.titolo || 'Preventivo', [b ? b.nome : '', p.numero ? 'n. ' + p.numero : '', fmtDate(p.data)].filter(Boolean).join(' · '), p.stato || '') };
+    }));
+    grp('Attrezzatura di bordo', (S.attr || []).map(function (a) {
+      var b = boatById(a.barcaId);
+      return { s: gqScore(words, attrLabel(a), [a.tipo, a.marca, a.modello, a.misure, a.colore, b && b.nome]), h: gqRow('attr', a.id, attrLabel(a), [a.tipo !== attrLabel(a) ? a.tipo : '', a.marca, b ? b.nome : ''].filter(Boolean).join(' · '), '') };
+    }));
+    return groups.length ? groups.join('') : '<p class="context">Nessun risultato per “' + esc(q) + '”.</p>';
+  }
+  function gqOpen() {
+    openSheet({ title: 'Cerca', menu: true, body: '<div class="search">' + I.search + '<input id="gq" type="search" placeholder="Barca, cliente, articolo, lavoro, scadenza…" value="' + esc(V.gq || '') + '" autocomplete="off" aria-label="Cerca in tutto"></div><div id="gq-res" style="margin-top:12px">' + gqResults(V.gq || '') + '</div>',
+      onOpen: function (f) {
+        var inpq = f.querySelector('#gq'), res = f.querySelector('#gq-res'), tm = null;
+        inpq.addEventListener('input', function () { clearTimeout(tm); tm = setTimeout(function () { V.gq = inpq.value; res.innerHTML = gqResults(V.gq); }, 120); });
+        inpq.addEventListener('keydown', function (e) { if (e.key === 'Enter') e.preventDefault(); });
+        setTimeout(function () { inpq.focus(); inpq.select(); }, 60);
+      } });
+  }
+  function gqGo(k, id) {
+    var x;
+    closeSheet();
+    if (k === 'boat') { V.tab = 'barche'; V.boatId = id; V.boatView = null; V.boatLavAll = false; render(); window.scrollTo(0, 0); }
+    else if (k === 'mag') { x = S.mag.find(function (m) { return m.id === id; }); if (x && S.canWrite) magSheet(x); else { V.tab = 'magazzino'; V.boatId = null; V.magQ = x ? x.nome : ''; render(); } }
+    else if (k === 'lav') {
+      x = S.lavori.find(function (l) { return l.id === id; }); if (!x) return;
+      if (x.fonte === 'scheda' ? canEditEntry(x) : S.canWrite) { if (x.fonte === 'scheda') schedaSheet(x); else lavSheet(x); }
+      else if (x.barcaId) gqGo('boat', x.barcaId);
+    }
+    else if (k === 'scad') { x = S.scadenze.find(function (s) { return s.id === id; }); if (x) scadSheet(x); }
+    else if (k === 'scc') { x = (S.scadC || []).find(function (s) { return s.id === id; }); if (x && S.canWrite) scSheet(x); else { V.tab = 'scadcantiere'; V.boatId = null; render(); } }
+    else if (k === 'prev') { x = (S.prev || []).find(function (p) { return p.id === id; }); if (x && S.canWrite) prevSheet(x); else { V.tab = 'preventivi'; V.boatId = null; render(); } }
+    else if (k === 'attr') { x = (S.attr || []).find(function (a) { return a.id === id; }); if (x && S.canWrite) attrSheet(x); else if (x && x.barcaId) gqGo('boat', x.barcaId); }
   }
 
   /* ---------- Fogli ---------- */
@@ -6928,6 +7018,9 @@ button.row:active, .row .hit:active { opacity: .65; }
       case 'bk-save': bkSave(); break;
       case 'back': V.boatId = null; V.boatView = null; render(); window.scrollTo(0, 0); break;
       case 'open-boat': closeLightbox(); V.tab = 'barche'; V.boatId = id; V.boatView = null; V.boatLavAll = false; render(); window.scrollTo(0, 0); break;
+      case 'gq-open': if (S.status === 'ready') gqOpen(); break;
+      case 'gq-go': gqGo(t.getAttribute('data-k'), id); break;
+      case 'gq-cli': x = $('#gq'); if (x) { x.value = V.gq = t.getAttribute('data-q'); $('#gq-res').innerHTML = gqResults(V.gq); } break;
       case 'res-open': V.boatView = 'resoconto'; window.scrollTo(0, 0); render(); break;
       case 'res-back': V.boatView = null; window.scrollTo(0, 0); render(); break;
       case 'res-range': V.resRange = t.getAttribute('data-r'); render(); break;
