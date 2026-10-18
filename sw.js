@@ -2,7 +2,7 @@
    Le pagine del sito: prima la rete (così gli aggiornamenti arrivano subito), se manca il campo la copia salvata.
    Librerie esterne (Firebase, mappa 3D, caratteri): la copia salvata, aggiornata in background.
    I dati non passano di qui: li gestisce Firebase. */
-var V = 'nm-v2';
+var V = 'nm-v3';
 var CORE = ['./', './index.html', './nm-fb.js', './config.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-180.png'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(V).then(function (c) { return c.addAll(CORE); }).then(function () { return self.skipWaiting(); }));
@@ -31,4 +31,20 @@ self.addEventListener('fetch', function (e) {
       });
     }));
   }
+});
+
+/* Notifiche: il riepilogo del mattino arriva da Firebase Cloud Messaging (vedi .github/notifiche/invia.js) */
+self.addEventListener('push', function (e) {
+  var p = {}; try { p = e.data ? e.data.json() : {}; } catch (err) { p = { data: { body: e.data ? e.data.text() : '' } }; }
+  var d = p.data || {}, n = p.notification || {};
+  var title = d.title || n.title || 'Nautica Mare', body = d.body || n.body || '';
+  e.waitUntil(self.registration.showNotification(title, { body: body, icon: './icon-192.png', badge: './icon-192.png', tag: d.tag || 'nm-riepilogo', data: { url: d.url || './' } }));
+});
+self.addEventListener('notificationclick', function (e) {
+  e.notification.close();
+  var url = new URL((e.notification.data && e.notification.data.url) || './', self.location.href).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (cs) {
+    for (var i = 0; i < cs.length; i++) { if (cs[i].url.indexOf(self.location.origin) === 0 && 'focus' in cs[i]) return cs[i].focus(); }
+    return self.clients.openWindow(url);
+  }));
 });

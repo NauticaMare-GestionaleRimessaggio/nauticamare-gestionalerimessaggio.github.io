@@ -9,3 +9,7 @@ window.NM_FIREBASE_CONFIG = {
   messagingSenderId: '417308637094',
   appId: '1:417308637094:web:c45816f45155ae773d4167'
 };
+
+/* Chiave pubblica per le notifiche sul telefono (Firebase › Impostazioni progetto › Cloud Messaging ›
+   Certificati push web › «Coppia di chiavi»). Non è segreta. Finché è vuota le notifiche restano spente. */
+window.NM_VAPID_KEY = '';
