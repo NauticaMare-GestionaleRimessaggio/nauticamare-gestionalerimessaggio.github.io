@@ -1052,7 +1052,8 @@ button.row:active, .row .hit:active { opacity: .65; }
       else if (s.fattaIl) add(s.fattaIl, { k: 's', cls: 'grey', o: s });
     });
     S.vari.forEach(function (v) { add(v.fatto ? (v.fattoIl || v.data) : v.data, { k: 'v', cls: v.fatto ? 'grey' : 'vio', o: v }); });
-    S.lavori.forEach(function (l) { add(l.data, { k: 'l', cls: l.stato === 'fatto' ? '' : l.stato === 'in_corso' ? 'stripe' : 'grey', o: l }); });
+    var inProg = {}; (S.prog || []).forEach(function (x) { if (x.lavId) inProg[x.lavId] = 1; });
+    S.lavori.forEach(function (l) { if (l.fonte !== 'scheda' && inProg[l.id]) return; add(l.data, { k: 'l', cls: l.stato === 'fatto' ? '' : l.stato === 'in_corso' ? 'stripe' : 'grey', o: l }); }); // le lavorazioni nel programma si vedono una volta sola
     (S.prog || []).forEach(function (x) { add(x.data, { k: 'p', cls: x.fatto ? 'grey' : 'teal', o: x }); });
     (S.scadC || []).forEach(function (x) { if (!x.fatta) add(x.data, { k: 'z', cls: scInfo(x).level, o: x }); else if (x.fattaIl) add(x.fattaIl, { k: 'z', cls: 'grey', o: x }); });
     return m;
@@ -3675,7 +3676,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
   function progLinkTxt(x) {
     if (x.opId) { var o = S.ops.find(function (q) { return q.id === x.opId; }); if (o) return 'Servizio: ' + opTitle(o); }
-    if (x.lavId) { var l = S.lavori.find(function (q) { return q.id === x.lavId; }); if (l) return 'Lavorazione: ' + (l.titolo || ''); }
+    if (x.lavId) { var l = S.lavori.find(function (q) { return q.id === x.lavId; }); if (l) return l.titolo === x.testo ? 'Anche tra le lavorazioni' : 'Lavorazione: ' + (l.titolo || ''); }
     return '';
   }
   function progRow(x, list, withPeople) {
@@ -3749,7 +3750,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var canDel = !isNew && (S.isEditor || S.isOwner || !!window.__NM_FB), more = !!(x.mezzi && x.mezzi.length || x.dove || (x.materiali || []).length || x.urgente || x.avvisare || x.note || x.ripeti);
     var b0 = x.barcaId ? boatById(x.barcaId) : null;
     openSheet({
-      title: isNew ? 'Da fare' : 'Cosa da fare', submitLabel: 'Salva', deleteLabel: 'Elimina dal programma', deleteText: 'La togli dal programma. Lavorazioni e servizi collegati restano.',
+      title: isNew ? 'Da fare' : 'Cosa da fare', submitLabel: 'Salva', deleteLabel: 'Elimina dal programma', deleteText: x.lavId && x.lavId === lavCreataDa(x) ? 'La togli dal programma insieme alla sua lavorazione da fare.' : 'La togli dal programma. Lavorazioni e servizi già esistenti collegati restano.',
       body: (ops.length || lavs.length ? field(lab('f-pl', 'Parti da un lavoro aperto (facoltativo)'), '<select id="f-pl">' + linkOpts + '</select>') : '') +
         field(lab('f-pt', 'Cosa c’è da fare'), '<textarea id="f-pt" required placeholder="es. Alaggio Lulu con il travel lift">' + esc(x.testo || '') + '</textarea>') +
         '<div class="grid2">' + field(lab('f-pd', 'Giorno'), inp('f-pd', x.data, 'type="date" required')) + field(lab('f-po', 'Ora d’inizio (facoltativa)'), inp('f-po', x.ora, 'type="time" step="900"')) + '</div>' +
@@ -3772,7 +3773,11 @@ button.row:active, .row .hit:active { opacity: .65; }
         (!isNew && x.fatto && S.myId ? '<button type="button" class="btn sec self-start" data-act="prog-ore" data-id="' + esc(x.id) + '">' + I.clip + 'Segna le ore nella scheda lavoro</button>' : '') +
         (!isNew ? '<button type="button" class="btn sec self-start" data-act="prog-dup" data-id="' + esc(x.id) + '">' + I.plus + 'Copia al giorno dopo</button>' : '') +
         (!isNew && !canDel ? '<p class="cap">Per eliminarla serve il permesso da editor: puoi segnarla fatta o spostarla a un altro giorno.</p>' : ''),
-      item: x, onDelete: canDel ? async function () { if (await delSeq([S.db.collection('programma').doc(x.id)])) { closeSheet(); toast('Tolta dal programma'); } } : null,
+      item: x, onDelete: canDel ? async function () {
+        var refs = [S.db.collection('programma').doc(x.id)], lc = lavCreataDa(x);
+        if (lc && progsOfLav(lc).length === 1) refs.push(S.db.collection('lavori').doc(lc));
+        if (await delSeq(refs)) { closeSheet(); toast(refs.length > 1 ? 'Tolta dal programma e dalle lavorazioni' : 'Tolta dal programma'); }
+      } : null,
       onOpen: function (f) {
         var pl = f.querySelector('#f-pl'), pt = f.querySelector('#f-pt'), pb = f.querySelector('#f-pb'), du = f.querySelector('#f-pdu'), pn = f.querySelector('#f-pn'), auto = '', autoD = '';
         function tog(box, attr) { box.addEventListener('click', function (e) { var c = e.target.closest('[' + attr + ']'); if (c) { c.setAttribute('aria-pressed', String(c.getAttribute('aria-pressed') !== 'true')); ppHint(); } }); }
@@ -3806,16 +3811,59 @@ button.row:active, .row .hit:active { opacity: .65; }
           if (rp === 'd5') { var cur = d.data; for (var i = 0; i < 6; i++) { cur = addDays(cur, 1); var wd = new Date(isoToUTC(cur)).getUTCDay(); if (wd === 6 || wd === 0) break; days.push(cur); } }
           if (rp === 'w4') for (var j = 1; j < 4; j++) days.push(addDays(d.data, 7 * j));
           ok = true;
-          for (var k = 0; k < days.length; k++) { var dd = Object.assign({}, d, { data: days[k], fatto: false, creato: d.modificato, creatoDa: S.myId || '' }), r = S.db.collection('programma').doc(); ok = (await w(function () { return r.set(dd); })) && ok; }
-        } else { var r2 = S.db.collection('programma').doc(x.id); ok = await w(function () { return r2.update(d); }); }
+          var conLav = d.barcaId && !d.lavId && !d.opId && days.length === 1;
+          for (var k = 0; k < days.length; k++) { var dd = Object.assign({}, d, { data: days[k], fatto: false, creato: d.modificato, creatoDa: S.myId || '' }), r = S.db.collection('programma').doc();
+            if (conLav) { dd.lavId = await lavFromProg(dd, r.id); if (!dd.lavId) return false; } ok = (await w(function () { return r.set(dd); })) && ok; }
+        } else {
+          if (d.barcaId && !d.lavId && !d.opId && !x.lavId) { d.lavId = await lavFromProg(Object.assign({}, d, { fatto: !!x.fatto }), x.id); if (!d.lavId) return false; }
+          var r2 = S.db.collection('programma').doc(x.id); ok = await w(function () { return r2.update(d); });
+          if (ok && d.lavId) await syncLav(Object.assign({}, d, { fatto: !!x.fatto }));
+        }
         if (ok) { V.progDay = d.data; toast(isNew ? 'Aggiunto al programma di ' + progDayLabel(d.data).toLowerCase() : 'Programma aggiornato'); }
         return ok;
       }
     });
   }
+  // Programma ↔ lavorazioni: una cosa da fare con la barca è anche una lavorazione da fare, e viceversa.
+  // Creare, spostare, segnare fatto e cancellare da una parte vale anche per l'altra.
+  function lavCreataDa(x) { var l = x.lavId && S.lavori.find(function (q) { return q.id === x.lavId; }); return l && (l.progId === x.id || progsOfLav(l.id).some(function (p) { return p.id === x.id && p.daLavorazione; })) ? l.id : ''; }
+  function progsOfLav(id) { return (S.prog || []).filter(function (x) { return x.lavId === id; }); }
+  async function lavFromProg(d, progId) { // crea la lavorazione per una cosa da fare con la barca; torna l'id
+    var now = new Date().toISOString(), ref = S.db.collection('lavori').doc();
+    var ld = { barcaId: d.barcaId, titolo: d.testo, data: d.data, stato: d.fatto ? 'fatto' : 'da_fare', categoria: guessCatInfo(d.testo).cat || 'Altro', descr: '', oreStima: null, oreLavoro: null, importo: null, oreMotore: null, ricambi: [], foto: [], progId: progId || '', creato: now, modificato: now };
+    return (await w(function () { return ref.set(ld); })) ? ref.id : '';
+  }
+  async function syncLav(d) { // dal programma alla lavorazione collegata
+    var l = d.lavId && S.lavori.find(function (q) { return q.id === d.lavId; }); if (!l) return;
+    var u = {};
+    if (d.data && d.data !== l.data) u.data = d.data;
+    if (d.testo && d.testo !== l.titolo) u.titolo = d.testo;
+    if (d.barcaId && d.barcaId !== l.barcaId) u.barcaId = d.barcaId;
+    if (d.fatto != null) { var st = d.fatto ? 'fatto' : (l.stato === 'fatto' ? 'da_fare' : l.stato); if (st !== l.stato) u.stato = st; }
+    if (!Object.keys(u).length) return;
+    u.modificato = new Date().toISOString(); var r = S.db.collection('lavori').doc(l.id); await w(function () { return r.update(u); });
+  }
+  async function syncProg(l) { // dalla lavorazione alle cose da fare collegate
+    var list = progsOfLav(l.id);
+    for (var i = 0; i < list.length; i++) {
+      var x = list[i], u = {};
+      if (list.length === 1 && l.data && l.data !== x.data) u.data = l.data;
+      if (l.titolo && l.titolo !== x.testo) u.testo = l.titolo;
+      if (l.barcaId && l.barcaId !== x.barcaId) u.barcaId = l.barcaId;
+      var on = l.stato === 'fatto'; if (on !== !!x.fatto) Object.assign(u, on ? { fatto: true, fattoDa: S.myId || '', fattoIl: new Date().toISOString() } : { fatto: false, fattoDa: '', fattoIl: '' });
+      if (!Object.keys(u).length) continue;
+      u.modificato = new Date().toISOString(); var r = S.db.collection('programma').doc(x.id); await w(function () { return r.update(u); });
+    }
+  }
+  async function progFromLav(l, id) { // una lavorazione da fare nuova va anche nel programma del suo giorno
+    var now = new Date().toISOString(), r = S.db.collection('programma').doc();
+    var d = { testo: l.titolo, data: l.data, ora: '', durata: l.oreStima || null, nPers: null, pers: [], chi: '', barcaId: l.barcaId, opId: '', lavId: id, mezzi: [], dove: '', materiali: [], urgente: false, avvisare: false, note: '', fatto: false, creato: now, modificato: now, creatoDa: S.myId || '', daLavorazione: true };
+    await w(function () { return r.set(d); });
+  }
   async function progTick(x) {
     var r = S.db.collection('programma').doc(x.id), now = new Date().toISOString(), on = !x.fatto;
     if (!(await w(function () { return r.update(on ? { fatto: true, fattoDa: S.myId || '', fattoIl: now } : { fatto: false, fattoDa: '', fattoIl: '' }); }))) return;
+    if (x.lavId) await syncLav({ lavId: x.lavId, fatto: on });
     if (on && S.myId) toast('Fatto! Ricordati di segnare le ore nella scheda lavoro');
   }
   async function progDup(x) {
@@ -3824,7 +3872,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
   async function progBring() {
     var t = todayISO(), list = progLeft(t), ok = true;
-    for (var i = 0; i < list.length; i++) { var r = S.db.collection('programma').doc(list[i].id); ok = (await w(function () { return r.update({ data: t, modificato: new Date().toISOString() }); })) && ok; }
+    for (var i = 0; i < list.length; i++) { var r = S.db.collection('programma').doc(list[i].id); ok = (await w(function () { return r.update({ data: t, modificato: new Date().toISOString() }); })) && ok; if (list[i].lavId && progsOfLav(list[i].lavId).length === 1) await syncLav({ lavId: list[i].lavId, data: t }); }
     if (ok) toast(list.length === 1 ? 'Portato a oggi' : list.length + ' cose portate a oggi');
   }
   function homeProgHtml() {
@@ -5903,7 +5951,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     openSheet({
       title: isNew ? 'Nuova lavorazione' : 'Modifica lavorazione', body: body, deleteLabel: 'Elimina lavorazione', foto: l.foto,
       deleteText: 'Elimini “' + (l.titolo || 'questa lavorazione') + '”. Non si può annullare.',
-      item: l, onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('lavori').doc(l.id)])) { closeSheet(); toast('Lavorazione eliminata'); } },
+      item: l, onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('lavori').doc(l.id)].concat(progsOfLav(l.id).map(function (x) { return S.db.collection('programma').doc(x.id); })))) { closeSheet(); toast('Lavorazione eliminata'); } },
       onOpen: function (f) {
         var se = f.querySelector('#f-oreStima'), auto = null;
         function upd() {
@@ -5943,8 +5991,8 @@ button.row:active, .row .hit:active { opacity: .65; }
         var aid = await attrLinkSave(f, data.barcaId); if (aid === null) return false; if (aid !== undefined) data.attrId = aid === '__nuova' ? '' : aid;
         var ok;
         var lid = null;
-        if (isNew) { data.creato = data.modificato; var ref = S.db.collection('lavori').doc(); lid = ref.id; ok = await w(function () { return ref.set(data); }); }
-        else { lid = l.id; var r2 = S.db.collection('lavori').doc(l.id); ok = await w(function () { return r2.update(data); }); }
+        if (isNew) { data.creato = data.modificato; var ref = S.db.collection('lavori').doc(); lid = ref.id; ok = await w(function () { return ref.set(data); }); if (ok && data.stato !== 'fatto') await progFromLav(data, lid); }
+        else { lid = l.id; var r2 = S.db.collection('lavori').doc(l.id); ok = await w(function () { return r2.update(data); }); if (ok) await syncProg(Object.assign({ id: l.id }, data)); }
         if (ok) { await bumpOre(data.barcaId, data.oreMotore); toast(isNew ? 'Lavorazione aggiunta' : 'Lavorazione salvata'); if (data.stato === 'fatto') rifSuggest(data, lid, isNew ? [] : l.ricambi, isNew || l.stato !== 'fatto'); }
         return ok;
       }
@@ -6629,7 +6677,7 @@ button.row:active, .row .hit:active { opacity: .65; }
 
   async function markLavDone(l) {
     var r = S.db.collection('lavori').doc(l.id);
-    if (await w(function () { return r.update({ stato: 'fatto', modificato: new Date().toISOString() }); })) toast('Lavorazione segnata come fatta');
+    if (await w(function () { return r.update({ stato: 'fatto', modificato: new Date().toISOString() }); })) { await syncProg(Object.assign({}, l, { stato: 'fatto' })); toast('Lavorazione segnata come fatta'); }
   }
   async function deleteExamples() {
     var refs = [];
