@@ -410,7 +410,7 @@ button.row:active, .row .hit:active { opacity: .65; }
 /* Ricambi nelle mansioni */
 .rc-box { display: flex; flex-direction: column; gap: 8px; }
 .sr-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 40px; gap: 8px; align-items: center; }
-.sr-row input { width: 100%; min-width: 0; min-height: 44px; font: inherit; font-size: 16px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.sr-row input, .car-row input { width: 100%; min-width: 0; min-height: 44px; font: inherit; font-size: 16px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
 #f-righe:not(:empty) { display: flex; flex-direction: column; gap: 8px; margin-top: -4px; }
 .rc-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 40px; gap: 8px; align-items: center; }
 .rc-x { height: 44px; border: 0; border-radius: 8px; background: var(--card-2); color: var(--muted); font-size: 1.2rem; }
@@ -5414,6 +5414,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
   function viewMagazzino() {
     return exampleBanner() + '<div class="search">' + I.search + '<input id="mq" type="search" placeholder="Cerca articolo, tipo o categoria" value="' + esc(V.magQ) + '" autocomplete="off" aria-label="Cerca nel magazzino"></div>' +
+      (S.canWrite ? '<button type="button" class="btn" data-act="mag-carico" style="width:100%;margin-top:10px">' + I.plus + 'Carico di più articoli (bolla)</button>' : '') +
       (S.mag.length ? '<button type="button" class="btn sec" data-act="mag-find" style="width:100%;margin-top:10px">' + I.camera + 'Trova col codice a barre</button>' : '') +
       (S.mag.length ? '<button type="button" class="btn sec" data-act="mag-shop" style="width:100%;margin-top:10px">' + I.cart + 'Lista della spesa' + (shopList().length ? ' · ' + shopList().length + (shopList().length === 1 ? ' articolo' : ' articoli') : '') + '</button>' : '') +
       (S.mag.length ? '<div class="chips" role="group" aria-label="Raggruppa gli articoli" style="margin-top:10px"><button type="button" data-act="mag-group" data-g="tipo" aria-pressed="' + (V.magGroup !== 'cat') + '">Per tipo</button><button type="button" data-act="mag-group" data-g="cat" aria-pressed="' + (V.magGroup === 'cat') + '">Per categoria</button><button type="button" data-act="mag-group" data-g="forn" aria-pressed="' + (V.magGroup === 'forn') + '">Per fornitore</button></div>' : '') +
@@ -6252,9 +6253,70 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
 
   /* Magazzino */
+  // Carico di più articoli insieme (per esempio da una bolla): una riga per articolo; un nome nuovo crea l'articolo
+  function umGuess(n) { var t = String(n || '').toLowerCase(); return /tanica/.test(t) ? 'tanica' : /latta/.test(t) ? 'latta' : /guant/.test(t) ? 'paia' : /nastr|scotch|rotol/.test(t) ? 'rotolo' : /\d\s?(l|lt|litri)\b/.test(t) ? 'l' : 'pz'; }
+  function caricoSheet() {
+    function row() {
+      return '<div class="car-row"><div class="rc-row"><input class="car-n" type="text" list="car-list" placeholder="Articolo" aria-label="Articolo"><input class="car-q" type="text" inputmode="decimal" placeholder="Q.tà" aria-label="Quantità" enterkeyhint="next">' +
+        '<button type="button" class="rc-x" aria-label="Togli riga">×</button></div><span class="hint car-h"></span></div>';
+    }
+    var body = '<p class="context">Una riga per articolo con la quantità arrivata. Se scrivi un articolo che non c’è, lo crea in magazzino.</p>' +
+      '<datalist id="car-list">' + S.mag.slice().sort(byName).map(function (m) { return '<option value="' + esc(m.nome) + '">'; }).join('') + '</datalist>' +
+      '<datalist id="forn-list">' + fornitori().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
+      '<div id="car-rows" style="display:flex;flex-direction:column;gap:10px">' + row() + row() + row() + '</div>' +
+      '<button type="button" class="link self-start" id="car-add">＋ Aggiungi riga</button>' +
+      '<div class="lbl">Dettagli (facoltativi)</div>' +
+      '<div class="grid2">' + field(lab('f-cf', 'Fornitore'), inp('f-cf', '', 'type="text" list="forn-list" autocapitalize="words" placeholder="es. Nautica Rossi"')) +
+      field(lab('f-cb', 'Numero bolla'), inp('f-cb', '', 'type="text" placeholder="es. 1234"')) + '</div>' +
+      field(lab('f-cd', 'Giorno'), inp('f-cd', todayISO(), 'type="date"'));
+    openSheet({
+      title: 'Carico di più articoli', submitLabel: 'Carica', body: body,
+      onOpen: function (f) {
+        var box = f.querySelector('#car-rows');
+        function hint(d) {
+          var n = d.querySelector('.car-n').value.trim(), h = d.querySelector('.car-h'), m = magByName(n);
+          h.className = 'hint car-h' + (n && !m ? ' t-soon' : '');
+          h.textContent = !n ? '' : m ? 'In magazzino adesso: ' + fmtQ(stockMap()[m.id] || 0, m.um) : 'Articolo nuovo: lo aggiungo al magazzino (' + umGuess(n) + ')';
+        }
+        function add() { box.insertAdjacentHTML('beforeend', row()); var ns = box.querySelectorAll('.car-n'); ns[ns.length - 1].focus(); }
+        f.querySelector('#car-add').addEventListener('click', add);
+        box.addEventListener('input', function (e) { var d = e.target.closest('.car-row'); if (d && e.target.classList.contains('car-n')) hint(d); });
+        box.addEventListener('click', function (e) { var x = e.target.closest('.rc-x'); if (x) { x.closest('.car-row').remove(); if (!box.children.length) add(); } });
+        box.addEventListener('keydown', function (e) {
+          if (e.key !== 'Enter' || !e.target.classList.contains('car-q')) return;
+          e.preventDefault(); var d = e.target.closest('.car-row');
+          if (d.nextElementSibling) d.nextElementSibling.querySelector('.car-n').focus(); else add();
+        });
+      },
+      onSubmit: async function (f) {
+        var rows = [], bad = '';
+        Array.prototype.forEach.call(f.querySelectorAll('#car-rows .car-row'), function (d) {
+          var n = d.querySelector('.car-n').value.trim(), q = parseDec(d.querySelector('.car-q').value.trim());
+          if (!n && q == null) return;
+          if (!n) bad = 'Manca il nome dell’articolo in una riga.'; else if (q == null || q <= 0) bad = 'Scrivi la quantità arrivata di ' + n + '.'; else rows.push({ n: n, q: q, el: d });
+        });
+        if (bad) { formErr(bad); return false; }
+        if (!rows.length) { formErr('Scrivi almeno un articolo con la quantità.'); return false; }
+        var forn = val(f, 'f-cf'), bolla = val(f, 'f-cb'), giorno = val(f, 'f-cd') || todayISO(), now = new Date().toISOString(), nuovi = 0, nuoviId = {};
+        for (var i = 0; i < rows.length; i++) {
+          var r = rows[i], m = magByName(r.n), id = m ? m.id : nuoviId[r.n.toLowerCase()];
+          if (!id) {
+            var ref = S.db.collection('magazzino').doc(), d = { nome: r.n, tipo: guessTipo(r.n), categoria: guessProdCat(r.n), um: umGuess(r.n), minimo: null, fornitore: forn, qtaOrdine: null, inLista: false, note: '', codice: '', creato: now, modificato: now };
+            if (!(await w(function () { return ref.set(d); }))) return false;
+            id = ref.id; nuoviId[r.n.toLowerCase()] = id; nuovi++;
+          }
+          var mr = S.db.collection('movimenti').doc(), mv = { articoloId: id, qta: r.q, tipo: 'carico', data: giorno, utente: S.myId || '', creato: now, fornitore: forn, bolla: bolla };
+          if (!(await w(function () { return mr.set(mv); }))) { formErr('Caricati ' + i + ' articoli su ' + rows.length + ': li ho tolti dall’elenco, controlla la connessione e carica gli altri.'); return false; }
+          r.el.remove();
+        }
+        toast('Caricati ' + rows.length + (rows.length === 1 ? ' articolo' : ' articoli') + (nuovi ? ', ' + nuovi + (nuovi === 1 ? ' nuovo' : ' nuovi') : ''));
+        return true;
+      }
+    });
+  }
   function movesFor(id) {
     var out = [];
-    S.mov.forEach(function (x) { if (x.articoloId === id) out.push({ data: x.data, t: x.tipo === 'rettifica' ? 'Correzione giacenza' : 'Carico', q: num(x.qta) || 0 }); });
+    S.mov.forEach(function (x) { if (x.articoloId === id) out.push({ data: x.data, t: x.tipo === 'rettifica' ? 'Correzione giacenza' : ['Carico', x.bolla ? 'bolla ' + x.bolla : '', x.fornitore].filter(Boolean).join(' · '), q: num(x.qta) || 0 }); });
     S.lavori.forEach(function (l) { (l.ricambi || []).forEach(function (r) { if (r.articoloId === id) out.push({ data: l.data, t: (l.titolo || 'Lavoro') + ' · ' + lavBoatLabel(l), q: -(num(r.qta) || 0) }); }); });
     return out.sort(function (a, b) { return String(b.data || '').localeCompare(String(a.data || '')); }).slice(0, 15);
   }
@@ -6628,6 +6690,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       case 'vari-done': V.variDone = !V.variDone; render(); break;
       case 'new-mag': magSheet(null); break;
       case 'mag-shop': shopSheet(); break;
+      case 'mag-carico': caricoSheet(); break;
       case 'demo-reset': if (window.__NM_DEMO && window.__NM_DEMO.reset) window.__NM_DEMO.reset(); break;
       case 'pan-per': V.panPer = t.getAttribute('data-p'); render(); break;
       case 'pan-by': V.panBy = t.getAttribute('data-b'); render(); break;
