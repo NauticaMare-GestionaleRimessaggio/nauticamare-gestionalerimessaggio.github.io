@@ -228,11 +228,31 @@
       Object.keys(d).forEach(function (k) { if (d[k] && d[k].__delete__) delete m[k]; else m[k] = clone(d[k]); });
       L.map[id] = m; L.pend[id] = 'set';
     } else {
-      p = r.set({ _del: true, _ts: ts }); delete L.map[id]; L.pend[id] = 'del';
+      var old = L.map[id];
+      if (!canDel(name, old)) return Promise.reject({ code: 'permission_denied', message: 'Può cancellarlo solo un amministratore' });
+      if (old) { // una copia va nel cestino, nella stessa scrittura
+        var b = fs.batch();
+        b.set(fs.collection('cestino').doc(rid('c')), { coll: name, docId: id, dati: enc(clone(old)), da: ME.uid, daNome: ME.nome || '', il: nowISO(), _ts: ts });
+        b.set(r, { _del: true, _ts: ts }); p = b.commit();
+      } else p = r.set({ _del: true, _ts: ts });
+      delete L.map[id]; L.pend[id] = 'del';
     }
     p.then(function () { if (L.pend) delete L.pend[id]; }, function () { if (L.pend) delete L.pend[id]; });
     emit(L); save(L);
     return settle(p, L);
+  }
+  // chi può cancellare: l'amministratore tutto; gli altri le proprie mansioni della scheda, le proprie
+  // giornate confermate, le proprie richieste di ferie non ancora decise, e i posti al porto (spostare le barche).
+  // Le stesse regole stanno in firestore.rules.
+  function canDel(name, d) {
+    if (!ME) return false;
+    if (ME.ruolo === 'admin') return true;
+    if (!d) return false;
+    if (name === 'posti') return true;
+    if (name === 'lavori') return d.fonte === 'scheda' && d.utente === ME.uid;
+    if (name === 'conferme') return d.utente === ME.uid;
+    if (name === 'assenze') return d.utente === ME.uid && d.stato === 'richiesta';
+    return false;
   }
   function ref(name, id) {
     return {
@@ -487,6 +507,7 @@
     D.start.then(function () { return whenReady(D, 15000); }).then(function () {
       if (ME && !D.map[ME.uid]) write('dipendenti', ME.uid, 'set', { nome: ME.nome || '', modificato: nowISO() }).catch(function () { });
     });
+    if (ME && ME.ruolo === 'admin') setTimeout(purgeCestino, 5000);
     // aperto dal link per portare i dati dall'app di Claude
     if (IMP_KEY) setTimeout(offerImport, 800);
   }
@@ -498,12 +519,65 @@
     var rows = [];
     if (ME.ruolo === 'admin') {
       var n = Object.keys(UT).filter(function (id) { return UT[id].stato === 'in_attesa'; }).length;
-      rows.push(['utenti', 'users', n ? 'soon' : '', 'Utenti e permessi', 'Approva i colleghi e decidi chi può cancellare', n ? '<span class="pill soon">' + n + (n === 1 ? ' in attesa' : ' in attesa') + '</span>' : '']);
+      rows.push(['utenti', 'users', n ? 'soon' : '', 'Utenti e permessi', 'Approva i colleghi e decidi i permessi', n ? '<span class="pill soon">' + n + (n === 1 ? ' in attesa' : ' in attesa') + '</span>' : '']);
     }
+    if (ME.ruolo === 'admin') rows.push(['cestino', 'trash', '', 'Cestino', 'Ciò che è stato cancellato negli ultimi 60 giorni: si può recuperare', '']);
     rows.push(['account', 'out', '', 'Il mio account', (ME.email || '') + ' · ' + (RUOLI[ME.ruolo] || ''), '']);
     return rows;
   }
-  function open(k) { PAN = k; renderPanel(); }
+  function open(k) { PAN = k; if (k === 'cestino') CEST = null; renderPanel(); }
+
+  /* ---------- cestino (solo amministratori) ---------- */
+  var CEST = null, CEST_DAYS = 60;
+  var CEST_NOMI = { barche: 'Barca', lavori: 'Lavoro o mansione', scadenze: 'Scadenza', vari: 'Varo o alaggio', magazzino: 'Ricambio', movimenti: 'Movimento di magazzino',
+    operazioni: 'Servizio', opModelli: 'Gruppo di servizi', mezzi: 'Mezzo', conferme: 'Giornata confermata', posti: 'Posto al porto', attrezzatura: 'Attrezzatura', programma: 'Programma',
+    cariche: 'Carica batterie', richieste: 'Richiesta', rifiuti: 'Rifiuto', ritiri: 'Ritiro rifiuti', scadCantiere: 'Scadenza del cantiere', preventivi: 'Preventivo', assenze: 'Ferie o permesso',
+    checklist: 'Checklist', modelli: 'Modello di checklist', checkBarca: 'Lista della barca', dipendenti: 'Dipendente', impostazioni: 'Impostazione' };
+  function cestCutoff() { return new Date(Date.now() - CEST_DAYS * 864e5).toISOString(); }
+  function purgeCestino() { // toglie per sempre ciò che è nel cestino da più di 60 giorni
+    return fs.collection('cestino').where('il', '<', cestCutoff()).limit(200).get().then(function (s) {
+      if (!s.size) return; var b = fs.batch(); s.docs.forEach(function (d) { b.delete(d.ref); }); return b.commit();
+    }).catch(function () { });
+  }
+  function loadCestino() {
+    CEST = { loading: true, items: [] };
+    purgeCestino().then(function () { return fs.collection('cestino').orderBy('il', 'desc').limit(400).get(); }).then(function (s) {
+      var cut = cestCutoff(), items = s.docs.map(function (d) { var x = d.data(); x.id = d.id; x.dati = dec(x.dati || {}); return x; }).filter(function (x) { return x.il >= cut; });
+      // raggruppo ciò che la stessa persona ha cancellato a pochi secondi di distanza
+      var groups = [];
+      items.forEach(function (x) {
+        var g = groups[groups.length - 1];
+        if (g && g.da === x.da && Date.parse(g.last) - Date.parse(x.il) < 15000) { g.items.push(x); g.last = x.il; } else groups.push({ da: x.da, daNome: x.daNome, il: x.il, last: x.il, items: [x] });
+      });
+      CEST = { items: items, groups: groups }; renderPanel();
+    }, function (e) { CEST = { err: errOf(e).code, items: [] }; renderPanel(); });
+  }
+  function cestLabel(x) { var d = x.dati || {}; return String(d.nome || d.titolo || d.tipo || d.descr || d.cliente || d.data || x.docId).slice(0, 80); }
+  function cestinoHtml() {
+    if (!CEST || CEST.loading) return '<div class="spin" style="width:28px;height:28px;border-radius:50%;border:3px solid #33355a;border-top-color:#2f8ff0;margin:30px auto;animation:nmspin 1s linear infinite"></div>';
+    if (CEST.err) return '<p class="note">Non riesco a leggere il cestino (' + esc(CEST.err) + '). Se hai appena aggiornato le regole del database, riprova tra un minuto.</p>';
+    if (!CEST.groups.length) return '<p class="note">Il cestino è vuoto.</p>';
+    return '<div class="grp">' + CEST.groups.map(function (g, i) {
+      var first = g.items[g.items.length - 1], when = new Date(g.il).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      var main = g.items.filter(function (x) { return x.coll === 'barche'; })[0] || first;
+      var extra = g.items.length > 1 ? ' e altre ' + (g.items.length - 1) + (g.items.length === 2 ? ' cosa' : ' cose') : '';
+      return '<div class="u"><div class="nm">' + esc(cestLabel(main)) + '<span class="pill">' + esc(CEST_NOMI[main.coll] || main.coll) + '</span></div>' +
+        '<div class="em">' + esc(extra ? 'Insieme' + extra : '') + (extra ? ' · ' : '') + 'cancellato da ' + esc(g.daNome || (UT[g.da] && UT[g.da].nome) || 'qualcuno') + ' · ' + esc(when) + '</div>' +
+        '<div class="acts"><button class="b pri" data-nm="rec" data-id="' + i + '">Recupera</button></div></div>';
+    }).join('') + '</div>';
+  }
+  async function recuperaGruppo(i) {
+    var g = CEST && CEST.groups && CEST.groups[i]; if (!g) return;
+    var busy = g.items.filter(function (x) { return live(x.coll).map[x.docId]; });
+    if (busy.length && !confirm(busy.length === 1 ? 'Nel frattempo è stato creato di nuovo un elemento con lo stesso posto: lo sostituisco con quello recuperato?' : busy.length + ' elementi sono stati ricreati nel frattempo: li sostituisco con quelli recuperati?')) return;
+    var ok = 0, fail = 0;
+    for (var k = 0; k < g.items.length; k++) {
+      var x = g.items[k];
+      try { await write(x.coll, x.docId, 'set', x.dati); await settle(fs.collection('cestino').doc(x.id).delete()); ok++; } catch (e) { fail++; }
+    }
+    toast(fail ? 'Recuperate ' + ok + ', ' + fail + ' non riuscite: riprova.' : ok === 1 ? 'Recuperato' : 'Recuperate ' + ok + ' cose');
+    CEST = null; renderPanel();
+  }
   function closePanel() { PAN = null; var p = $('#nmpan'); if (p) p.remove(); }
   function oldPeople() {
     var D = LIVE.dipendenti ? LIVE.dipendenti.map : {};
@@ -543,10 +617,14 @@
       h = '<div class="top"><button class="back" data-nm="close">‹ Indietro</button><h3>Utenti e permessi</h3><span style="min-width:64px"></span></div>' +
         sec('In attesa di approvazione', by('in_attesa')) + sec('Cantiere', by('attivo').filter(function (id) { return UT[id].ruolo !== 'cliente'; })) +
         sec('Clienti', by('attivo').filter(function (id) { return UT[id].ruolo === 'cliente'; })) + sec('Sospesi', by('bloccato')) +
-        '<p class="note"><b>Dipendente</b>: usa tutta l’app, ma non cancella dal programma. <b>Può cancellare</b>: anche le cancellazioni riservate. <b>Amministratore</b>: in più approva i colleghi e cambia i permessi. ' +
+        '<p class="note"><b>Dipendente</b> e <b>Può cancellare</b>: usano tutta l’app; cancellano e modificano solo le proprie mansioni e richieste di ferie (oltre a liberare i posti al porto). <b>Amministratore</b>: in più cancella tutto, recupera dal cestino, approva le ferie e i colleghi e cambia i permessi. ' +
         '<b>Cliente</b>: vede solo le barche che gli colleghi, con stato, posto e lavori eseguiti, senza ore né nomi dei dipendenti.</p>' +
         (olds.length ? '<p class="note"><b>Collega ai dati vecchi</b>: dopo aver ripristinato la copia presa da Claude, scegli chi era quella persona. Mansioni, ore e giornate confermate passano al nuovo account.</p>' : '') +
         '<p class="note">Per far entrare un collega mandagli il link dell’app: si registra da solo e compare qui sopra, in attesa.</p>';
+    } else if (PAN === 'cestino' && ME.ruolo === 'admin') {
+      h = '<div class="top"><button class="back" data-nm="close">‹ Indietro</button><h3>Cestino</h3><span style="min-width:64px"></span></div>' + cestinoHtml() +
+        '<p class="note">Qui finisce tutto ciò che viene cancellato, con chi l’ha cancellato e quando. Dopo 60 giorni sparisce per sempre. Le cose cancellate insieme (per esempio una barca con i suoi lavori) si recuperano insieme.</p>';
+      if (!CEST) loadCestino();
     } else { closePanel(); return; }
     p.innerHTML = h;
   }
@@ -554,6 +632,7 @@
     var t = e.target.closest && e.target.closest('#nmpan [data-nm]'); if (!t || t.tagName === 'SELECT') return;
     var k = t.getAttribute('data-nm'), id = t.getAttribute('data-id');
     if (k === 'close') closePanel();
+    else if (k === 'rec') { t.disabled = true; recuperaGruppo(+id); }
     else if (k === 'out') logout();
     else if (k === 'pw') auth.sendPasswordResetEmail(ME.email).then(function () { toast('Ti ho mandato l’email per cambiare la password.'); }, function (er) { toast(authErr(er)); });
     else if (k === 'ok') {
