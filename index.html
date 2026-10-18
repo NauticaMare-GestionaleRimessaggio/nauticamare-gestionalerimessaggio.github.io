@@ -409,6 +409,9 @@ button.row:active, .row .hit:active { opacity: .65; }
 
 /* Ricambi nelle mansioni */
 .rc-box { display: flex; flex-direction: column; gap: 8px; }
+.sr-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 40px; gap: 8px; align-items: center; }
+.sr-row input { width: 100%; min-width: 0; min-height: 44px; font: inherit; font-size: 16px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+#f-righe:not(:empty) { display: flex; flex-direction: column; gap: 8px; margin-top: -4px; }
 .rc-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 40px; gap: 8px; align-items: center; }
 .rc-x { height: 44px; border: 0; border-radius: 8px; background: var(--card-2); color: var(--muted); font-size: 1.2rem; }
 .self-start { align-self: flex-start; }
@@ -517,6 +520,7 @@ button.row:active, .row .hit:active { opacity: .65; }
 .bp-btn .bp-t.ph { color: var(--muted); }
 .bp-btn svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
 .bp-pan { border: 1px solid var(--accent); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--card); }
+.bp-pan[hidden] { display: none; }
 .bp-pan input[type="search"] { width: 100%; min-height: 44px; font: inherit; font-size: 16px; color: var(--ink); background: var(--bg, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
 .bp-pan .chips { margin-top: 0; }
 .bp-pan .chips button { padding: 6px 12px; font-size: .84rem; border: 1px solid var(--line); }
@@ -1142,6 +1146,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     }
     var sv = [];
     if (num(b.lunghezza) != null) { var bbm = beamOf(b); sv.push([fmtNum(b.lunghezza, 2) + ' × ' + fmtNum(bbm.B, 2) + ' m', bbm.est ? 'Lunghezza × larghezza (stimata)' : 'Lunghezza × larghezza']); }
+    var oreB = boatOre(b.id); if (oreB) sv.push([fmtH(oreB), 'Ore lavorate, tutti']);
     if (b.anno) sv.push([b.anno, 'Anno']);
     if (num(b.potenza) != null) sv.push([fmtNum(b.potenza) + ' cv' + (num(b.nMotori) > 1 ? ' ×' + b.nMotori : ''), 'Potenza']);
     var schedaTile = '<div class="tile"><span class="tile-h"><span class="t-ok">' + I.boat + '</span>Scheda</span>' +
@@ -6062,6 +6067,8 @@ button.row:active, .row .hit:active { opacity: .65; }
         field(lab('f-nbCli', 'Cliente (facoltativo)'), inp('f-nbCli', '', 'type="text" autocapitalize="words" placeholder="es. Mario Rossi"')) + '</div>' +
       '<div id="f-opWrap">' + field(lab('f-opE', 'Servizio di cantiere'), '<select id="f-opE"></select>', 'Se scegli un servizio, compari tra chi ci ha lavorato.') + '<p class="cap" id="f-opStima" style="margin:-4px 2px 0" hidden></p></div>' +
       field(lab('f-mans', 'Cosa hai fatto'), '<textarea id="f-mans" required placeholder="es. lucidatura paratie esterne in gelcoat blu">' + esc(l.titolo || '') + '</textarea>') +
+      (isNew ? '<div id="f-righe"></div><button type="button" class="link self-start" id="f-addRiga" style="margin-top:-6px">＋ Aggiungi riga: altra lavorazione con le sue ore</button>' : '') +
+      '<p class="cap t-acc" id="f-totB" style="margin:-4px 2px 0" hidden></p>' +
       field(lab('f-catE', 'Categoria'), '<select id="f-catE">' + opts([['', 'Automatica in base al testo']].concat(CATEGORIE), isNew ? '' : (l.categoria || '')) + '</select>') +
       attrLinkBlock(l.attrId) +
       rcBlock(l.ricambi) + photoBlock(l.foto);
@@ -6078,6 +6085,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       },
       onOpen: function (f) {
         var bs = f.querySelector('#f-barcaE'), os = f.querySelector('#f-opE'), ds = f.querySelector('#f-dataE'), ms = f.querySelector('#f-mans'), oe = f.querySelector('#f-oreE');
+        righeInit(f, isNew ? null : l);
         var auto = l.opId ? (ms.value === opTitle(S.ops.find(function (x) { return x.id === l.opId; }) || {}) ? ms.value : null) : null;
         function stima() {
           var o = S.ops.find(function (x) { return x.id === os.value; }), p = $('#f-opStima'), tx = o ? opStima(o).txt : '';
@@ -6128,6 +6136,9 @@ button.row:active, .row .hit:active { opacity: .65; }
         }
         if (!mans) { formErr('Scrivi cosa hai fatto.'); return false; }
         if (ore == null || ore <= 0 || ore > 24) { formErr('Scrivi le ore lavorate, per esempio 8 oppure 2,5.'); return false; }
+        var righe = isNew ? righeRead(f) : [];
+        if (righe === null) return false;
+        if (ore + righe.reduce(function (t, r) { return t + r.ore; }, 0) > 24) { formErr('In tutto fanno più di 24 ore nella stessa giornata: controlla le righe.'); return false; }
         var now = new Date().toISOString();
         if (bv === '__nuova') {
           var nref = S.db.collection('barche').doc();
@@ -6152,11 +6163,53 @@ button.row:active, .row .hit:active { opacity: .65; }
           data.stato = 'fatto'; data.descr = ''; data.importo = null; data.oreMotore = null; data.utente = S.myId; data.fonte = 'scheda'; data.creato = now;
           if (isConfirmed(S.myId, giorno)) data.aggiuntaDopoConferma = true;
           var ref = S.db.collection('lavori').doc(); ok = await w(function () { return ref.set(data); });
+          for (var ri = 0; ok && ri < righe.length; ri++) {
+            var rd = Object.assign({}, data, { titolo: righe[ri].titolo, oreLavoro: righe[ri].ore, categoria: guessCatInfo(righe[ri].titolo, '', bv === '__cantiere').cat || 'Altro', ricambi: [], foto: [], attrId: '', opId: '' });
+            var rr = S.db.collection('lavori').doc(); ok = await w(function () { return rr.set(rd); });
+          }
         } else { var r2 = S.db.collection('lavori').doc(l.id); ok = await w(function () { return r2.update(data); }); }
-        if (ok) { V.schedaDay = giorno; toast(isNew ? 'Mansione salvata' : 'Mansione aggiornata'); render(); rifSuggest(data, isNew ? ref.id : l.id, isNew ? [] : l.ricambi, isNew || !!l.daSegnare); }
+        if (ok) { V.schedaDay = giorno; toast(isNew ? (righe.length ? 'Salvate ' + (righe.length + 1) + ' righe' : 'Mansione salvata') : 'Mansione aggiornata'); render(); rifSuggest(data, isNew ? ref.id : l.id, isNew ? [] : l.ricambi, isNew || !!l.daSegnare); }
         return ok;
       }
     });
+  }
+  // Scheda a righe: altre lavorazioni con le loro ore sulla stessa barca e giornata; ognuna diventa una mansione
+  function boatOre(boatId, exceptId) {
+    var t = 0; if (!boatId) return 0;
+    S.lavori.forEach(function (x) { if (x.fonte === 'scheda' && x.barcaId === boatId && x.id !== exceptId && !x.daSegnare && num(x.oreLavoro) > 0) t += num(x.oreLavoro); });
+    return t;
+  }
+  function righeInit(f, l) {
+    var box = f.querySelector('#f-righe'), add = f.querySelector('#f-addRiga'), bs = f.querySelector('#f-barcaE');
+    function tot() {
+      var p = f.querySelector('#f-totB'), b = boatById(bs.value); if (!p) return;
+      if (!b) { p.hidden = true; return; }
+      var qui = parseDec(val(f, 'f-oreE')) || 0;
+      if (box) Array.prototype.forEach.call(box.querySelectorAll('.sr-o'), function (i) { qui += parseDec(i.value.trim()) || 0; });
+      var prima = boatOre(b.id, l && l.id);
+      p.hidden = false;
+      p.textContent = 'Totale ore su ' + (b.nome || 'questa barca') + ', di tutti e in tutti i giorni: ' + fmtH(prima + qui) + (qui && prima ? ' (' + fmtH(qui) + ' in questa scheda)' : '');
+    }
+    function row() {
+      var d = document.createElement('div'); d.className = 'sr-row';
+      d.innerHTML = '<input class="sr-t" type="text" placeholder="Altra lavorazione" aria-label="Altra lavorazione"><input class="sr-o" type="text" inputmode="decimal" placeholder="Ore" aria-label="Ore"><button type="button" class="rc-x" aria-label="Togli riga">×</button>';
+      d.querySelector('.rc-x').addEventListener('click', function () { d.remove(); tot(); });
+      box.appendChild(d); d.querySelector('.sr-t').focus();
+    }
+    if (add) add.addEventListener('click', row);
+    f.addEventListener('input', function (e) { if (e.target.id === 'f-oreE' || (e.target.classList && e.target.classList.contains('sr-o'))) tot(); });
+    bs.addEventListener('change', tot);
+    tot();
+  }
+  function righeRead(f) {
+    var out = [], bad = false;
+    Array.prototype.forEach.call(f.querySelectorAll('#f-righe .sr-row'), function (d) {
+      var t = d.querySelector('.sr-t').value.trim(), o = parseDec(d.querySelector('.sr-o').value.trim());
+      if (!t && o == null) return;
+      if (!t || o == null || o <= 0 || o > 24) bad = true; else out.push({ titolo: t, ore: o });
+    });
+    if (bad) { formErr('In ogni riga in più scrivi la lavorazione e le ore, oppure togli la riga con ×.'); return null; }
+    return out;
   }
   async function saveNome(n) {
     if (!S.myId) return false;
