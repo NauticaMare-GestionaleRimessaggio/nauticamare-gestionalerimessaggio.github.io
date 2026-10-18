@@ -3297,7 +3297,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       openSheet({
         title: 'Posto ' + b.id, body: body, submitLabel: 'Salva',
         deleteLabel: d.gestione === 'nostro' ? 'Libera il posto' : 'Riporta alla Marina', deleteText: d.gestione === 'nostro' ? 'Tolgo barca, cliente e contratto: il posto resta vostro e torna libero.' : 'Tolgo barca e cliente: il posto torna della Marina.',
-        onDelete: postoDoc(b.id) ? async function () {
+        ownDel: true, onDelete: postoDoc(b.id) ? async function () {
           var ref = S.db.collection('posti').doc(b.id), ok;
           if (d.gestione === 'nostro') ok = await w(function () { return ref.set({ gestione: 'nostro', barcaId: '', cliente: '', telefono: '', contratto: '', fino: '', note: '', modificato: new Date().toISOString() }); });
           else ok = await delSeq([ref]);
@@ -3952,7 +3952,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     openSheet({
       title: isNew ? 'Ferie o permesso' : assTipo(a.tipo) + ' · ' + nameOf(a.utente), submitLabel: canEdit ? 'Salva' : 'Chiudi',
       deleteLabel: own && a.stato === 'richiesta' ? 'Ritira la richiesta' : 'Elimina', deleteText: 'La togli dall’elenco delle assenze.',
-      onDelete: !isNew && (admin || (own && a.stato === 'richiesta')) ? async function () { if (await delSeq([S.db.collection('assenze').doc(a.id)])) { closeSheet(); toast('Tolta'); } } : null,
+      ownDel: own && a.stato === 'richiesta', onDelete: !isNew && (admin || (own && a.stato === 'richiesta')) ? async function () { if (await delSeq([S.db.collection('assenze').doc(a.id)])) { closeSheet(); toast('Tolta'); } } : null,
       body: (admin ? field(lab('f-au', 'Per chi'), '<select id="f-au"' + (canEdit ? '' : ' disabled') + '>' + people.map(function (id) { return '<option value="' + esc(id) + '"' + (id === a.utente ? ' selected' : '') + '>' + esc(id === S.myId ? 'Io · ' + nameOf(id) : nameOf(id)) + '</option>'; }).join('') + '</select>') : '') +
         field(lab('f-at', 'Che cosa'), '<select id="f-at"' + (canEdit ? '' : ' disabled') + '>' + opts(ASS_TIPI, a.tipo) + '</select>') +
         '<div class="grid2" id="f-aGg">' + field(lab('f-ad', 'Dal'), inp('f-ad', a.dal, 'type="date"' + (canEdit ? '' : ' disabled'))) + field(lab('f-aa', 'Al (compreso)'), inp('f-aa', a.al, 'type="date"' + (canEdit ? '' : ' disabled'))) + '</div>' +
@@ -5065,7 +5065,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (cw) t += '<div class="add-row"><input id="op-new" type="text" placeholder="Aggiungi una voce solo per questa volta" aria-label="Nuova voce"><button type="submit" class="btn sec">Aggiungi</button></div>';
     t += field('<label for="op-note">Note</label>', '<textarea id="op-note"' + (cw ? '' : ' disabled') + ' placeholder="es. serviti due giri di manovra per la palma">' + esc(o.note || '') + '</textarea>');
     if (cw) t += '<div class="m-acts">' + (done ? '<button type="button" class="btn sec" data-act="op-reopen">Riapri</button>' : '<button type="button" class="btn" data-act="op-complete">' + I.check + 'Completa servizio</button>') + '</div>' +
-      '<button type="button" class="btn danger-ghost self-start" data-act="op-del">Elimina servizio</button>';
+      (canDelAll() ? '<button type="button" class="btn danger-ghost self-start" data-act="op-del">Elimina servizio</button>' : '');
     box.innerHTML = t;
     var ne = $('#op-note'); if (ne) ne.addEventListener('change', function () { if (SHEET.op) { SHEET.op.note = ne.value; saveOp({ note: ne.value }); } });
   }
@@ -5541,6 +5541,9 @@ button.row:active, .row .hit:active { opacity: .65; }
   function closeSheet() { $('#sheet-root').innerHTML = ''; document.body.classList.remove('locked'); SHEET.onDelete = null; SHEET.foto = []; SHEET.run = null; SHEET.op = null; }
   function openSheet(o) {
     closeSheet();
+    // sul sito: cancella solo l'amministratore, tranne ciò che è proprio (ownDel); ciò che si cancella va nel cestino
+    if (o.onDelete && window.__NM_FB && !S.isOwner && !o.ownDel) o.onDelete = null;
+    if (o.onDelete && window.__NM_FB && o.deleteText) o.deleteText = o.deleteText.replace(/ ?Non si può annullare\.?/, '') + ' Resta nel cestino per 60 giorni.';
     SHEET.onDelete = o.onDelete || null;
     SHEET.foto = (o.foto || []).slice();
     var del = o.onDelete ? '<div class="danger-zone"><button type="button" class="btn danger-ghost" data-act="ask-del" id="ask-del">' + esc(o.deleteLabel || 'Elimina') + '</button>' +
@@ -5641,6 +5644,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
   function closeLightbox() { var d = $('#lightbox'); if (d) d.remove(); }
 
+  function canDelAll() { return !window.__NM_FB || S.isOwner; }
   async function delSeq(refs) { for (var i = 0; i < refs.length; i++) { var r = refs[i]; if (!(await w(function () { return r.delete(); }))) return false; } return true; }
 
   function addMenu(date, boat) {
@@ -5896,6 +5900,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
 
   function schedaSheet(l, preset) {
+    if (l && window.__NM_FB && !S.isOwner && l.utente && l.utente !== S.myId) { toast('La mansione è di ' + nameOf(l.utente) + ': la può modificare solo chi l’ha segnata o un amministratore.', true); return; }
     var isNew = !l; l = l || Object.assign({ data: V.schedaDay || todayISO(), barcaId: null, categoria: '' }, preset || {});
     var boats = S.boats.slice().sort(byName);
     var sel = '<select id="f-barcaE" required><option value=""' + (isNew && !l.barcaId ? ' selected' : '') + ' disabled>Scegli la barca</option>' +
@@ -5917,7 +5922,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       attrLinkBlock(l.attrId) +
       rcBlock(l.ricambi) + photoBlock(l.foto);
     openSheet({
-      title: isNew ? 'Nuova mansione' : l.daSegnare ? 'Segna il tuo tempo' : 'Modifica mansione', body: body, deleteLabel: l.daSegnare ? 'Non ci ho lavorato' : 'Elimina mansione', foto: l.foto,
+      title: isNew ? 'Nuova mansione' : l.daSegnare ? 'Segna il tuo tempo' : 'Modifica mansione', body: body, ownDel: l.utente === S.myId, deleteLabel: l.daSegnare ? 'Non ci ho lavorato' : 'Elimina mansione', foto: l.foto,
       deleteText: !isNew && l.daSegnare ? 'Il servizio sparisce dalla tua scheda.' : !isNew && isConfirmed(l.utente, l.data) ? 'La giornata è già confermata: la mansione resterà visibile barrata come cancellata e non conterà più nelle ore.' : 'Elimini questa mansione dalla scheda e dallo storico della barca.',
       onDelete: isNew ? null : async function () {
         if (!l.daSegnare && isConfirmed(l.utente, l.data)) {
@@ -6353,7 +6358,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       h += '<div class="feat-acts" style="margin-top:14px">' + (done ? '<button type="button" class="btn sec" data-act="ck-reopen">Riapri</button>' : '<button type="button" class="btn" data-act="ck-complete">Segna completata</button>') +
         '<button type="button" class="btn sec" data-act="ck-save-boat">Salva la lista per ' + esc(b ? b.nome : 'la barca') + '</button></div>' +
         '<span class="hint" style="display:block;margin-top:8px">' + (own ? 'Questa barca ha già la sua versione della lista: salvando la aggiorni.' : 'Se togli o aggiungi voci, salva la lista: la prossima volta questa barca ripartirà da qui.') + '</span>' +
-        '<button type="button" class="btn danger-ghost" data-act="ck-delrun" style="margin-top:16px">Elimina checklist</button>';
+        (canDelAll() ? '<button type="button" class="btn danger-ghost" data-act="ck-delrun" style="margin-top:16px">Elimina checklist</button>' : '');
     }
     box.innerHTML = h;
   }

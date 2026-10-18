@@ -36,9 +36,45 @@ service cloud.firestore {
       allow write: if staff();
     }
 
-    // Tutti i dati del cantiere: solo per chi lavora al cantiere ed è stato approvato
+    // Cestino: ogni cancellazione ne lascia qui una copia (per 60 giorni).
+    // La scrive chi cancella, la leggono, recuperano e svuotano solo gli amministratori.
+    match /cestino/{id} {
+      allow read, delete: if admin();
+      allow create: if staff() && request.resource.data.da == request.auth.uid;
+    }
+
+    // Tutti i dati del cantiere: solo per chi lavora al cantiere ed è stato approvato.
+    // Nell'app «cancellare» vuol dire scrivere { _del: true }: lo può fare solo l'amministratore,
+    // tranne che per le cose proprie (mansioni della scheda, giornate confermate, richieste di ferie
+    // non ancora decise) e per i posti al porto, che si liberano spostando le barche.
+    // Le mansioni della scheda, le giornate confermate e le ferie si modificano solo se sono proprie.
     match /{coll}/{id} {
-      allow read, write: if staff() && !(coll in ['utenti', 'config']);
+      function nuovo() { return request.resource.data; }
+      function cancellato(d) { return d.get('_del', false) == true; }
+      function mio(d) { return d.get('utente', '') == request.auth.uid; }
+      // di chi è: vale per le cose personali, tutto il resto è di tutto il cantiere
+      function proprio(d) {
+        return cancellato(d)
+          || ((coll != 'lavori' || d.get('fonte', '') != 'scheda' || mio(d))
+            && (!(coll in ['conferme', 'assenze']) || mio(d)));
+      }
+      // le ferie le approva solo l'amministratore; la malattia si comunica e basta
+      function ferieOk(d) { return coll != 'assenze' || cancellato(d) || d.get('stato', '') == 'richiesta' || (d.get('stato', '') == 'approvata' && d.get('tipo', '') == 'malattia'); }
+      function puoCancellare(d) {
+        return coll == 'posti'
+          || (coll == 'lavori' && d.get('fonte', '') == 'scheda' && mio(d))
+          || (coll == 'conferme' && mio(d))
+          || (coll == 'assenze' && mio(d) && d.get('stato', '') == 'richiesta');
+      }
+      function datiCantiere() { return !(coll in ['utenti', 'config', 'cestino']); }
+
+      allow read: if staff() && datiCantiere();
+      allow create: if datiCantiere() && (admin() || (staff() && !cancellato(nuovo()) && proprio(nuovo()) && ferieOk(nuovo())));
+      allow update: if datiCantiere() && (admin() || (staff() && (
+        cancellato(nuovo()) ? (cancellato(resource.data) || puoCancellare(resource.data))
+          : (proprio(resource.data) && proprio(nuovo()) && ferieOk(nuovo())
+            && (coll != 'assenze' || cancellato(resource.data) || resource.data.get('stato', '') == 'richiesta')))));
+      allow delete: if datiCantiere() && admin();
     }
   }
 }
