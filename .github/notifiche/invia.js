@@ -80,7 +80,9 @@ async function main() {
     var u = utenti[n.utente || n.id];
     return u && u.stato === 'attivo' && STAFF.indexOf(u.ruolo) >= 0 && (n.tokens || []).length;
   });
-  if (!iscritti.length) { console.log('Nessun telefono iscritto.'); }
+  var solo = String(process.env.SOLO_EMAIL || '').trim().toLowerCase();
+  if (solo) iscritti = iscritti.filter(function (n) { return String((utenti[n.utente || n.id] || {}).email || '').toLowerCase() === solo; });
+  if (!iscritti.length) { console.log(solo ? 'Nessun telefono iscritto per ' + solo + '.' : 'Nessun telefono iscritto.'); }
 
   var msg, dest;
   if (prova) {

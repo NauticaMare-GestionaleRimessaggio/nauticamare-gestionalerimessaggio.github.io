@@ -12,6 +12,10 @@ on:
         description: 'Manda una notifica di prova a tutti i telefoni iscritti'
         type: boolean
         default: true
+      email:
+        description: 'Solo a questo account (email); vuoto = a tutti gli iscritti'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -37,4 +41,5 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           PROVA: ${{ github.event_name == 'workflow_dispatch' && inputs.prova && '1' || '' }}
+          SOLO_EMAIL: ${{ github.event_name == 'workflow_dispatch' && inputs.email || '' }}
         run: node invia.js
