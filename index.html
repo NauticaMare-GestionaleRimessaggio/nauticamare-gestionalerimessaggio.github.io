@@ -1954,7 +1954,7 @@ button.row:active, .row .hit:active { opacity: .65; }
         '<span class="hint">Misure in metri, prese dall’angolo del piazzale tra Via Talete e il fondo.</span>' +
         '<div id="f-isc-w"' + (o.k === 'uffici' ? '' : ' hidden') + '>' + field(lab('f-isc', 'Rientranza delle scale esterne'), '<select id="f-isc">' + opts([['', 'Nessuna']].concat(Object.keys(SCALA_ANG).map(function (k) { return [k, SCALA_ANG[k]]; })), o.scala || '') + '</select>') + '</div>',
       onOpen: function (f) { var k = f.querySelector('#f-ik'); k.addEventListener('change', function () { f.querySelector('#f-isc-w').hidden = k.value !== 'uffici'; }); },
-      onDelete: isNew ? null : async function () { list.splice(i, 1); if (await saveMapCfg({ ostacoli: list })) { closeSheet(); toast('Ingombro tolto'); } },
+      ownDel: true, onDelete: isNew ? null : async function () { list.splice(i, 1); if (await saveMapCfg({ ostacoli: list })) { closeSheet(); toast('Ingombro tolto'); } },
       onSubmit: async function (f) {
         var g = function (id) { return parseDec(val(f, id)); }, d = { nome: val(f, 'f-in'), k: val(f, 'f-ik'), x: g('f-ix'), y: g('f-iy'), w: g('f-iw'), h: g('f-ih') };
         if (d.k === 'uffici' && val(f, 'f-isc')) d.scala = val(f, 'f-isc');
@@ -2013,7 +2013,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     openSheet({
       title: isNew ? 'Nuovo mezzo' : 'Modifica mezzo', body: body, deleteLabel: 'Elimina mezzo',
       deleteText: 'Elimini ' + (m.nome || 'questo mezzo') + '. Se ha una barca a bordo, la barca resta sulla mappa.',
-      onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('mezzi').doc(m.id)])) { closeSheet(); if (M.sel === 'm:' + m.id) M.sel = null; toast('Mezzo eliminato'); } },
+      item: m, onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('mezzi').doc(m.id)])) { closeSheet(); if (M.sel === 'm:' + m.id) M.sel = null; toast('Mezzo eliminato'); } },
       onSubmit: async function (f) {
         var L = parseDec(val(f, 'f-mzl')), B = parseDec(val(f, 'f-mzb')), nome = val(f, 'f-mzn');
         if (!nome) { formErr('Scrivi il nome del mezzo.'); return false; }
@@ -3372,7 +3372,7 @@ button.row:active, .row .hit:active { opacity: .65; }
           '<div class="grid2">' + field(lab('f-rl1', 'Lunghezza da (m)'), inp('f-rl1', num(q.Lmin) != null ? String(q.Lmin).replace('.', ',') : '', 'type="text" inputmode="decimal"')) + field(lab('f-rl2', 'a (m)'), inp('f-rl2', num(q.Lmax) != null ? String(q.Lmax).replace('.', ',') : '', 'type="text" inputmode="decimal"')) + '</div>' +
           field(lab('f-rb', 'Budget fino a (€)'), inp('f-rb', num(q.budget) != null ? String(q.budget) : '', 'type="text" inputmode="numeric"')) +
           field(lab('f-rn', 'Note'), '<textarea id="f-rn" placeholder="es. vuole fuoribordo, posto in porto incluso">' + esc(q.note || '') + '</textarea>'),
-        onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('richieste').doc(q.id)])) { closeSheet(); toast('Richiesta eliminata'); } },
+        item: q, onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('richieste').doc(q.id)])) { closeSheet(); toast('Richiesta eliminata'); } },
         onSubmit: async function (f) {
           var d = { chi: val(f, 'f-rc'), telefono: val(f, 'f-rt'), tipo: val(f, 'f-rk'), Lmin: parseDec(val(f, 'f-rl1')), Lmax: parseDec(val(f, 'f-rl2')), budget: parseIntS(val(f, 'f-rb')), note: val(f, 'f-rn'), modificato: new Date().toISOString() };
           if (!d.chi) { formErr('Scrivi chi cerca la barca.'); return false; }
@@ -3716,7 +3716,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     var ops = S.ops.filter(function (o) { return !opDone(o); });
     var linkOpts = '<option value="">Nessuno: scrivo io</option>' + ops.map(function (o) { var b = boatById(o.barcaId); return '<option value="op:' + esc(o.id) + '"' + (x.opId === o.id ? ' selected' : '') + '>' + esc('Servizio · ' + opTitle(o) + (b ? ' · ' + b.nome : '')) + '</option>'; }).join('') +
       lavs.map(function (l) { var b = boatById(l.barcaId); return '<option value="lav:' + esc(l.id) + '"' + (x.lavId === l.id ? ' selected' : '') + '>' + esc((l.titolo || 'Lavorazione') + (b ? ' · ' + b.nome : '')) + '</option>'; }).join('');
-    var canDel = !isNew && (S.isEditor || S.isOwner), more = !!(x.mezzi && x.mezzi.length || x.dove || (x.materiali || []).length || x.urgente || x.avvisare || x.note || x.ripeti);
+    var canDel = !isNew && (S.isEditor || S.isOwner || !!window.__NM_FB), more = !!(x.mezzi && x.mezzi.length || x.dove || (x.materiali || []).length || x.urgente || x.avvisare || x.note || x.ripeti);
     var b0 = x.barcaId ? boatById(x.barcaId) : null;
     openSheet({
       title: isNew ? 'Da fare' : 'Cosa da fare', submitLabel: 'Salva', deleteLabel: 'Elimina dal programma', deleteText: 'La togli dal programma. Lavorazioni e servizi collegati restano.',
@@ -3742,7 +3742,7 @@ button.row:active, .row .hit:active { opacity: .65; }
         (!isNew && x.fatto && S.myId ? '<button type="button" class="btn sec self-start" data-act="prog-ore" data-id="' + esc(x.id) + '">' + I.clip + 'Segna le ore nella scheda lavoro</button>' : '') +
         (!isNew ? '<button type="button" class="btn sec self-start" data-act="prog-dup" data-id="' + esc(x.id) + '">' + I.plus + 'Copia al giorno dopo</button>' : '') +
         (!isNew && !canDel ? '<p class="cap">Per eliminarla serve il permesso da editor: puoi segnarla fatta o spostarla a un altro giorno.</p>' : ''),
-      onDelete: canDel ? async function () { if (await delSeq([S.db.collection('programma').doc(x.id)])) { closeSheet(); toast('Tolta dal programma'); } } : null,
+      item: x, onDelete: canDel ? async function () { if (await delSeq([S.db.collection('programma').doc(x.id)])) { closeSheet(); toast('Tolta dal programma'); } } : null,
       onOpen: function (f) {
         var pl = f.querySelector('#f-pl'), pt = f.querySelector('#f-pt'), pb = f.querySelector('#f-pb'), du = f.querySelector('#f-pdu'), pn = f.querySelector('#f-pn'), auto = '', autoD = '';
         function tog(box, attr) { box.addEventListener('click', function (e) { var c = e.target.closest('[' + attr + ']'); if (c) { c.setAttribute('aria-pressed', String(c.getAttribute('aria-pressed') !== 'true')); ppHint(); } }); }
@@ -4053,12 +4053,12 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
   function prevSheet(p, presetBoat) {
     var isNew = !p; p = p || { barcaId: presetBoat || '', data: todayISO(), stato: 'bozza', voci: [{ titolo: '', ore: null }], ricambi: [], foto: [] };
-    var canDel = !isNew && (S.isEditor || S.isOwner), wasOk = p.stato === 'accettato';
+    var canDel = !isNew && (S.isEditor || S.isOwner || !!window.__NM_FB), wasOk = p.stato === 'accettato';
     var c = !isNew && wasOk ? prevConfronto(p) : null, lavs = !isNew ? prevLavori(p) : [];
     openSheet({
       title: isNew ? 'Nuovo preventivo' : 'Preventivo', submitLabel: 'Salva', foto: p.foto,
       deleteLabel: canDel ? 'Elimina preventivo' : null, deleteText: 'Elimini il preventivo. Le lavorazioni già create restano.',
-      onDelete: canDel ? async function () { if (await delSeq([S.db.collection('preventivi').doc(p.id)])) { closeSheet(); toast('Preventivo eliminato'); } } : null,
+      item: p, onDelete: canDel ? async function () { if (await delSeq([S.db.collection('preventivi').doc(p.id)])) { closeSheet(); toast('Preventivo eliminato'); } } : null,
       body: field(lab('f-barca', 'Barca'), boatSelect(p.barcaId)) +
         field(lab('f-pvt', 'Titolo'), inp('f-pvt', p.titolo, 'type="text" placeholder="es. Rimessaggio e tagliando 2027"')) +
         '<div class="grid2">' + field(lab('f-pvn', 'Numero dell’ufficio (facoltativo)'), inp('f-pvn', p.numero, 'type="text" placeholder="es. 112/2026"')) + field(lab('f-pvd', 'Data'), inp('f-pvd', p.data, 'type="date"')) + '</div>' +
@@ -4154,13 +4154,13 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
   function scSheet(s, preset) {
     var isNew = !s; s = s || Object.assign({ gruppo: 'mezzi', data: '' }, preset || {});
-    var canDel = !isNew && (S.isEditor || S.isOwner);
+    var canDel = !isNew && (S.isEditor || S.isOwner || !!window.__NM_FB);
     var mz = (S.mezzi || []).map(function (m) { return m.nome; }).filter(Boolean);
     function rifList(g) { var a = (g === 'mezzi' ? mz : []).concat(SC_RIF[g] || []); return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
     openSheet({
       title: isNew ? 'Scadenza del cantiere' : 'Modifica scadenza', submitLabel: 'Salva',
       deleteLabel: canDel ? 'Elimina scadenza' : null, deleteText: 'Elimini “' + (s.tipo || 'questa scadenza') + '”.',
-      onDelete: canDel ? async function () { if (await delSeq([S.db.collection('scadCantiere').doc(s.id)])) { closeSheet(); toast('Scadenza eliminata'); } } : null,
+      item: s, onDelete: canDel ? async function () { if (await delSeq([S.db.collection('scadCantiere').doc(s.id)])) { closeSheet(); toast('Scadenza eliminata'); } } : null,
       body: field(lab('f-scg', 'Gruppo'), '<select id="f-scg">' + opts(SC_GRUPPI, s.gruppo) + '</select>') +
         '<datalist id="sc-rif"></datalist><datalist id="sc-tipi"></datalist>' +
         field(lab('f-scr', 'Di cosa'), inp('f-scr', s.rif, 'type="text" list="sc-rif" required placeholder="es. Carrello BL 20, Estintori capannone"')) +
@@ -4267,7 +4267,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     metLoad();
     if (!MET.ts) return MET.err && window.__NM_FB ? secH('Meteo · MSV') + '<div class="notice">Previsioni non disponibili adesso: serve internet. Riprovo da solo.</div>' : '';
     var now = metAt(todayISO(), pad(new Date().getHours()) + ':' + pad(new Date().getMinutes())) || MET.ts[0];
-    var lvN = metLevel(metGust(now)), sym = metSym(now.s), h = secH('Meteo · MSV', S.canWrite && (S.isEditor || S.isOwner) ? 'met-cfg' : '', 'Soglie');
+    var lvN = metLevel(metGust(now)), sym = metSym(now.s), h = secH('Meteo · MSV', S.canWrite ? 'met-cfg' : '', 'Soglie');
     h += '<div class="met-card"><div class="met-now"><span class="met-t">' + (num(now.c) != null ? fmtNum(now.c, 0) + '°' : '–') + '</span><span class="main"><span class="title">' + esc(sym || 'Adesso') + '</span>' +
       '<span class="sub">' + esc(metWindLine(now.w, now.g, now.d)) + '</span></span><span class="met-dot ' + lvN + '" aria-label="' + (lvN === 'late' ? 'vento forte' : lvN === 'soon' ? 'vento sostenuto' : 'vento debole') + '"></span></div>';
     var rows = [];
@@ -4414,7 +4414,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (tab === 'deposito') h += rifViewDeposito(euro);
     else if (tab === 'ritiri') h += rifViewRitiri(euro);
     else h += rifViewRegistro();
-    if (S.canWrite && (S.isEditor || S.isOwner)) h += '<p class="cap" style="margin:14px 2px 0">Tipi, contenitori, stime dei kg e nomi delle ditte: <button type="button" class="link" data-act="rif-cfg">Impostazioni rifiuti</button></p>';
+    if (S.canWrite) h += '<p class="cap" style="margin:14px 2px 0">Tipi, contenitori, stime dei kg e nomi delle ditte: <button type="button" class="link" data-act="rif-cfg">Impostazioni rifiuti</button></p>';
     return h;
   }
   function rifViewDeposito(euro) {
@@ -4500,12 +4500,12 @@ button.row:active, .row .hit:active { opacity: .65; }
   function rifSheet(r, preset) {
     var isNew = !r; r = r || Object.assign({ data: todayISO(), tipo: (preset && preset.tipo) || rifTipi()[0].id }, preset || {});
     var t0 = rifTipo(r.tipo) || rifTipi()[0], u0 = r.unita || t0.unita;
-    var canDel = !isNew && (S.isEditor || S.isOwner || r.utente === S.myId);
+    var canDel = !isNew && (S.isEditor || S.isOwner || !!window.__NM_FB || r.utente === S.myId);
     var boats = S.boats.slice().sort(byName);
     openSheet({
       title: isNew ? 'Segna rifiuto' : 'Rifiuto segnato', submitLabel: 'Salva',
       deleteLabel: canDel ? 'Elimina' : null, deleteText: 'Lo togli dal deposito e dal registro.',
-      onDelete: canDel ? async function () { var ref = S.db.collection('rifiuti').doc(r.id); if (await w(function () { return ref.delete(); })) { closeSheet(); toast('Eliminato'); } else { var b = $('[data-act="do-del"]'); if (b) b.disabled = false; } } : null,
+      item: r, onDelete: canDel ? async function () { var ref = S.db.collection('rifiuti').doc(r.id); if (await w(function () { return ref.delete(); })) { closeSheet(); toast('Eliminato'); } else { var b = $('[data-act="do-del"]'); if (b) b.disabled = false; } } : null,
       body: field(lab('f-rt', 'Che rifiuto è'), '<select id="f-rt">' + rifTipoOpts(t0.id) + '</select>', '') + '<p class="cap" id="f-rtInfo" style="margin:-4px 2px 10px"></p>' +
         '<div class="grid2">' + field(lab('f-rq', 'Quanto'), inp('f-rq', num(r.q) != null ? String(r.q).replace('.', ',') : '', 'type="text" inputmode="decimal" placeholder="es. 3" required')) +
         field(lab('f-ru', 'In'), '<select id="f-ru"></select>') + '</div><p class="cap t-acc" id="f-rkg" style="margin:-4px 2px 10px"></p>' +
@@ -4543,7 +4543,7 @@ button.row:active, .row .hit:active { opacity: .65; }
 
   function rifRitiroSheet(x) {
     var isNew = !x, ditte = rifDitte(), dep = rifDep(), dit0 = x ? x.ditta : (Object.keys(dep).some(function (k) { var t = rifTipo(k); return t && t.ditta === 'd1'; }) ? 'd1' : Object.keys(dep).some(function (k) { var t = rifTipo(k); return t && t.ditta === 'olio'; }) ? 'olio' : 'd1');
-    var canDel = !isNew && (S.isEditor || S.isOwner);
+    var canDel = !isNew && (S.isEditor || S.isOwner || !!window.__NM_FB);
     function rowsFor(dit) {
       var list = rifTipi().filter(function (t) { return t.ditta === dit; });
       if (!isNew) { var saved = {}; (x.righe || []).forEach(function (r) { saved[r.tipo] = r; }); list = list.filter(function (t) { return saved[t.id]; }); }
@@ -4559,7 +4559,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     openSheet({
       title: isNew ? 'Ritiro della ditta' : 'Ritiro', submitLabel: 'Salva',
       deleteLabel: canDel ? 'Elimina il ritiro' : null, deleteText: 'I rifiuti di questo ritiro tornano nel deposito.',
-      onDelete: canDel ? async function () {
+      item: x, onDelete: canDel ? async function () {
         var refs = (S.rif || []).filter(function (r) { return r.ritiroId === x.id; });
         for (var i = 0; i < refs.length; i++) { var rr = S.db.collection('rifiuti').doc(refs[i].id); if (!(await w(function () { return rr.update({ ritiroId: '' }); }))) return; }
         var ref = S.db.collection('ritiri').doc(x.id); if (await w(function () { return ref.delete(); })) { closeSheet(); toast('Ritiro eliminato: i rifiuti tornano nel deposito'); }
@@ -4618,7 +4618,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     openSheet({
       title: isNew ? 'Nuovo tipo di rifiuto' : t.nome, submitLabel: 'Salva',
       deleteLabel: !isNew && !used ? 'Elimina questo tipo' : null, deleteText: 'Lo togli dall’elenco.',
-      onDelete: !isNew && !used ? async function () { if (await rifTipiSave(rifTipi().filter(function (x) { return x.id !== t.id; }))) closeSheet(); } : null,
+      ownDel: true, onDelete: !isNew && !used ? async function () { if (await rifTipiSave(rifTipi().filter(function (x) { return x.id !== t.id; }))) closeSheet(); } : null,
       body: field(lab('f-tn', 'Nome'), inp('f-tn', t.nome, 'type="text" required')) +
         '<div class="grid2">' + field(lab('f-tc', 'Codice CER'), inp('f-tc', t.cer, 'type="text" placeholder="es. 16 01 07*"'), 'L’asterisco vuol dire pericoloso') + field(lab('f-tk', 'Contenitore'), inp('f-tk', t.cont, 'type="text" placeholder="es. Big bag R"')) + '</div>' +
         '<div class="grid2">' + field(lab('f-tu', 'Si segna in'), '<select id="f-tu">' + opts([['pz', 'Pezzi'], ['l', 'Litri'], ['sacchetto', 'Sacchetti'], ['kg', 'Kg']], t.unita) + '</select>') + field(lab('f-tw', 'Kg stimati per unità'), inp('f-tw', num(t.kgU) != null ? String(t.kgU).replace('.', ',') : '', 'type="text" inputmode="decimal"')) + '</div>' +
@@ -4755,7 +4755,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       title: isNew ? 'Nuova attrezzatura' : attrLabel(a), foto: a.foto, deleteLabel: 'Elimina attrezzatura', deleteText: 'La togli dalla scheda della barca. I lavori già fatti restano.',
       body: '<p class="context">' + esc(b ? boatLabel(b) : '') + ' · tutti i campi sono a scelta: tocca quelli che ti servono.</p>' + attrFields(a, 'fa-', true) +
         (linked.length ? '<div class="lbl">Lavori su questo pezzo (' + linked.length + ')</div><div class="group">' + linked.slice(0, 8).map(function (l) { return lavRow(l, false); }).join('') + '</div>' : ''),
-      onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('attrezzatura').doc(a.id)])) { closeSheet(); toast('Attrezzatura eliminata'); } },
+      item: a, onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('attrezzatura').doc(a.id)])) { closeSheet(); toast('Attrezzatura eliminata'); } },
       onOpen: function (f) { attrBind(f, 'fa-'); if (isNew) { var t = f.querySelector('#fa-tipo'); setTimeout(function () { try { t.focus(); } catch (e) { } }, 60); } },
       onSubmit: async function (f) {
         var d = attrRead(f, 'fa-'), now = new Date().toISOString();
@@ -4954,7 +4954,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     openSheet({
       title: isNew ? 'Nuovo gruppo' : 'Modifica gruppo', body: body, deleteLabel: 'Elimina gruppo',
       deleteText: 'Elimini il gruppo “' + (m.nome || '') + '”. I servizi già fatti restano.',
-      onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('opModelli').doc(m.id)])) { closeSheet(); toast('Gruppo eliminato'); } },
+      item: m, onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('opModelli').doc(m.id)])) { closeSheet(); toast('Gruppo eliminato'); } },
       onSubmit: async function (f) {
         var nome = val(f, 'f-on'), fisse = val(f, 'f-of').split('\n').map(function (x) { return x.trim(); }).filter(Boolean), vars = [];
         if (!nome) { formErr('Scrivi il nome del gruppo.'); return false; }
@@ -5065,7 +5065,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (cw) t += '<div class="add-row"><input id="op-new" type="text" placeholder="Aggiungi una voce solo per questa volta" aria-label="Nuova voce"><button type="submit" class="btn sec">Aggiungi</button></div>';
     t += field('<label for="op-note">Note</label>', '<textarea id="op-note"' + (cw ? '' : ' disabled') + ' placeholder="es. serviti due giri di manovra per la palma">' + esc(o.note || '') + '</textarea>');
     if (cw) t += '<div class="m-acts">' + (done ? '<button type="button" class="btn sec" data-act="op-reopen">Riapri</button>' : '<button type="button" class="btn" data-act="op-complete">' + I.check + 'Completa servizio</button>') + '</div>' +
-      (canDelAll() ? '<button type="button" class="btn danger-ghost self-start" data-act="op-del">Elimina servizio</button>' : '');
+      (canDelAll() || mine(o) ? '<button type="button" class="btn danger-ghost self-start" data-act="op-del">Elimina servizio</button>' : '');
     box.innerHTML = t;
     var ne = $('#op-note'); if (ne) ne.addEventListener('change', function () { if (SHEET.op) { SHEET.op.note = ne.value; saveOp({ note: ne.value }); } });
   }
@@ -5542,7 +5542,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   function openSheet(o) {
     closeSheet();
     // sul sito: cancella solo l'amministratore, tranne ciò che è proprio (ownDel); ciò che si cancella va nel cestino
-    if (o.onDelete && window.__NM_FB && !S.isOwner && !o.ownDel) o.onDelete = null;
+    if (o.onDelete && window.__NM_FB && !S.isOwner && !o.ownDel && !mine(o.item)) o.onDelete = null;
     if (o.onDelete && window.__NM_FB && o.deleteText) o.deleteText = o.deleteText.replace(/ ?Non si può annullare\.?/, '') + ' Resta nel cestino per 60 giorni.';
     SHEET.onDelete = o.onDelete || null;
     SHEET.foto = (o.foto || []).slice();
@@ -5645,6 +5645,7 @@ button.row:active, .row .hit:active { opacity: .65; }
   function closeLightbox() { var d = $('#lightbox'); if (d) d.remove(); }
 
   function canDelAll() { return !window.__NM_FB || S.isOwner; }
+  function mine(x) { return !!(x && x.creatoDa && x.creatoDa === S.myId); } // l'ha aggiunto chi sta usando l'app
   async function delSeq(refs) { for (var i = 0; i < refs.length; i++) { var r = refs[i]; if (!(await w(function () { return r.delete(); }))) return false; } return true; }
 
   function addMenu(date, boat) {
@@ -5692,7 +5693,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     openSheet({
       title: isNew ? 'Nuova barca' : 'Modifica scheda', body: body, deleteLabel: 'Elimina barca',
       deleteText: 'Elimini ' + (b.nome || 'questa barca') + (nL || nS ? ' insieme a ' + nL + ' lavori e ' + nS + ' scadenze' : '') + '. Non si può annullare.',
-      onDelete: isNew ? null : async function () {
+      ownDel: [b].concat(S.lavori.filter(function (l) { return l.barcaId === b.id; }), S.scadenze.filter(function (x) { return x.barcaId === b.id; })).every(mine), onDelete: isNew ? null : async function () {
         var refs = S.lavori.filter(function (l) { return l.barcaId === b.id; }).map(function (l) { return S.db.collection('lavori').doc(l.id); })
           .concat(S.scadenze.filter(function (s) { return s.barcaId === b.id; }).map(function (s) { return S.db.collection('scadenze').doc(s.id); }))
           .concat([S.db.collection('barche').doc(b.id)]);
@@ -5754,7 +5755,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     openSheet({
       title: isNew ? 'Nuova lavorazione' : 'Modifica lavorazione', body: body, deleteLabel: 'Elimina lavorazione', foto: l.foto,
       deleteText: 'Elimini “' + (l.titolo || 'questa lavorazione') + '”. Non si può annullare.',
-      onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('lavori').doc(l.id)])) { closeSheet(); toast('Lavorazione eliminata'); } },
+      item: l, onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('lavori').doc(l.id)])) { closeSheet(); toast('Lavorazione eliminata'); } },
       onOpen: function (f) {
         var se = f.querySelector('#f-oreStima'), auto = null;
         function upd() {
@@ -5816,7 +5817,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     openSheet({
       title: isNew ? 'Nuova scadenza' : 'Modifica scadenza', body: body, deleteLabel: 'Elimina scadenza',
       deleteText: 'Elimini “' + (s.tipo || 'questa scadenza') + '”. Non si può annullare.',
-      onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('scadenze').doc(s.id)])) { closeSheet(); toast('Scadenza eliminata'); } },
+      item: s, onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('scadenze').doc(s.id)])) { closeSheet(); toast('Scadenza eliminata'); } },
       onOpen: function (f) {
         function upd() { var b = boatById(val(f, 'f-barca')); $('#hint-ore').textContent = b && num(b.oreMotore) != null ? 'Ore motore attuali di ' + (b.nome || 'questa barca') + ': ' + fmtOre(b.oreMotore) : ''; }
         f.querySelector('#f-barca').addEventListener('change', upd); upd();
@@ -5922,7 +5923,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       attrLinkBlock(l.attrId) +
       rcBlock(l.ricambi) + photoBlock(l.foto);
     openSheet({
-      title: isNew ? 'Nuova mansione' : l.daSegnare ? 'Segna il tuo tempo' : 'Modifica mansione', body: body, ownDel: l.utente === S.myId, deleteLabel: l.daSegnare ? 'Non ci ho lavorato' : 'Elimina mansione', foto: l.foto,
+      title: isNew ? 'Nuova mansione' : l.daSegnare ? 'Segna il tuo tempo' : 'Modifica mansione', body: body, ownDel: l.utente === S.myId || mine(l), deleteLabel: l.daSegnare ? 'Non ci ho lavorato' : 'Elimina mansione', foto: l.foto,
       deleteText: !isNew && l.daSegnare ? 'Il servizio sparisce dalla tua scheda.' : !isNew && isConfirmed(l.utente, l.data) ? 'La giornata è già confermata: la mansione resterà visibile barrata come cancellata e non conterà più nelle ore.' : 'Elimini questa mansione dalla scheda e dallo storico della barca.',
       onDelete: isNew ? null : async function () {
         if (!l.daSegnare && isConfirmed(l.utente, l.data)) {
@@ -6216,7 +6217,7 @@ button.row:active, .row .hit:active { opacity: .65; }
         hints();
       },
       deleteText: 'Elimini ' + (m.nome || 'questo ricambio') + ' dal magazzino. Nelle mansioni già segnate il nome resta.',
-      onDelete: isNew ? null : async function () {
+      ownDel: [m].concat(S.mov.filter(function (x) { return x.articoloId === m.id; })).every(mine), onDelete: isNew ? null : async function () {
         var refs = S.mov.filter(function (x) { return x.articoloId === m.id; }).map(function (x) { return S.db.collection('movimenti').doc(x.id); }).concat([S.db.collection('magazzino').doc(m.id)]);
         if (await delSeq(refs)) { closeSheet(); toast('Ricambio eliminato'); }
       },
@@ -6258,7 +6259,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     openSheet({
       title: isNew ? 'Programma varo o alaggio' : 'Modifica ' + (TIPI_V[v.tipo] || '').toLowerCase(), body: body, deleteLabel: 'Elimina',
       deleteText: 'Elimini questo ' + (TIPI_V[v.tipo] || 'movimento').toLowerCase() + '. Non si può annullare.',
-      onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('vari').doc(v.id)])) { closeSheet(); toast('Eliminato'); } },
+      item: v, onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('vari').doc(v.id)])) { closeSheet(); toast('Eliminato'); } },
       onSubmit: async function (f) {
         var now = new Date().toISOString();
         var data = { barcaId: val(f, 'f-barca'), tipo: val(f, 'f-vt'), data: val(f, 'f-vd'), ora: val(f, 'f-vo'), note: val(f, 'f-vn'), modificato: now };
@@ -6292,7 +6293,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     openSheet({
       title: isNew ? 'Nuova checklist' : 'Modifica checklist', body: body, deleteLabel: 'Elimina modello',
       deleteText: 'Elimini il modello “' + (m.nome || '') + '”. Le checklist già fatte sulle barche restano.',
-      onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('modelli').doc(m.id)])) { closeSheet(); toast('Modello eliminato'); } },
+      item: m, onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('modelli').doc(m.id)])) { closeSheet(); toast('Modello eliminato'); } },
       onSubmit: async function (f) {
         var nome = val(f, 'f-cn'), voci = val(f, 'f-cv').split('\n').map(function (s) { return s.trim(); }).filter(Boolean), now = new Date().toISOString();
         if (!nome) { formErr('Scrivi il nome della checklist.'); return false; }
@@ -6358,7 +6359,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       h += '<div class="feat-acts" style="margin-top:14px">' + (done ? '<button type="button" class="btn sec" data-act="ck-reopen">Riapri</button>' : '<button type="button" class="btn" data-act="ck-complete">Segna completata</button>') +
         '<button type="button" class="btn sec" data-act="ck-save-boat">Salva la lista per ' + esc(b ? b.nome : 'la barca') + '</button></div>' +
         '<span class="hint" style="display:block;margin-top:8px">' + (own ? 'Questa barca ha già la sua versione della lista: salvando la aggiorni.' : 'Se togli o aggiungi voci, salva la lista: la prossima volta questa barca ripartirà da qui.') + '</span>' +
-        (canDelAll() ? '<button type="button" class="btn danger-ghost" data-act="ck-delrun" style="margin-top:16px">Elimina checklist</button>' : '');
+        (canDelAll() || mine(c) ? '<button type="button" class="btn danger-ghost" data-act="ck-delrun" style="margin-top:16px">Elimina checklist</button>' : '');
     }
     box.innerHTML = h;
   }
