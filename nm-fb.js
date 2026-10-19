@@ -106,6 +106,9 @@
     '#nmfb .upd{color:#8a8db0;font-size:.82rem;margin-top:10px}#nmfb .more{background:none;border:0;color:#8cc2ff;font:inherit;padding:8px 0;cursor:pointer}' +
     '#nmpan .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;width:100%}#nmpan .chip{display:inline-flex;align-items:center;gap:4px;background:#1e3a5f;color:#d6e8ff;border-radius:99px;padding:4px 4px 4px 10px;font-size:.9rem}' +
     '#nmpan .chip button{background:none;border:0;color:#d6e8ff;font-size:1.1rem;line-height:1;padding:2px 6px;cursor:pointer}' +
+    '#nmatt{position:fixed;top:calc(env(safe-area-inset-top) + 10px);right:10px;left:10px;z-index:100001;display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:none}' +
+    '#nmatt .it{pointer-events:auto;max-width:380px;width:100%;background:#2b2c33;color:#fff;border-radius:14px;padding:10px 14px;font:14px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3);cursor:pointer}' +
+    '#nmatt .it b{display:block}#nmatt .it span{color:#c9cbe0}#nmattv{width:100%;text-align:left}#nmattv .ar{display:block;padding:10px 0;border-top:1px solid #2a2d55}#nmattv .ar:first-child{border-top:0}#nmattv .ar b{display:block}#nmattv .ar div{color:#b7bad8;font-size:.9rem}' +
     '#nmtoast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 90px);transform:translateX(-50%);z-index:100000;background:#2b2c33;color:#fff;padding:10px 16px;border-radius:12px;font:15px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.4)}';
   function ensureCss() { if (!$('#nmfb-css')) { var st = document.createElement('style'); st.id = 'nmfb-css'; st.textContent = CSS; document.head.appendChild(st); } }
   function logoSrc() { var l = document.getElementById('logo-src'); return l ? l.getAttribute('src') : ''; }
@@ -216,7 +219,7 @@
   }
   var DELG = { id: '', t: 0 };
   function write(name, id, kind, data) {
-    var L = live(name), r = fs.collection(name).doc(id), ts = FV.serverTimestamp(), p;
+    var L = live(name), r = fs.collection(name).doc(id), ts = FV.serverTimestamp(), p, prev0 = L.map[id] ? clone(L.map[id]) : null;
     L.pend = L.pend || {};
     if (kind === 'set') {
       data = Object.assign({}, data || {});
@@ -245,6 +248,7 @@
       delete L.map[id]; L.pend[id] = 'del';
     }
     p.then(function () { if (L.pend) delete L.pend[id]; }, function () { if (L.pend) delete L.pend[id]; });
+    attScrittura(name, kind === 'delete' ? 'cancella' : prev0 ? 'modifica' : 'aggiunge', data || prev0);
     emit(L); save(L);
     return settle(p, L);
   }
@@ -516,6 +520,7 @@
       if (ME && !D.map[ME.uid]) write('dipendenti', ME.uid, 'set', { nome: ME.nome || '', modificato: nowISO() }).catch(function () { });
     });
     if (ME && ME.ruolo === 'admin') setTimeout(purgeCestino, 5000);
+    attEntra(); attAscolta();
     // aperto dal link per portare i dati dall'app di Claude
     if (IMP_KEY) setTimeout(offerImport, 800);
   }
@@ -697,7 +702,7 @@
   function dataLunga(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? (+m[3]) + ' ' + MESI[+m[2] - 1] + ' ' + m[1] : ''; }
   function quando(iso) { var t = new Date(iso); if (isNaN(t)) return ''; var p2 = function (n) { return (n < 10 ? '0' : '') + n; }; return t.getDate() + ' ' + MESI[t.getMonth()] + ' ' + t.getFullYear() + ' alle ' + p2(t.getHours()) + ':' + p2(t.getMinutes()); }
   function showCliente(x) {
-    CLIENTE = true;
+    CLIENTE = true; ME = ME || x; attEntra();
     var ids = (x.barche || []).slice(0, 20);
     CL.unsubs.forEach(function (f) { f(); }); CL.unsubs = []; CL.ids = ids;
     ids.forEach(function (id) {
@@ -894,6 +899,79 @@
         '<button class="btn" data-imp="fine">Apri l’app</button>');
   }
 
+
+  /* ---------- attività: chi entra e cosa fa ----------
+     Ognuno scrive le proprie azioni in «attivita»; le leggono solo gli amministratori (firestore.rules).
+     Gli avvisi arrivano solo all'account scritto in config.js (NM_AVVISI_A), mentre ha l'app aperta;
+     quando la riapre vede chi è entrato mentre non c'era. Si tiene 60 giorni. */
+  var ATT = { entrato: false, vista: '', last: {}, uns: null, voci: {} }, ATT_DAYS = 60;
+  function attIo() { var a = window.NM_AVVISI_A; return !!(ME && ME.ruolo === 'admin' && a && String(ME.email || '').toLowerCase() === String(a).trim().toLowerCase()); }
+  function attDisp() { return /iPhone|iPad|Android|Mobi/i.test(navigator.userAgent) ? 'telefono' : 'computer'; }
+  function attScrivi(cosa) {
+    if (!ME || !ME.uid || attIo()) return;
+    var k = cosa, t = Date.now();
+    if (ATT.last[k] && t - ATT.last[k] < 60000) return; // la stessa cosa ripetuta subito (salvataggi di fila) conta una volta
+    ATT.last[k] = t;
+    fs.collection('attivita').add({ uid: ME.uid, nome: ME.nome || ME.email || '', cosa: String(cosa).slice(0, 200), il: nowISO(), disp: attDisp(), _ts: FV.serverTimestamp() }).catch(function () { });
+  }
+  function attEntra() { if (ATT.entrato || !ME) return; ATT.entrato = true; attScrittura.ok = true; attScrivi(CLIENTE ? 'è entrato nell’area clienti' : 'è entrato nell’app'); }
+  function attVista(n) { if (!started || !n || n === ATT.vista) return; ATT.vista = n; attScrivi('apre ' + n); }
+  function attScrittura(name, verbo, d) {
+    if (!attScrittura.ok || name === 'dipendenti' || name === 'portale') return;
+    d = d || {};
+    var nome = d.nome || d.titolo || d.descrizione || d.testo || d.cliente || '';
+    attScrivi(verbo + ' ' + (CEST_NOMI[name] || name).toLowerCase() + (nome ? ' «' + String(nome).slice(0, 60) + '»' : ''));
+  }
+  function attOra(iso) { var d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+  function attSoloOra(iso) { var d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }); }
+  function attAscolta() {
+    if (!attIo() || ATT.uns) return;
+    var KEY = 'nm-att-visto-' + ME.uid, visto = null;
+    try { visto = localStorage.getItem(KEY); } catch (e) { }
+    var cut = new Date(Date.now() - ATT_DAYS * 864e5).toISOString();
+    if (!visto || visto < cut) visto = new Date(Date.now() - 864e5).toISOString(); // la prima volta: le ultime 24 ore
+    setTimeout(function () { fs.collection('attivita').where('il', '<', cut).limit(300).get().then(function (s) { if (!s.size) return; var b = fs.batch(); s.docs.forEach(function (d) { b.delete(d.ref); }); return b.commit(); }).catch(function () { }); }, 8000);
+    var primo = true;
+    if (window.Notification && Notification.permission === 'default') try { Notification.requestPermission(); } catch (e) { }
+    ATT.uns = fs.collection('attivita').where('il', '>', visto).orderBy('il').onSnapshot(function (s) {
+      var nuove = [];
+      s.docChanges().forEach(function (c) { if (c.type === 'added') { var x = c.doc.data(); if (x.uid !== ME.uid) nuove.push(x); } });
+      if (nuove.length) { try { localStorage.setItem(KEY, nuove[nuove.length - 1].il); } catch (e) { } }
+      if (primo) { primo = false; if (nuove.length) attRiepilogo(nuove); return; }
+      nuove.forEach(attAvvisa);
+    }, function () { ATT.uns = null; });
+  }
+  // avviso in diretta: uno per persona, con le sue ultime azioni
+  function attAvvisa(x) {
+    var v = ATT.voci[x.uid] = (ATT.voci[x.uid] || []).concat(attSoloOra(x.il) + ' ' + x.cosa).slice(-4);
+    var tit = x.nome + (x.disp ? ' · ' + x.disp : ''), body = v.slice().reverse().join('\n');
+    ensureCss();
+    var box = $('#nmatt'); if (!box) { box = document.createElement('div'); box.id = 'nmatt'; document.body.appendChild(box); }
+    var el = box.querySelector('[data-u="' + x.uid + '"]');
+    if (!el) { el = document.createElement('div'); el.className = 'it'; el.setAttribute('data-u', x.uid); el.onclick = function () { el.remove(); }; box.appendChild(el); }
+    el.innerHTML = '<b>' + esc(tit) + '</b><span>' + esc(attSoloOra(x.il) + ' · ' + x.cosa) + '</span>';
+    clearTimeout(el._t); el._t = setTimeout(function () { el.remove(); }, 12000);
+    if (document.hidden && window.Notification && Notification.permission === 'granted' && navigator.serviceWorker) {
+      navigator.serviceWorker.getRegistration().then(function (r) {
+        if (r) r.showNotification(tit, { body: body, tag: 'nm-att-' + x.uid, renotify: true, icon: './icon-192.png', badge: './icon-192.png', data: { url: './' } });
+        else new Notification(tit, { body: body, tag: 'nm-att-' + x.uid });
+      }).catch(function () { });
+    }
+  }
+  // all'apertura: chi è entrato mentre non c'eri, una riga per persona
+  function attRiepilogo(list) {
+    var per = {}, ord = [];
+    list.forEach(function (x) { var p = per[x.uid]; if (!p) { p = per[x.uid] = { nome: x.nome, disp: {}, da: x.il, a: x.il, cose: [] }; ord.push(x.uid); } p.a = x.il; p.disp[x.disp] = 1; p.cose.push(attSoloOra(x.il) + ' ' + x.cosa); });
+    ord.sort(function (a, b) { return per[b].a < per[a].a ? -1 : 1; });
+    var h = '<h3 style="margin:0 0 4px;align-self:flex-start">Mentre non c’eri</h3><p style="margin:0 0 10px;color:#9a9dc0;align-self:flex-start">Chi è entrato nell’app e cosa ha fatto.</p><div id="nmattv">' + ord.map(function (u) {
+      var p = per[u], c = p.cose.slice(-12), more = p.cose.length - c.length;
+      return '<div class="ar"><b>' + esc(p.nome) + '</b><div>' + esc(attOra(p.da) + (p.da !== p.a ? ' – ' + attSoloOra(p.a) : '') + ' · ' + Object.keys(p.disp).filter(Boolean).join(', ')) + '</div>' +
+        '<div>' + (more > 0 ? esc('…e altre ' + more + ' azioni prima') + '<br>' : '') + c.map(esc).join('<br>') + '</div></div>';
+    }).join('') + '</div><button class="btn" id="nmattok" style="margin-top:14px">Ho visto</button>';
+    var o = overlay(h); if (!o) return;
+    $('#nmattok').onclick = hideOverlay;
+  }
+
   /* ---------- quello che vede l'app ---------- */
   window.__NM_FB = {
     use: function (name) {
@@ -901,6 +979,7 @@
     },
     photoSrc: function (id) { if (PH[id]) return PH[id]; if (started) loadPhoto(id); else READY.then(function () { loadPhoto(id); }); return GIF0; },
     altroRows: altroRows,
-    open: open
+    open: open,
+    vista: attVista
   };
 })();

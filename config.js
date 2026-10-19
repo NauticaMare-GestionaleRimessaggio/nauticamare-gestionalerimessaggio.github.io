@@ -13,3 +13,7 @@ window.NM_FIREBASE_CONFIG = {
 /* Chiave pubblica per le notifiche sul telefono (Firebase › Impostazioni progetto › Cloud Messaging ›
    Certificati push web › «Coppia di chiavi»). Non è segreta. Finché è vuota le notifiche restano spente. */
 window.NM_VAPID_KEY = 'BCTv5vIm6qaMMgbGdtg4mDd_cFzgt6eOqjMaaCDab8fBBFp707fbjuyF03ran6OHTzjEZfDX-whaIbcWh6spzok';
+
+/* Chi riceve gli avvisi «chi entra nell'app e cosa fa» (solo un amministratore, mentre ha l'app aperta).
+   Le azioni di questo account non vengono registrate. Vuoto = nessun avviso. */
+window.NM_AVVISI_A = 'andreatorcini01@gmail.com';

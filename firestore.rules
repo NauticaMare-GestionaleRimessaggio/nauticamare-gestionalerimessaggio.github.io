@@ -43,6 +43,13 @@ service cloud.firestore {
       allow create: if staff() && request.resource.data.da == request.auth.uid;
     }
 
+    // Attività: chi entra nell'app e cosa fa. Ognuno scrive solo le proprie,
+    // le leggono (e dopo 60 giorni le cancellano) solo gli amministratori.
+    match /attivita/{id} {
+      allow read, delete: if admin();
+      allow create: if attivo() && request.resource.data.uid == request.auth.uid;
+    }
+
     // Tutti i dati del cantiere: solo per chi lavora al cantiere ed è stato approvato.
     // Nell'app «cancellare» vuol dire scrivere { _del: true }. L'amministratore cancella tutto; gli altri
     // ciò che hanno aggiunto loro (creatoDa), le proprie mansioni della scheda, le proprie giornate
@@ -70,7 +77,7 @@ service cloud.firestore {
       }
       function autoreOk(d) { return d.get('creatoDa', request.auth.uid) == request.auth.uid; }
       function autoreUguale() { return cancellato(resource.data) || nuovo().get('creatoDa', '') == resource.data.get('creatoDa', ''); }
-      function datiCantiere() { return !(coll in ['utenti', 'config', 'cestino']); }
+      function datiCantiere() { return !(coll in ['utenti', 'config', 'cestino', 'attivita']); }
 
       allow read: if staff() && datiCantiere();
       allow create: if datiCantiere() && (admin() || (staff() && !cancellato(nuovo()) && proprio(nuovo()) && ferieOk(nuovo()) && autoreOk(nuovo())));
