@@ -9,22 +9,17 @@ service cloud.firestore {
     function staff() { return attivo() && get(profilo()).data.ruolo in ['base', 'editor', 'admin']; }
     function cliente() { return attivo() && get(profilo()).data.ruolo == 'cliente'; }
     function admin() { return attivo() && get(profilo()).data.ruolo == 'admin'; }
-    function inizializzato() { return exists(/databases/$(database)/documents/config/inizializzato); }
-
-    // Il primo che si registra diventa amministratore; poi questo segno blocca tutto
+    // La registrazione del primo amministratore è chiusa: gli amministratori li nomina solo un amministratore
     match /config/inizializzato {
       allow read: if signedIn();
-      allow create: if signedIn() && !inizializzato() && getAfter(profilo()).data.ruolo == 'admin';
     }
 
     // Persone: ognuno vede il proprio profilo, il cantiere vede tutti,
     // solo gli amministratori approvano e cambiano i permessi
     match /utenti/{uid} {
       allow read: if staff() || (signedIn() && request.auth.uid == uid);
-      allow create: if signedIn() && request.auth.uid == uid && (
-        (request.resource.data.stato == 'in_attesa' && request.resource.data.ruolo == 'base')
-        || (!inizializzato() && existsAfter(/databases/$(database)/documents/config/inizializzato)
-            && request.resource.data.stato == 'attivo' && request.resource.data.ruolo == 'admin'));
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.stato == 'in_attesa' && request.resource.data.ruolo == 'base';
       allow update: if admin() || (signedIn() && request.auth.uid == uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'modificato']));
       allow delete: if admin();
@@ -41,6 +36,13 @@ service cloud.firestore {
     match /cestino/{id} {
       allow read, delete: if admin();
       allow create: if staff() && request.resource.data.da == request.auth.uid;
+    }
+
+    // Attività: chi entra nell'app e cosa fa. Ognuno scrive solo le proprie,
+    // le leggono (e dopo 60 giorni le cancellano) solo gli amministratori.
+    match /attivita/{id} {
+      allow read, delete: if admin();
+      allow create: if attivo() && request.resource.data.uid == request.auth.uid;
     }
 
     // Tutti i dati del cantiere: solo per chi lavora al cantiere ed è stato approvato.
@@ -70,7 +72,7 @@ service cloud.firestore {
       }
       function autoreOk(d) { return d.get('creatoDa', request.auth.uid) == request.auth.uid; }
       function autoreUguale() { return cancellato(resource.data) || nuovo().get('creatoDa', '') == resource.data.get('creatoDa', ''); }
-      function datiCantiere() { return !(coll in ['utenti', 'config', 'cestino']); }
+      function datiCantiere() { return !(coll in ['utenti', 'config', 'cestino', 'attivita']); }
 
       allow read: if staff() && datiCantiere();
       allow create: if datiCantiere() && (admin() || (staff() && !cancellato(nuovo()) && proprio(nuovo()) && ferieOk(nuovo()) && autoreOk(nuovo())));
