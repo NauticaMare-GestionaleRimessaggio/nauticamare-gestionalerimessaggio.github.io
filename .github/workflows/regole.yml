@@ -4,7 +4,7 @@ name: Regole del database
 
 on:
   push:
-    branches: [main, claude/project-thread-d0tm99]
+    branches: [main]
     paths: [firestore.rules]
   workflow_dispatch:
 
