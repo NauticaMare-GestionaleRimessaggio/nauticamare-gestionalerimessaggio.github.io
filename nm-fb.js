@@ -106,8 +106,8 @@
     '#nmfb .upd{color:#8a8db0;font-size:.82rem;margin-top:10px}#nmfb .more{background:none;border:0;color:#8cc2ff;font:inherit;padding:8px 0;cursor:pointer}' +
     '#nmpan .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;width:100%}#nmpan .chip{display:inline-flex;align-items:center;gap:4px;background:#1e3a5f;color:#d6e8ff;border-radius:99px;padding:4px 4px 4px 10px;font-size:.9rem}' +
     '#nmpan .chip button{background:none;border:0;color:#d6e8ff;font-size:1.1rem;line-height:1;padding:2px 6px;cursor:pointer}' +
-    '#nmatt{position:fixed;top:calc(env(safe-area-inset-top) + 10px);right:10px;left:10px;z-index:100001;display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:none}' +
-    '#nmatt .it{pointer-events:auto;max-width:380px;width:100%;background:#2b2c33;color:#fff;border-radius:14px;padding:10px 14px;font:14px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3);cursor:pointer}' +
+    '#nmatt{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 76px);right:10px;left:10px;z-index:100001;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}' +
+    '#nmatt .it{pointer-events:auto;position:relative;max-width:420px;width:100%;box-sizing:border-box;background:#2b2c33;color:#fff;border-radius:14px;padding:10px 40px 10px 14px;font:14px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3)}#nmatt .x{position:absolute;top:4px;right:4px;width:32px;height:32px;border:0;background:none;color:#c9cbe0;font-size:20px;line-height:1;cursor:pointer}' +
     '#nmatt .it b{display:block}#nmatt .it span{color:#c9cbe0}#nmattv{width:100%;text-align:left}#nmattv .ar{display:block;padding:10px 0;border-top:1px solid #2a2d55}#nmattv .ar:first-child{border-top:0}#nmattv .ar b{display:block}#nmattv .ar div{color:#b7bad8;font-size:.9rem}' +
     '#nmtoast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 90px);transform:translateX(-50%);z-index:100000;background:#2b2c33;color:#fff;padding:10px 16px;border-radius:12px;font:15px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.4)}';
   function ensureCss() { if (!$('#nmfb-css')) { var st = document.createElement('style'); st.id = 'nmfb-css'; st.textContent = CSS; document.head.appendChild(st); } }
@@ -948,9 +948,10 @@
     ensureCss();
     var box = $('#nmatt'); if (!box) { box = document.createElement('div'); box.id = 'nmatt'; document.body.appendChild(box); }
     var el = box.querySelector('[data-u="' + x.uid + '"]');
-    if (!el) { el = document.createElement('div'); el.className = 'it'; el.setAttribute('data-u', x.uid); el.onclick = function () { el.remove(); }; box.appendChild(el); }
-    el.innerHTML = '<b>' + esc(tit) + '</b><span>' + esc(attSoloOra(x.il) + ' · ' + x.cosa) + '</span>';
-    clearTimeout(el._t); el._t = setTimeout(function () { el.remove(); }, 12000);
+    if (!el) { el = document.createElement('div'); el.className = 'it'; el.setAttribute('data-u', x.uid);  box.appendChild(el); }
+    el.innerHTML = '<button type="button" class="x" aria-label="Chiudi">×</button><b>' + esc(tit) + '</b><span>' + esc(attSoloOra(x.il) + ' · ' + x.cosa) + '</span>';
+    el.querySelector('.x').onclick = function () { clearTimeout(el._t); el.remove(); };
+    clearTimeout(el._t); el._t = setTimeout(function () { el.remove(); }, 60000); // resta un minuto
     if (document.hidden && window.Notification && Notification.permission === 'granted' && navigator.serviceWorker) {
       navigator.serviceWorker.getRegistration().then(function (r) {
         if (r) r.showNotification(tit, { body: body, tag: 'nm-att-' + x.uid, renotify: true, icon: './icon-192.png', badge: './icon-192.png', data: { url: './' } });
