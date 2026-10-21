@@ -18,8 +18,10 @@ service cloud.firestore {
     // solo gli amministratori approvano e cambiano i permessi
     match /utenti/{uid} {
       allow read: if staff() || (signedIn() && request.auth.uid == uid);
+      // chi si registra scrive solo nome, email e tipo: le barche dei clienti le collega l'amministratore
       allow create: if signedIn() && request.auth.uid == uid
-        && request.resource.data.stato == 'in_attesa' && request.resource.data.ruolo == 'base';
+        && request.resource.data.stato == 'in_attesa' && request.resource.data.ruolo == 'base'
+        && request.resource.data.keys().hasOnly(['nome', 'email', 'tipo', 'creato', 'modificato', 'stato', 'ruolo']);
       allow update: if admin() || (signedIn() && request.auth.uid == uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'modificato']));
       allow delete: if admin();
@@ -31,11 +33,23 @@ service cloud.firestore {
       allow write: if staff();
     }
 
+    // Le raccolte con i dati del cantiere (le stesse di COLLS in nm-fb.js)
+    function raccolteCantiere() {
+      return ['barche', 'lavori', 'scadenze', 'dipendenti', 'conferme', 'impostazioni', 'magazzino', 'movimenti', 'vari', 'modelli',
+        'checkBarca', 'checklist', 'opModelli', 'operazioni', 'mezzi', 'attrezzatura', 'programma', 'cariche', 'posti', 'richieste',
+        'rifiuti', 'ritiri', 'scadCantiere', 'preventivi', 'assenze', 'kit', 'inventari'];
+    }
+
     // Cestino: ogni cancellazione ne lascia qui una copia (per 60 giorni).
     // La scrive chi cancella, la leggono, recuperano e svuotano solo gli amministratori.
+    // La copia vale solo per i dati del cantiere e solo insieme alla cancellazione vera
+    // (nella stessa scrittura l'elemento diventa { _del: true }): così non si possono inventare voci da «recuperare».
     match /cestino/{id} {
       allow read, delete: if admin();
-      allow create: if staff() && request.resource.data.da == request.auth.uid;
+      allow create: if staff() && request.resource.data.da == request.auth.uid
+        && request.resource.data.coll is string && request.resource.data.coll in raccolteCantiere()
+        && request.resource.data.docId is string
+        && getAfter(/databases/$(database)/documents/$(request.resource.data.coll)/$(request.resource.data.docId)).data.get('_del', false) == true;
     }
 
     // Attività: chi entra nell'app e cosa fa. Ognuno scrive solo le proprie,

@@ -2128,8 +2128,13 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
 
   /* Vista 3D (three.js caricato solo quando serve) */
-  var THREE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js', ORBIT_URL = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js', threeP = null;
-  function loadScript(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = function () { rej(new Error('script')); }; (document.head || document.body).appendChild(s); }); }
+  // ogni libreria esterna ha la sua impronta (integrity): se il file sul sito esterno cambiasse, il telefono non lo userebbe
+  var THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js', ORBIT_URL = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js', threeP = null;
+  var LIB_SRI = {};
+  LIB_SRI[THREE_URL] = 'sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu';
+  LIB_SRI[ORBIT_URL] = 'sha384-wagZhIFgY4hD+7awjQjR4e2E294y6J2HSnd8eTNc15ZubTeQeVRZwhQJ+W6hnBsf';
+  LIB_SRI['https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js'] = 'sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB';
+  function loadScript(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); if (LIB_SRI[src]) { s.integrity = LIB_SRI[src]; s.crossOrigin = 'anonymous'; } s.src = src; s.onload = res; s.onerror = function () { rej(new Error('script')); }; (document.head || document.body).appendChild(s); }); }
   function getThree() {
     if (!threeP) {
       threeP = (window.THREE ? Promise.resolve() : loadScript(THREE_URL)).then(function () { return window.THREE.OrbitControls ? null : loadScript(ORBIT_URL); }).then(function () { return window.THREE; });
