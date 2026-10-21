@@ -26,7 +26,7 @@ jobs:
           node-version: 20
       - name: Installa
         working-directory: .github/notifiche
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Pubblica le regole
         working-directory: .github/notifiche
         env:

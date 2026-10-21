@@ -587,6 +587,7 @@
     var ok = 0, fail = 0;
     for (var k = 0; k < g.items.length; k++) {
       var x = g.items[k];
+      if (COLLS.indexOf(x.coll) < 0) { fail++; continue; } // si recuperano solo i dati del cantiere, mai profili o impostazioni di sistema
       try { await write(x.coll, x.docId, 'set', x.dati); await settle(fs.collection('cestino').doc(x.id).delete()); ok++; } catch (e) { fail++; }
     }
     toast(fail ? 'Recuperate ' + ok + ', ' + fail + ' non riuscite: riprova.' : ok === 1 ? 'Recuperato' : 'Recuperate ' + ok + ' cose');
@@ -599,7 +600,8 @@
     if (B[u.in] && confirm('«' + (d.nome || 'Questa barca') + '» era stata unita a «' + nome + '». Annullo l’unione? Rimetto qui lavori, scadenze e il resto che le avevo spostato, e riporto la scheda «' + nome + '» com’era prima dell’unione (le modifiche fatte dopo a quella scheda si perdono).')) {
       var ok = 0, fail = 0;
       for (var i = 0; i < (u.spostati || []).length; i++) {
-        var m = u.spostati[i], cur = live(m.c).map[m.id], up = {}; if (!cur) continue;
+        var m = u.spostati[i]; if (!m || COLLS.indexOf(m.c) < 0) continue;
+        var cur = live(m.c).map[m.id], up = {}; if (!cur) continue;
         if ('b' in m) up.barcaId = m.b;
         if (m.ab) up.altreBarche = m.ab;
         if (m.c === 'posti') up.modificato = nowISO();
@@ -678,7 +680,7 @@
     else if (k === 'pw') auth.sendPasswordResetEmail(ME.email).then(function () { toast('Ti ho mandato l’email per cambiare la password.'); }, function (er) { toast(authErr(er)); });
     else if (k === 'ok') {
       var u0 = UT[id] || {}, f0 = { stato: 'attivo' };
-      if (u0.stato === 'in_attesa' && u0.tipo === 'cliente') { f0.ruolo = 'cliente'; f0.barche = u0.barche || []; }
+      if (u0.stato === 'in_attesa' && u0.tipo === 'cliente') { f0.ruolo = 'cliente'; f0.barche = []; } // le barche le collega l'amministratore
       setUser(id, f0).then(function () { toast(f0.ruolo === 'cliente' ? 'Fatto: ora collega le sue barche qui sotto.' : 'Fatto: ' + (u0.nome || '') + ' può entrare.'); });
     }
     else if (k === 'unb') { var ub = (UT[id].barche || []).filter(function (b) { return b !== t.getAttribute('data-b'); }); setUser(id, { barche: ub }); }
