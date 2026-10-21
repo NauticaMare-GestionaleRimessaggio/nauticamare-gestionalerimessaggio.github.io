@@ -74,11 +74,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* Barra in alto */
 .top {
   position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bar);
-  display: grid; grid-template-columns: 96px minmax(0, 1fr) 96px; align-items: center;
+  display: grid; grid-template-columns: minmax(42px, max-content) minmax(0, 1fr) minmax(96px, max-content); align-items: center;
   padding: 8px 8px; min-height: 54px;
 }
 .top .l { display: flex; justify-content: flex-start; gap: 4px; }
 .top .r { display: flex; justify-content: flex-end; gap: 4px; }
+.top .icon-btn.help { width: 32px; color: var(--muted); }
+.top .r:has(.help + .icon-btn + .icon-btn) { gap: 0; }
+.top .icon-btn.help svg { width: 23px; height: 23px; }
+.gd-p { margin: 0; color: var(--ink); }
+.gd-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 9px; color: var(--muted); }
 .top h1 { margin: 0; text-align: center; font-size: 1.05rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .icon-btn {
   position: relative; width: 42px; height: 42px; border: 0; background: none; color: var(--ink);
@@ -629,7 +634,8 @@ button.row:active, .row .hit:active { opacity: .65; }
     cart: svg('<path d="M3 4.5h2.5l2.2 10.5h10.6l2-7.5H7"/><circle cx="9.5" cy="19" r="1.3"/><circle cx="17" cy="19" r="1.3"/>'),
     wind: svg('<path d="M3 8.5h10.5a2.5 2.5 0 1 0-2.5-2.5"/><path d="M3 12.5h15.5a2.5 2.5 0 1 1-2.5 2.5"/><path d="M3 16.5h7"/>'),
     trash: svg('<path d="M4.5 6.5h15M9.5 6.5V4h5v2.5"/><path d="M6.5 6.5l1 13.5h9l1-13.5"/><path d="M10 10.5v6M14 10.5v6"/>'),
-    restore: svg('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4.2h4.2"/><path d="M12 8.5V12l2.5 1.8"/>')
+    restore: svg('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4.2h4.2"/><path d="M12 8.5V12l2.5 1.8"/>'),
+    help: svg('<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.6"/><path d="M12 16.6v.4"/>')
   };
   var ALTRO = ['altro', 'programma', 'pannello', 'batterie', 'scadenze', 'vari', 'magazzino', 'preventivi', 'rifiuti', 'scadcantiere', 'assenze', 'misure', 'ore', 'operazioni', 'backup', 'notifiche', 'categorie'];
   var LOGO_SRC = document.getElementById('logo-src').getAttribute('src');
@@ -5859,17 +5865,18 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (V.tab === 'mappa') return M.area === 'porto' ? 'Porto' : 'Mappa del cantiere';
     return V.tab === 'home' ? 'Home' : TITOLI[V.tab] || V.tab;
   }
+  var HELP_BTN = '<button type="button" class="icon-btn help" data-act="guida" aria-label="Guida all’app">';
   function renderTop() {
-    var t = $('#top'), add = S.canWrite && S.status === 'ready';
+    var t = $('#top'), add = S.canWrite && S.status === 'ready', help = HELP_BTN + I.help + '</button>';
     if (V.tab === 'barche' && V.boatId && boatById(V.boatId)) {
       var b = boatById(V.boatId);
-      if (V.boatView === 'resoconto') { t.innerHTML = '<div class="l"><button type="button" class="icon-btn blue" data-act="res-back" aria-label="Torna alla scheda">' + I.back + '</button></div><h1>Resoconto</h1><div class="r"></div>'; return; }
+      if (V.boatView === 'resoconto') { t.innerHTML = '<div class="l"><button type="button" class="icon-btn blue" data-act="res-back" aria-label="Torna alla scheda">' + I.back + '</button></div><h1>Resoconto</h1><div class="r">' + help + '</div>'; return; }
       t.innerHTML = '<div class="l"><button type="button" class="icon-btn blue" data-act="back" aria-label="Torna alle barche">' + I.back + '</button>' + '</div><h1>' + esc(b.nome || 'Barca') + '</h1>' +
-        '<div class="r">' + (S.canWrite ? '<button type="button" class="icon-btn blue" data-act="edit-boat" data-id="' + esc(b.id) + '" aria-label="Modifica scheda">' + I.pencil + '</button>' : '') + '</div>';
+        '<div class="r">' + help + (S.canWrite ? '<button type="button" class="icon-btn blue" data-act="edit-boat" data-id="' + esc(b.id) + '" aria-label="Modifica scheda">' + I.pencil + '</button>' : '') + '</div>';
       return;
     }
     if (V.tab === 'mappa') {
-      t.innerHTML = '<div class="l"><button type="button" class="icon-btn blue" data-act="m-back" aria-label="Indietro">' + I.back + '</button></div><h1>' + (M.area === 'porto' ? 'Porto' : 'Mappa del cantiere') + '</h1><div class="r">' +
+      t.innerHTML = '<div class="l"><button type="button" class="icon-btn blue" data-act="m-back" aria-label="Indietro">' + I.back + '</button></div><h1>' + (M.area === 'porto' ? 'Porto' : 'Mappa del cantiere') + '</h1><div class="r">' + help +
         (S.canWrite && S.status === 'ready' && M.area !== 'porto' ? '<button type="button" class="icon-btn" data-act="m-cfg" aria-label="Misure del cantiere">' + I.ruler + '</button>' : '') + '</div>';
       return;
     }
@@ -5882,7 +5889,7 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (addAct == null) addAct = 'add-menu';
     var ro = S.status === 'ready' && !S.canWrite ? ' · sola lettura' : '';
     t.innerHTML = '<div class="l">' + left + '</div><h1' + (V.tab === 'home' ? ' id="logo-slot"' : '') + '>' + (V.tab === 'home' ? '' : titles[V.tab] + ro) + '</h1>' +
-      '<div class="r">' + (S.status === 'ready' ? '<button type="button" class="icon-btn" data-act="go-map" aria-label="Mappa del cantiere">' + I.map + '</button>' : '') + (add && addAct ? '<button type="button" class="icon-btn" data-act="' + addAct + '" aria-label="Aggiungi">' + I.plus + '</button>' : '') + '</div>';
+      '<div class="r">' + help + (S.status === 'ready' ? '<button type="button" class="icon-btn" data-act="go-map" aria-label="Mappa del cantiere">' + I.map + '</button>' : '') + (add && addAct ? '<button type="button" class="icon-btn" data-act="' + addAct + '" aria-label="Aggiungi">' + I.plus + '</button>' : '') + '</div>';
     if (V.tab === 'home') { var slot = $('#logo-slot'); if (slot) slot.appendChild(LOGO_IMG); }
   }
   function renderTabs() {
@@ -6010,6 +6017,187 @@ button.row:active, .row .hit:active { opacity: .65; }
     else if (k === 'scc') { x = (S.scadC || []).find(function (s) { return s.id === id; }); if (x && S.canWrite) scSheet(x); else { V.tab = 'scadcantiere'; V.boatId = null; render(); } }
     else if (k === 'prev') { x = (S.prev || []).find(function (p) { return p.id === id; }); if (x && S.canWrite) prevSheet(x); else { V.tab = 'preventivi'; V.boatId = null; render(); } }
     else if (k === 'attr') { x = (S.attr || []).find(function (a) { return a.id === id; }); if (x && S.canWrite) attrSheet(x); else if (x && x.barcaId) gqGo('boat', x.barcaId); }
+  }
+
+  /* ---------- Guida: il tasto «?» in alto apre la spiegazione della sezione in cui si è ---------- */
+  // ogni voce: t = titolo, p = due righe introduttive, li = punti; «A|» davanti = solo amministratore, «D|» = solo dipendenti
+  var GUIDA = {
+    inizio: { t: 'Come è fatta l’app', p: 'Un’unica app per tutto il cantiere: barche, lavori, ore, scadenze, mappa, magazzino. I dati sono condivisi in tempo reale: quello che segna un collega lo vedi subito.', li: [
+      'In basso ci sono le sei sezioni principali: Home, Scheda lavoro, Lavorazioni, Calendario, Barche, Altro. Tutte le altre sono dentro Altro.',
+      'In alto a destra trovi sempre la mappa del cantiere e il + per aggiungere qualcosa nella sezione in cui sei.',
+      'Il tasto ? in alto apre questa guida, già sulla sezione in cui ti trovi.',
+      'In Home e in Altro c’è la ricerca unica: scrivi una barca, un cliente, un articolo, un codice o un lavoro e l’app cerca dappertutto.',
+      'Senza campo l’app si apre lo stesso con gli ultimi dati: quello che salvi parte appena torna la rete.',
+      'Sul telefono conviene aggiungerla alla schermata Home: su iPhone da Safari › Condividi › «Aggiungi alla schermata Home», su Android da Chrome › tre puntini › «Installa app».'] },
+    home: { t: 'Home', p: 'La pagina di riepilogo: cosa c’è da fare subito e com’è la giornata.', li: [
+      'In primo piano scorri le schede con le cose urgenti (giornata da confermare, vari di oggi, scadenze, ferie da approvare, batterie, ricambi da riordinare). Ognuna ha il suo tasto per farla subito.',
+      'La campanella in alto a sinistra porta alle scadenze scadute e ne mostra il numero.',
+      'Meteo della Marina con il vento in nodi: il semaforo diventa giallo da 10 nodi di raffica e rosso da 18.',
+      '«Oggi in cantiere» mostra chi ha segnato ore oggi e su quali barche.',
+      'La barra di ricerca cerca in tutta l’app.'] },
+    scheda: { t: 'Scheda lavoro', p: 'Il rapportino del giorno: ognuno segna cosa ha fatto e per quante ore.', li: [
+      'Tocca «+ Mansione», scegli la barca (cerca per nome, cliente, posto o misura) oppure «Lavori di cantiere».',
+      'Scrivi cosa hai fatto e le ore (per esempio 2,5). Con «Aggiungi riga» metti più lavori sulla stessa barca.',
+      'Se hai usato ricambi del magazzino indicali: la quantità si scala da sola e il pezzo entra nello storico della barca. Puoi usare anche un kit già pronto.',
+      'La categoria si sceglie da sola leggendo il testo; puoi sempre cambiarla.',
+      'Se la barca non c’è ancora, la crei al volo con il nome. Se esiste già una barca con quel nome, l’app te lo chiede per evitare doppioni.',
+      'A fine giornata tocca «Conferma giornata». Dopo puoi ancora correggere, ma la versione di prima resta visibile barrata.',
+      'D|Puoi cancellare solo le tue mansioni.',
+      'A|Puoi correggere e cancellare le mansioni di tutti.'] },
+    lavori: { t: 'Lavorazioni', p: 'L’elenco dei lavori da fare sulle barche. La Scheda lavoro dice «cosa ho fatto oggi», le Lavorazioni «cosa c’è da fare».', li: [
+      'Con il + aggiungi un lavoro: barca, data, categoria, tempo stimato, ricambi previsti.',
+      'Toccalo per cambiarne lo stato: da fare, in corso, fatta. Se segni le ore motore e sono più alte di quelle della barca, la scheda barca si aggiorna.',
+      'In alto scegli «Da fare e in corso», «Fatte» o «Tutte».',
+      'Le lavorazioni da fare entrano anche nel Programma del loro giorno, e viceversa: spostarle o segnarle fatte vale da tutte e due le parti.'] },
+    calendario: { t: 'Calendario', p: 'Il mese a vista: i puntini colorati mostrano cosa c’è in ogni giorno.', li: [
+      'Puntini per lavori, scadenze (rosse se scadute, arancioni se vicine), vari e alaggi, programma e scadenze del cantiere.',
+      'Tocca un giorno per vedere il dettaglio: chi ha lavorato e quante ore, programma, vari, scadenze, assenti e meteo.',
+      'Dal giorno aperto puoi aggiungere qualcosa direttamente in quella data.'] },
+    barche: { t: 'Barche', p: 'Tutte le barche del cantiere. Tutto ruota attorno alla barca: lavori, scadenze, vari e ricambi sono collegati a lei.', li: [
+      'Cerca per nome, modello, cliente o posto.',
+      '«Trova la barca dalla foto»: fotografi una barca e l’app propone le 5 più simili tra quelle registrate. La foto non viene salvata.',
+      'Le barche con dati incompleti mostrano «manca: …» con il tasto per completarle.',
+      'Con il + in alto aggiungi una barca nuova.'] },
+    barca: { t: 'Scheda della barca', p: 'Qui c’è tutta la storia della barca.', li: [
+      'La matita in alto modifica i dati: modello, misure, motori, stato, ore motore, proprietario con telefono ed email.',
+      'Sotto trovi attrezzatura di bordo, ricambi montati, batterie, vari, scadenze, servizi, preventivi e lavori: ognuno ha il suo + per aggiungere da qui.',
+      '«Trasporto: passa?» controlla se la barca sul carrello passa dai portoni e dalla strada fino alla Marina.',
+      '«Resoconto» prepara il riepilogo dei lavori di un periodo, pronto da copiare e mandare al cliente.',
+      'I tasti mappa e porto mostrano dove si trova la barca.',
+      'A|In fondo, «Unisci con un’altra barca» serve quando la stessa barca è stata registrata due volte: scegli cosa tenere campo per campo e tutto passa sulla scheda che resta. Il doppione va nel cestino e da lì si può annullare l’unione.'] },
+    mappa: { t: 'Mappa del cantiere', p: 'Il piazzale e il capannone in scala, con le barche disegnate con le loro misure.', li: [
+      'Trascina una barca dove si trova davvero: la posizione si salva da sola e la vedono tutti.',
+      'L’app segnala barche sovrapposte o fuori dal perimetro e mostra le distanze dalle vicine.',
+      'Puoi mettere anche mezzi e carrelli: una barca caricata su un carrello si sposta con lui.',
+      'Con la «barca di prova» controlli se una certa misura ci sta. C’è anche la vista 3D.',
+      'L’elenco «Da posizionare» mostra le barche non ancora messe sulla mappa.',
+      'Il righello in alto corregge le misure del cantiere.'] },
+    porto: { t: 'Porto', p: 'I pontili della Marina con i posti barca.', li: [
+      'Tocca un posto per segnarlo come vostro o della Marina e assegnare barca, cliente, contratto e scadenza.',
+      '«Contratti» elenca i posti in ordine di scadenza, con quelli vicini in alto.',
+      '«Trova posto»: scrivi le misure di una barca e si accendono i vostri posti liberi in cui entra.',
+      '«Brokeraggio»: barche in vendita e persone che cercano una barca, con quelle adatte già abbinate.'] },
+    altro: { t: 'Altro', p: 'Qui trovi tutte le sezioni che non stanno nella barra in basso, e la ricerca unica.', li: [
+      'La ricerca in alto trova barche, clienti, articoli, codici, lavori e scadenze in tutta l’app.',
+      'Ogni voce mostra a destra se c’è qualcosa da guardare (per esempio «3 da riordinare»).',
+      'In fondo ci sono «Il mio account» per cambiare password o uscire.',
+      'A|Sempre in fondo trovi Utenti e permessi e il Cestino.'] },
+    programma: { t: 'Programma', p: 'Chi fa cosa oggi e domani.', li: [
+      'Per ogni cosa indichi giorno, ora e durata (facoltative), barca, persone, mezzi, materiali da preparare e urgenza.',
+      'Si può ripetere nei giorni lavorativi seguenti o ogni settimana.',
+      'Guarda «Per persona» o tutta la squadra; le cose rimaste indietro si portano a oggi con un tocco.',
+      'L’app avvisa se un mezzo o una persona sono già impegnati o se qualcuno è in ferie.',
+      'Quando segni una cosa fatta, ricordati di mettere le ore nella Scheda lavoro.'] },
+    pannello: { t: 'Pannello', p: 'Una pagina unica di controllo, aggiornata in tempo reale.', li: [
+      'Ore della settimana, programma di oggi, giornate da confermare, lavori e servizi aperti.',
+      'Contratti del porto in scadenza, posti liberi e occupati, barche in vendita.',
+      'Servizi degli ultimi 30 giorni: nei tempi, più lunghi o più veloci del previsto.',
+      'Magazzino da riordinare e batterie da caricare.'] },
+    batterie: { t: 'Batterie', p: 'Per le barche a terra: quando sono state caricate o controllate le batterie.', li: [
+      'Segna la carica con quante batterie, la tensione letta e le note. I dati si possono leggere dalla foto dell’etichetta.',
+      'In cima ci sono quelle ferme da più tempo; dopo i giorni scelti compare il promemoria in Home.'] },
+    vari: { t: 'Vari e alaggi', p: 'Le uscite e i rientri in acqua delle barche, con data e ora.', li: [
+      'Con il + programmi un varo o un alaggio.',
+      'Quando lo segni fatto lo stato della barca si aggiorna da solo: «In acqua» o «In rimessaggio».',
+      'Al varo l’app chiede in quale posto del porto va e propone i vostri posti liberi adatti; all’alaggio ricorda di metterla sulla mappa del cantiere.'] },
+    magazzino: { t: 'Magazzino', p: 'Ricambi, prodotti e materiali con quantità, posizione e scorta minima.', li: [
+      'Le quantità si scalano da sole quando qualcuno segna un ricambio in una mansione.',
+      '«Da riordinare» e «Lista della spesa» raccolgono gli articoli sotto scorta, divisi per fornitore.',
+      '«Carico di più articoli (bolla)» carica in una volta sola tutto quello che è arrivato; se un articolo non esiste lo crea.',
+      'Il codice a barre si legge con la fotocamera per caricare, scaricare o trovare un articolo.',
+      '«Riconosci dalla foto» compila nome e tipo di un ricambio. I kit sono gruppi di pezzi da usare insieme.',
+      'Inventario: si contano gli articoli un posto alla volta, anche in più persone dal proprio telefono.',
+      'A|Alla fine dell’inventario vedi le differenze e lo chiudi: le giacenze si correggono lasciando traccia.'] },
+    preventivi: { t: 'Preventivi', p: 'I preventivi in ore e ricambi, anche dalla foto di quello dell’ufficio.', li: [
+      'Puoi fotografare il preventivo (anche scritto a mano) e l’app compila le righe, oppure prepararlo qui.',
+      'Lo stato va da bozza a inviato ad accettato.',
+      'Quando diventa «Accettato», i lavori previsti diventano lavorazioni da fare con le ore stimate. Dopo si confrontano ore previste e vere.'] },
+    rifiuti: { t: 'Rifiuti', p: 'Il registro dei rifiuti del cantiere, con codice CER e contenitore.', li: [
+      'Segna un rifiuto a pezzi, litri o sacchetti (l’app stima i kg) oppure in kg, anche legato alla barca.',
+      'La fotocamera può suggerire che tipo di rifiuto è.',
+      'Vedi quanto c’è in deposito dall’ultimo ritiro.',
+      '«Ritiro ditta»: spunti cosa è stato ritirato, i kg pesati e il numero del formulario.',
+      'Il registro si scarica in Excel, per il RENTRI.'] },
+    assenze: { t: 'Ferie e permessi', p: 'Richieste di ferie, permessi e malattia.', li: [
+      'Con il + chiedi ferie (a giorni), un permesso (a ore) o segnali la malattia.',
+      'Tutti vedono chi è assente; il motivo e le note li vedono solo la persona e l’amministratore.',
+      'Le assenze compaiono anche in programma, calendario e ore del mese.',
+      'D|L’amministratore approva o rifiuta e lo vedi in Home. Puoi cancellare una tua richiesta finché non è decisa.',
+      'A|Le richieste da approvare compaiono qui e in Home: approva o rifiuta con un tocco.'] },
+    misure: { t: 'Misure: mm e pollici', p: 'Strumenti di misura per l’officina.', li: [
+      'Convertitore tra millimetri e pollici.',
+      'Chiavi metriche e in pollici: ti dice se una chiave va bene o è troppo larga.',
+      'Riconoscimento dei filetti metrici, UNC, UNF, BSP e NPT dal diametro e dal passo.'] },
+    ore: { t: 'Ore del mese', p: 'Le ore di ogni dipendente, prese dalla Scheda lavoro.', li: [
+      'Cambia mese con le frecce.',
+      'Tocca una persona per vedere giorno per giorno le ore e le giornate confermate o ancora da confermare.',
+      'In fondo c’è il totale della squadra.'] },
+    operazioni: { t: 'Servizi di cantiere', p: 'Le operazioni ripetitive: trasporti, alaggi, movimentazioni, vari, lavaggi.', li: [
+      'Ogni gruppo (per esempio «Trasporto») ha le sue varianti, con i passaggi e un tempo stimato.',
+      'Avvii un servizio su una barca; chi ci lavora segna il suo tempo, poi lo completi.',
+      'Dopo qualche servizio il tempo stimato si aggiorna da solo con la media dei tempi veri.'] },
+    scadenze: { t: 'Scadenze', p: 'Tagliandi, antivegetativa, assicurazioni, contratti e dotazioni di sicurezza delle barche.', li: [
+      'Una scadenza può essere a data, a ore motore o tutte e due, e può ripetersi.',
+      'Quando la segni fatta passa da sola alla prossima; puoi registrarla anche tra i lavori fatti.',
+      'Sono divise in scadute (rosse), entro 30 giorni (arancioni) e più avanti.',
+      'Con la fotocamera l’app legge la scadenza da un’etichetta o un documento: controlla prima di salvare.'] },
+    scadcantiere: { t: 'Scadenze del cantiere', p: 'Come le scadenze delle barche, ma per mezzi, attrezzature e sicurezza del cantiere.', li: [
+      'Revisioni di gru, carrelli e muletto, estintori, pronto soccorso, impianto elettrico, uscite di emergenza, DVR.',
+      'Sono tenute separate da quelle dei clienti.'] },
+    notifiche: { t: 'Notifiche', p: 'Gli avvisi sul telefono per le scadenze.', li: [
+      'Attiva le notifiche su questo telefono: ogni mattina dei giorni lavorativi arriva un solo avviso con le scadenze.',
+      'Su iPhone funzionano solo con l’app aggiunta alla schermata Home.',
+      'A|Decidi tu l’ora, chi le riceve, quanto prima avvisare, la soglia per le ore motore e se includere le scadenze del cantiere.'] },
+    categorie: { t: 'Categorie dei lavori', p: 'L’elenco delle categorie: motore, carena, coperta…', li: [
+      'La categoria di un lavoro si sceglie da sola leggendo il testo, o ricordando com’era l’ultima volta.',
+      'D|Solo l’amministratore può aggiungere, rinominare o togliere le categorie.',
+      'A|Puoi aggiungere, rinominare o togliere le categorie, e indicare le parole che le fanno riconoscere.'] },
+    backup: { t: 'Copia dei dati', p: 'Un file unico con tutti i dati del gestionale.', li: [
+      '«Scarica» salva il file sul telefono o sul computer: conviene farlo ogni tanto e tenerlo su Drive o iCloud.',
+      '«Recupera ciò che manca» rimette dalla copia solo quello che non c’è più, senza toccare il resto.',
+      'Le foto non entrano nella copia.'] },
+    inventario: { rif: 'magazzino' },
+    account: { t: 'Account e permessi', p: 'Ognuno entra con la sua email e password; nessuno usa account condivisi.', li: [
+      '«Il mio account» (in fondo ad Altro) serve per cambiare la password o uscire.',
+      'Per far entrare un collega basta mandargli il link dell’app: si registra come «Lavoro al cantiere».',
+      'D|Il nuovo account aspetta che l’amministratore lo approvi.',
+      'D|Il tasto «Elimina» compare solo dove puoi davvero cancellare: le cose che hai aggiunto tu.',
+      'D|Se cancelli qualcosa per sbaglio chiedi all’amministratore: lo recupera dal cestino entro 60 giorni.',
+      'A|In Altro › Utenti e permessi approvi i nuovi account, cambi i ruoli (dipendente, amministratore, cliente), sospendi e colleghi le barche ai clienti.',
+      'A|Il Cestino tiene per 60 giorni tutto ciò che è stato cancellato, con chi e quando: si recupera con un tocco.',
+      'A|Mentre hai l’app aperta ti arrivano in basso gli avvisi di chi entra e cosa fa; quando torni vedi il riepilogo «Mentre non c’eri».'] },
+    ai: { t: 'Fotocamera e intelligenza artificiale', p: 'In diversi punti c’è un tasto con la fotocamera che legge la foto e compila i campi.', li: [
+      'Riconosce una barca, legge una scadenza o l’etichetta di una batteria, riconosce un rifiuto o un ricambio, legge un preventivo.',
+      'Non salva mai da sola: controlli e confermi tu.',
+      'Non fotografare documenti con dati personali dei clienti.'] },
+    faq: { t: 'Domande frequenti', p: '', li: [
+      'Ho cancellato qualcosa per sbaglio? Si recupera dal cestino entro 60 giorni (lo fa l’amministratore).',
+      'Funziona senza internet? Sì, con gli ultimi dati; le modifiche partono quando torna la rete. Meteo, fotocamera intelligente e notifiche hanno bisogno di internet.',
+      'Due persone possono modificare la stessa cosa? Sì, ognuno vede subito le modifiche dell’altro.',
+      'Si rompe il telefono? I dati non si perdono: basta entrare con la stessa email e password da un altro dispositivo.',
+      'Il cliente vede ore e prezzi? No: vede solo dove è la barca, il suo stato e i lavori fatti.'] }
+  };
+  var GUIDA_ORD = ['inizio', 'home', 'scheda', 'lavori', 'calendario', 'barche', 'barca', 'mappa', 'porto', 'altro', 'programma', 'pannello', 'vari', 'scadenze', 'scadcantiere', 'batterie', 'magazzino', 'preventivi', 'operazioni', 'rifiuti', 'assenze', 'ore', 'misure', 'notifiche', 'categorie', 'backup', 'account', 'ai', 'faq'];
+  function guidaQui() {
+    if (V.tab === 'barche' && V.boatId && boatById(V.boatId)) return 'barca';
+    if (V.tab === 'mappa') return M.area === 'porto' ? 'porto' : 'mappa';
+    var k = GUIDA[V.tab] ? V.tab : 'inizio';
+    return GUIDA[k].rif || k;
+  }
+  function guidaBody(k) {
+    var g = GUIDA[k], adm = !!S.isOwner;
+    var li = g.li.filter(function (s) { return s.slice(0, 2) === 'A|' ? adm : s.slice(0, 2) === 'D|' ? !adm : true; }).map(function (s) { return '<li>' + esc(s.replace(/^[AD]\|/, '')) + '</li>'; }).join('');
+    return (g.p ? '<p class="gd-p">' + esc(g.p) + '</p>' : '') + '<ul class="gd-list">' + li + '</ul>' +
+      '<div class="lbl">Altre sezioni</div><div class="group">' + GUIDA_ORD.filter(function (x) { return x !== k; }).map(function (x) {
+        return '<button type="button" class="row" data-act="guida" data-k="' + x + '"><span class="main"><span class="title">' + esc(GUIDA[x].t) + '</span></span><span style="color:var(--dim);width:18px;flex:none">' + I.right + '</span></button>';
+      }).join('') + '</div>';
+  }
+  function guida(k) {
+    k = GUIDA[k] ? k : guidaQui();
+    var sb = document.querySelector('#sheet-form .sheet-body.gd');
+    if (!sb) { openSheet({ title: 'Guida · ' + GUIDA[k].t, menu: true, body: '' }); sb = document.querySelector('#sheet-form .sheet-body'); sb.classList.add('gd'); }
+    document.querySelector('#sheet-form .sheet-head h3').textContent = 'Guida · ' + GUIDA[k].t;
+    sb.innerHTML = guidaBody(k); sb.scrollTop = 0;
   }
 
   /* ---------- Fogli ---------- */
@@ -7630,6 +7818,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       case 'opmod-addvar': x = $('#vlist'); if (x && SHEET.vBlock) { x.insertAdjacentHTML('beforeend', SHEET.vBlock({ nome: '', voci: [] }, x.children.length)); var nv = x.querySelectorAll('.v-n'); if (nv.length) nv[nv.length - 1].focus(); } break;
       case 'opmod-delvar': x = t.closest('.vbox'); if (x) x.remove(); break;
       case 'op-play': case 'op-pause': case 'op-useclock': case 'op-manual': case 'op-mansave': case 'op-pers': case 'op-segna': case 'op-delvoce': case 'op-complete': case 'op-reopen': case 'op-del': case 'op-del2': opAction(act, t); break;
+      case 'guida': guida(t.getAttribute('data-k')); break;
       case 'go-map':
         if (V.tab !== 'mappa') { M.prevTab = V.tab; M.prevBoat = V.tab === 'barche' ? V.boatId : null; }
         V.tab = 'mappa'; V.boatId = null; V.boatView = null;
