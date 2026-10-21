@@ -1238,6 +1238,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       h += '<div class="sec-h" style="margin-top:10px"><span class="cap">' + tots.join(' · ') + '</span>' +
         (lv.length > 5 ? '<button type="button" class="link" data-act="boat-lav-all">' + (V.boatLavAll ? 'Mostra meno' : 'Vedi tutti (' + lv.length + ')') + '</button>' : '') + '</div>';
     } else h += '<div class="notice">Nessun lavoro registrato.</div>';
+    if (S.isOwner && S.canWrite && S.boats.length > 1) h += '<button type="button" class="btn sec" data-act="boat-merge" data-id="' + esc(b.id) + '" style="width:100%;margin-top:22px">Unisci con un’altra barca</button><p class="cap" style="margin:6px 4px 0">Solo per l’amministratore: se questa barca ha una scheda doppia.</p>';
     return h;
   }
 
@@ -6409,6 +6410,159 @@ button.row:active, .row .hit:active { opacity: .65; }
     });
   }
 
+  /* ---------- Unire due schede della stessa barca (solo amministratore) ----------
+     Si sceglie il doppione e, nei campi diversi, quale valore tenere. Lavori, scadenze e tutto ciò che punta
+     al doppione passano sulla scheda che resta, poi il doppione va nel cestino. Nella sua copia nel cestino
+     resta cosa è stato spostato: recuperandolo, l'unione si annulla. */
+  var MRG_CAMPI = [['nome', 'Nome'], ['modello', 'Cantiere e modello'], ['tipo', 'Tipo'], ['stato', 'Stato'], ['lunghezza', 'Lunghezza (m)'], ['larghezza', 'Larghezza (m)'], ['anno', 'Anno'],
+    ['posto', 'Posto'], ['immatricolazione', 'Immatricolazione'], ['motore', 'Motore'], ['motoreTipo', 'Installazione motore'], ['nMotori', 'Numero motori'], ['potenza', 'Potenza (cv)'],
+    ['oreMotore', 'Ore motore'], ['matricolaMotore', 'Matricola motore'], ['batterie', 'Batterie'], ['tipologia', 'Tipologia'], ['altezzaScafo', 'Altezza scafo (m)'], ['altezzaMax', 'Altezza totale (m)'],
+    ['coloreScafo', 'Colore scafo'], ['coloreCarena', 'Colore carena'], ['fascia', 'Fascia colorata'], ['coloreFascia', 'Colore fascia'], ['proprietario', 'Cliente'], ['telefono', 'Telefono'], ['email', 'Email']];
+  function clone(x) { return x == null ? x : JSON.parse(JSON.stringify(x)); }
+  var MRG_SALTA = ['id', 'creato', 'creatoDa', 'modificato', 'note', 'foto', 'daCompletare', 'unione'];
+  var MRG_NOMI = { lavori: ['lavoro', 'lavori'], scadenze: ['scadenza', 'scadenze'], vari: ['varo o alaggio', 'vari e alaggi'], operazioni: ['servizio', 'servizi'], programma: ['impegno in programma', 'impegni in programma'],
+    preventivi: ['preventivo', 'preventivi'], attrezzatura: ['attrezzatura di bordo', 'attrezzature di bordo'], cariche: ['carica batterie', 'cariche batterie'], rifiuti: ['rifiuto', 'rifiuti'],
+    movimenti: ['movimento di magazzino', 'movimenti di magazzino'], checklist: ['checklist', 'checklist'], mezzi: ['mezzo o carrello', 'mezzi e carrelli'], posti: ['posto al porto', 'posti al porto'], checkBarca: ['lista della barca', 'liste della barca'] };
+  function mrgVuoto(v) { return v == null || v === '' || (Array.isArray(v) && !v.length); }
+  function mrgTxt(k, v) {
+    if (mrgVuoto(v)) return '—';
+    if (/^colore/.test(k)) return '<span style="display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:6px;border:1px solid var(--line);background:' + esc(v) + '"></span>' + esc(v);
+    return esc(typeof v === 'number' ? fmtNum(v, 2) : String(v));
+  }
+  function mrgSimili(b) { // barche che sembrano la stessa: stesso nome, immatricolazione o matricola del motore
+    var n = function (x) { return bpNorm(x).replace(/[^a-z0-9]/g, ''); };
+    return S.boats.filter(function (x) {
+      return x.id !== b.id && ((n(x.nome) && n(x.nome) === n(b.nome)) || (n(x.immatricolazione) && n(x.immatricolazione) === n(b.immatricolazione)) || (n(x.matricolaMotore) && n(x.matricolaMotore) === n(b.matricolaMotore)));
+    });
+  }
+  // cosa punta al doppione d e cosa cambia perché punti alla barca a; per annullare si conserva il valore di prima
+  function mrgPiano(a, d) {
+    var mv = [], liste = [['lavori', S.lavoriAll], ['scadenze', S.scadenze], ['vari', S.vari], ['operazioni', S.ops], ['programma', S.prog], ['preventivi', S.prev], ['attrezzatura', S.attr],
+      ['cariche', S.cariche], ['rifiuti', S.rif], ['movimenti', S.mov], ['checklist', S.check]];
+    liste.forEach(function (L) {
+      (L[1] || []).forEach(function (x) {
+        var ab = x.altreBarche || [], u = {};
+        if (x.barcaId === d.id) u.barcaId = a.id;
+        if (ab.indexOf(d.id) >= 0 || (u.barcaId && ab.indexOf(a.id) >= 0)) {
+          var bid = u.barcaId || x.barcaId, nab = [];
+          ab.forEach(function (y) { y = y === d.id ? a.id : y; if (y !== bid && nab.indexOf(y) < 0) nab.push(y); });
+          u.altreBarche = nab;
+        }
+        if (!Object.keys(u).length) return;
+        var m = { c: L[0], id: x.id, u: u };
+        if ('barcaId' in u) m.b = d.id;
+        if ('altreBarche' in u) m.ab = ab.slice();
+        mv.push(m);
+      });
+    });
+    // posto al porto e carrello: se la barca che resta ne ha già uno, quello del doppione si libera
+    var pd = Object.keys(S.posti || {}).filter(function (k) { return S.posti[k] && S.posti[k].barcaId === d.id; }), pa = Object.keys(S.posti || {}).some(function (k) { return S.posti[k] && S.posti[k].barcaId === a.id; });
+    pd.forEach(function (k, i) { mv.push({ c: 'posti', id: k, u: { barcaId: pa || i ? '' : a.id, modificato: new Date().toISOString() }, b: d.id, libera: pa || i > 0 }); });
+    var md = (S.mezzi || []).filter(function (x) { return x.barcaId === d.id; }), ma = (S.mezzi || []).some(function (x) { return x.barcaId === a.id; });
+    md.forEach(function (x, i) { mv.push({ c: 'mezzi', id: x.id, u: { barcaId: ma || i ? null : a.id }, b: d.id, libera: ma || i > 0 }); });
+    var ck = Object.keys(S.ckBarca || {}).filter(function (k) { return S.ckBarca[k].barcaId === d.id; }).map(function (k) { var x = S.ckBarca[k]; return { da: k, a: S.ckBarca[ckKey(a.id, x.modelloId)] ? '' : ckKey(a.id, x.modelloId), x: x }; });
+    return { mv: mv, ck: ck };
+  }
+  function mrgUnito(a, d, scelte) { // la scheda che resta, con i valori scelti e i vuoti riempiti dal doppione
+    var out = {};
+    Object.keys(d).forEach(function (k) { if (MRG_SALTA.indexOf(k) < 0 && k.charAt(0) !== '_' && mrgVuoto(a[k]) && !mrgVuoto(d[k])) out[k] = clone(d[k]); });
+    Object.keys(scelte).forEach(function (k) { if (scelte[k] === 'd') out[k] = clone(d[k]); });
+    var note = [a.note, d.note].map(function (x) { return String(x || '').trim(); }).filter(Boolean);
+    if (note.length === 2 && note[0] !== note[1]) out.note = note[0] + '\n\n' + note[1];
+    var foto = (a.foto || []).slice(); (d.foto || []).forEach(function (f) { if (foto.indexOf(f) < 0) foto.push(f); });
+    if (foto.length !== (a.foto || []).length) out.foto = foto;
+    if (d.creato && (!a.creato || String(d.creato) < String(a.creato))) out.creato = d.creato;
+    if (a.daCompletare && !d.daCompletare) out.daCompletare = false;
+    return out;
+  }
+  function mergePick(b) {
+    var sim = mrgSimili(b), list = S.boats.filter(function (x) { return x.id !== b.id; }).sort(byName), pre = sim[0] ? sim[0].id : '';
+    var body = '<p class="context">Scegli l’altra scheda della stessa barca. Prima di unire vedi cosa cambia e scegli quali dati tenere.</p>' +
+      (sim.length ? '<div class="notice" style="margin-bottom:12px">Sembra' + (sim.length > 1 ? 'no doppioni: ' : ' un doppione: ') + esc(sim.map(boatLabel).join(', ')) + '</div>' : '') +
+      field(lab('f-barca', 'L’altra scheda'), '<select id="f-barca" required>' + (pre ? '' : '<option value="">Scegli la barca</option>') + list.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === pre ? ' selected' : '') + '>' + esc(boatLabel(x)) + '</option>'; }).join('') + '</select>');
+    openSheet({
+      title: 'Unisci con un’altra barca', body: body, submitLabel: 'Avanti',
+      onSubmit: async function (f) {
+        var d = boatById(val(f, 'f-barca'));
+        if (!d) { formErr('Scegli l’altra scheda.'); return false; }
+        setTimeout(function () { mergeSheet(b.id, d.id); }, 0);
+        return true;
+      }
+    });
+  }
+  function mergeSheet(aId, dId) {
+    var a = boatById(aId), d = boatById(dId); if (!a || !d) return;
+    var piano = mrgPiano(a, d), diff = [], auto = [];
+    MRG_CAMPI.forEach(function (c) {
+      var k = c[0], va = a[k], vd = d[k];
+      if (mrgVuoto(vd) || String(va) === String(vd)) return;
+      if (mrgVuoto(va)) auto.push(c); else diff.push(c);
+    });
+    var conta = {};
+    piano.mv.forEach(function (m) { if (!m.libera) conta[m.c] = (conta[m.c] || 0) + 1; });
+    if (piano.ck.length) conta.checkBarca = piano.ck.filter(function (x) { return x.a; }).length;
+    var righe = Object.keys(conta).filter(function (k) { return conta[k]; }).map(function (k) { return conta[k] + ' ' + MRG_NOMI[k][conta[k] === 1 ? 0 : 1]; });
+    var lib = piano.mv.filter(function (m) { return m.libera; }), clienti = window.__NM_FB && window.__NM_FB.clientiBarca ? window.__NM_FB.clientiBarca(d.id) : [];
+    var nA = esc(a.nome || 'Senza nome'), nD = esc(d.nome || 'Senza nome');
+    var body = '<p class="context">Resta la scheda <b>«' + nA + '»</b>' + (a.posto ? ' (' + esc(a.posto) + ')' : '') + '. La scheda <b>«' + nD + '»</b>' + (d.posto ? ' (' + esc(d.posto) + ')' : '') +
+      ' va nel cestino per 60 giorni: se la recuperi da lì, l’unione si annulla.</p>' +
+      '<button type="button" class="link" id="mrg-swap" style="margin:-4px 0 14px">Tieni invece «' + nD + '» come scheda principale</button>';
+    if (diff.length) {
+      body += '<div class="lbl">Dati diversi: scegli quale tenere</div>' + diff.map(function (c) {
+        var k = c[0], def = k === 'oreMotore' && num(d[k]) > num(a[k]) ? 'd' : 'a';
+        return '<div class="field"><span class="lbl" style="margin:0">' + esc(c[1]) + '</span>' +
+          ['a', 'd'].map(function (s) { var x = s === 'a' ? a : d; return '<label class="check"><input type="radio" name="m-' + k + '" value="' + s + '"' + (s === def ? ' checked' : '') + '> ' + mrgTxt(k, x[k]) + ' <span class="cap">· da «' + (s === 'a' ? nA : nD) + '»</span></label>'; }).join('') + '</div>';
+      }).join('');
+    } else body += '<div class="notice">Nessun dato in contrasto tra le due schede.</div>';
+    var info = [];
+    if (auto.length) info.push('Si completano dalla scheda doppia: ' + esc(auto.map(function (c) { return c[1].replace(/ \(.*\)$/, '').toLowerCase(); }).join(', ')) + '.');
+    if (String(a.note || '').trim() && String(d.note || '').trim() && String(a.note).trim() !== String(d.note).trim()) info.push('Le note delle due schede si mettono insieme.');
+    if ((d.foto || []).length) info.push('Le foto della scheda doppia passano su questa.');
+    info.push(righe.length ? 'Passano su «' + nA + '»: ' + esc(righe.join(', ')) + '.' : 'Sulla scheda doppia non ci sono lavori, scadenze o altro da spostare.');
+    lib.forEach(function (m) { info.push(m.c === 'posti' ? 'Il posto al porto ' + esc(m.id) + ' della scheda doppia si libera (il cliente resta segnato), perché «' + nA + '» ha già il suo.' : 'Il carrello della scheda doppia si libera, perché «' + nA + '» ne ha già uno.'); });
+    if (clienti.length) info.push(clienti.length === 1 ? 'Il cliente collegato alla scheda doppia vedrà «' + nA + '» nella sua area.' : clienti.length + ' clienti collegati alla scheda doppia vedranno «' + nA + '» nella loro area.');
+    body += '<div class="lbl" style="margin-top:16px">Cosa succede</div><div class="group notes" style="flex-shrink:0">' + info.join('\n\n') + '</div>' +
+      '<label class="check" style="margin-top:14px"><input type="checkbox" id="mrg-ok" required> Ho controllato: sono la stessa barca</label>';
+    openSheet({
+      title: 'Unisci le schede', body: body, submitLabel: 'Unisci',
+      onOpen: function (f) { f.querySelector('#mrg-swap').addEventListener('click', function () { mergeSheet(dId, aId); }); },
+      onSubmit: async function (f) {
+        if (!f.querySelector('#mrg-ok').checked) { formErr('Spunta la conferma: le due schede devono essere la stessa barca.'); return false; }
+        var scelte = {};
+        diff.forEach(function (c) { var r = f.querySelector('input[name="m-' + c[0] + '"]:checked'); scelte[c[0]] = r ? r.value : 'a'; });
+        a = boatById(aId); d = boatById(dId); if (!a || !d) { formErr('Una delle due schede non c’è più.'); return false; }
+        return mergeDo(a, d, scelte);
+      }
+    });
+  }
+  async function mergeDo(a, d, scelte) {
+    var piano = mrgPiano(a, d), now = new Date().toISOString(), unito = mrgUnito(a, d, scelte), prima = clone(a); delete prima.id;
+    var FB = window.__NM_FB, clienti = FB && FB.clientiBarca ? FB.clientiBarca(d.id) : [];
+    // 1. sul doppione si segna cosa sta per cambiare: la sua copia nel cestino servirà per annullare
+    var rd = S.db.collection('barche').doc(d.id);
+    var unione = { in: a.id, nome: a.nome || '', il: now, da: S.myId || '', prima: prima, spostati: piano.mv.map(function (m) { var r = { c: m.c, id: m.id }; if ('b' in m) r.b = m.b; if (m.ab) r.ab = m.ab; return r; }), clienti: clienti };
+    if (!(await w(function () { return rd.update({ unione: unione }); }))) return false;
+    // 2. la scheda che resta
+    var ra = S.db.collection('barche').doc(a.id); unito.modificato = now;
+    if (!(await w(function () { return ra.update(unito); }))) return false;
+    // 3. lavori, scadenze e il resto
+    for (var i = 0; i < piano.mv.length; i++) {
+      var m = piano.mv[i], r = S.db.collection(m.c).doc(m.id);
+      if (!(await w(function () { return r.update(m.u); }))) { toast('Unione interrotta: spostate ' + i + ' cose su ' + piano.mv.length + '. Riprova a unire le stesse due schede.', true); return false; }
+    }
+    if (clienti.length && FB.spostaClienti) { try { await FB.spostaClienti(d.id, a.id); } catch (e) { toast('Non sono riuscito a collegare i clienti alla scheda che resta: fallo da Altro › Persone.', true); } }
+    // 4. vecchie liste per barca e il doppione vanno nel cestino, insieme
+    for (var j = 0; j < piano.ck.length; j++) {
+      var ck = piano.ck[j];
+      if (ck.a) { var nx = Object.assign({}, ck.x, { barcaId: a.id }); delete nx.id; var rn = S.db.collection('checkBarca').doc(ck.a); if (!(await w(function () { return rn.set(nx); }))) return false; }
+    }
+    var refs = piano.ck.map(function (x) { return S.db.collection('checkBarca').doc(x.da); }).concat([rd]);
+    if (!(await delSeq(refs))) return false;
+    V.tab = 'barche'; V.boatId = a.id; V.boatView = null; window.scrollTo(0, 0); render();
+    toast('Schede unite: «' + (d.nome || 'la scheda doppia') + '» è nel cestino');
+    return true;
+  }
+
   async function bumpOre(boatId, ore) {
     var b = boatById(boatId);
     if (!b || ore == null || (num(b.oreMotore) != null && ore <= b.oreMotore)) return true;
@@ -7556,6 +7710,7 @@ button.row:active, .row .hit:active { opacity: .65; }
       case 'edit-nome': nomeSheet(); break;
       case 'new-boat': boatSheet(null); break;
       case 'edit-boat': var b = boatById(id); if (b) boatSheet(b); break;
+      case 'boat-merge': var bm = boatById(id); if (bm && S.isOwner) mergePick(bm); break;
       case 'new-prog': x = t.getAttribute('data-chi'); progSheet(null, x ? { pers: x === '__squadra' ? [] : [x] } : null); break;
       case 'edit-prog': x = S.prog.find(function (q) { return q.id === id; }); if (x) progSheet(x); break;
       case 'prog-tick': x = S.prog.find(function (q) { return q.id === id; }); if (x && S.canWrite) progTick(x); break;

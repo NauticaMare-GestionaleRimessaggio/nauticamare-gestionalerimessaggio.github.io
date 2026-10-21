@@ -589,7 +589,34 @@
       try { await write(x.coll, x.docId, 'set', x.dati); await settle(fs.collection('cestino').doc(x.id).delete()); ok++; } catch (e) { fail++; }
     }
     toast(fail ? 'Recuperate ' + ok + ', ' + fail + ' non riuscite: riprova.' : ok === 1 ? 'Recuperato' : 'Recuperate ' + ok + ' cose');
+    for (var j = 0; j < g.items.length; j++) { var y = g.items[j]; if (y.coll === 'barche' && y.dati && y.dati.unione && live('barche').map[y.docId]) await annullaUnione(y.docId, y.dati); }
     CEST = null; renderPanel();
+  }
+  // una barca recuperata che era stata unita a un'altra: si rimette tutto com'era prima dell'unione
+  async function annullaUnione(dId, d) {
+    var u = d.unione, B = live('barche').map, nome = (B[u.in] && B[u.in].nome) || u.nome || 'l’altra barca';
+    if (B[u.in] && confirm('«' + (d.nome || 'Questa barca') + '» era stata unita a «' + nome + '». Annullo l’unione? Rimetto qui lavori, scadenze e il resto che le avevo spostato, e riporto la scheda «' + nome + '» com’era prima dell’unione (le modifiche fatte dopo a quella scheda si perdono).')) {
+      var ok = 0, fail = 0;
+      for (var i = 0; i < (u.spostati || []).length; i++) {
+        var m = u.spostati[i], cur = live(m.c).map[m.id], up = {}; if (!cur) continue;
+        if ('b' in m) up.barcaId = m.b;
+        if (m.ab) up.altreBarche = m.ab;
+        if (m.c === 'posti') up.modificato = nowISO();
+        try { await write(m.c, m.id, 'update', up); ok++; } catch (e) { fail++; }
+      }
+      try { await write('barche', u.in, 'set', u.prima); } catch (e) { fail++; }
+      (u.clienti || []).forEach(function (uid) { var x = UT[uid]; if (!x) return; var bb = (x.barche || []).slice(); if (bb.indexOf(dId) < 0) bb.push(dId); setUser(uid, { barche: bb }).catch(function () { }); });
+      toast(fail ? 'Unione annullata in parte: ' + fail + ' cose non riuscite.' : 'Unione annullata: le due schede sono di nuovo separate.');
+    }
+    try { await write('barche', dId, 'update', { unione: { __delete__: true } }); } catch (e) { }
+  }
+  // clienti collegati a una barca (per l'unione di due schede)
+  function clientiBarca(bid) { return Object.keys(UT).filter(function (id) { return (UT[id].barche || []).indexOf(bid) >= 0; }); }
+  function spostaClienti(da, a) {
+    return Promise.all(clientiBarca(da).map(function (id) {
+      var bb = []; (UT[id].barche || []).forEach(function (b) { b = b === da ? a : b; if (bb.indexOf(b) < 0) bb.push(b); });
+      return setUser(id, { barche: bb });
+    }));
   }
   function closePanel() { PAN = null; var p = $('#nmpan'); if (p) p.remove(); }
   function oldPeople() {
@@ -981,6 +1008,8 @@
     photoSrc: function (id) { if (PH[id]) return PH[id]; if (started) loadPhoto(id); else READY.then(function () { loadPhoto(id); }); return GIF0; },
     altroRows: altroRows,
     open: open,
-    vista: attVista
+    vista: attVista,
+    clientiBarca: clientiBarca,
+    spostaClienti: spostaClienti
   };
 })();
