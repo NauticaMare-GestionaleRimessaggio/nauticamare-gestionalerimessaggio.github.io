@@ -17,3 +17,8 @@ window.NM_VAPID_KEY = 'BCTv5vIm6qaMMgbGdtg4mDd_cFzgt6eOqjMaaCDab8fBBFp707fbjuyF0
 /* Chi riceve gli avvisi «chi entra nell'app e cosa fa» (solo un amministratore, mentre ha l'app aperta).
    Le azioni di questo account non vengono registrate. Vuoto = nessun avviso. */
 window.NM_AVVISI_A = 'andreatorcini01@gmail.com';
+
+/* App Check (obbligatorio per l'AI dal 2 novembre 2026): chiave del sito reCAPTCHA registrata in
+   Firebase › App Check › App › app web. tipo: 'v3' (reCAPTCHA v3) oppure 'enterprise'.
+   Non è segreta. Finché è vuota l'app non manda il gettone e, dal 2/11, l'AI dalla foto non risponde. */
+window.NM_APPCHECK = { tipo: 'v3', siteKey: '' };
