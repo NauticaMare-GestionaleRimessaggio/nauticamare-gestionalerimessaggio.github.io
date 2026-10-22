@@ -2113,7 +2113,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
         var nuova = false;
         if (e === 'lav' && !voce.lavId) {
           var tit = 'Dopo il vento: ' + (cosa.filter(function (x) { return x !== 'Altro'; }).join(', ').toLowerCase() || note);
-          var ld = { barcaId: b.id, titolo: tit, data: todayISO(), stato: 'da_fare', categoria: guessCatInfo(tit + ' ' + note, '', false, b.id).cat || 'Altro', descr: note,
+          var ld = { barcaId: b.id, titolo: tit, data: '', stato: 'da_fare', categoria: guessCatInfo(tit + ' ' + note, '', false, b.id).cat || 'Altro', descr: note,
             oreStima: null, oreLavoro: null, importo: null, oreMotore: null, ricambi: [], foto: voce.foto.slice(), creato: now, modificato: now, giroId: g.id };
           var lr = S.db.collection('lavori').doc();
           if (!(await w(function () { return lr.set(ld); }))) return false;
@@ -4667,6 +4667,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     if (d.testo && d.testo !== l.titolo) u.titolo = d.testo;
     if (d.barcaId && d.barcaId !== l.barcaId) u.barcaId = d.barcaId;
     if (d.fatto != null) { var st = d.fatto ? 'fatto' : (l.stato === 'fatto' ? 'da_fare' : l.stato); if (st !== l.stato) u.stato = st; }
+    if (u.stato === 'fatto' && !l.data && !u.data) u.data = todayISO();
     if (!Object.keys(u).length) return;
     u.modificato = new Date().toISOString(); var r = S.db.collection('lavori').doc(l.id); await w(function () { return r.update(u); });
   }
@@ -4681,6 +4682,13 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       if (!Object.keys(u).length) continue;
       u.modificato = new Date().toISOString(); var r = S.db.collection('programma').doc(x.id); await w(function () { return r.update(u); });
     }
+  }
+  var progPulita = false;
+  async function progPulizia() { // una tantum (Torcio, 22/10/2026): le lavorazioni segnate il 22/10 erano entrate da sole nel programma; si tolgono, la lavorazione resta
+    if (progPulita || !S.isOwner || !S.got.lavori || !S.got.programma) return;
+    progPulita = true;
+    var list = (S.prog || []).filter(function (x) { return x.daLavorazione && !x.fatto && String(x.creato || '').slice(0, 10) === '2026-10-22' && x.lavId && S.lavori.some(function (l) { return l.id === x.lavId && l.progId !== x.id; }); });
+    for (var i = 0; i < list.length; i++) { var r = S.db.collection('programma').doc(list[i].id); await w(function () { return r.delete(); }); }
   }
   async function progTick(x) {
     var r = S.db.collection('programma').doc(x.id), now = new Date().toISOString(), on = !x.fatto;
@@ -6912,7 +6920,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'In alto scegli «Da fare e in corso», «Fatte» o «Tutte».',
       'Se un lavoro lo fa una ditta esterna (velaio, tappezziere, elettricista…), in «Chi lo fa» scegli «Una ditta esterna»: scrivi la ditta, cosa è uscito dal cantiere e quando deve tornare. La ditta e il suo telefono l’app li ricorda per la volta dopo; in Altro › Ditte esterne puoi segnare anche referente, email e note.',
       '«Fuori» elenca cosa è dalle ditte, diviso per ditta, con i ritardi in rosso e i tasti per chiamare o sollecitare su WhatsApp o per email. Quando torna tocca «Rientrato»: la lavorazione resta da fare finché non la segni fatta.',
-      'Una lavorazione nuova resta solo qui, tra quelle da fare: nel Programma ci va quando la aggiungi tu da lì («Parti da un lavoro aperto»). Le cose del Programma con una barca invece compaiono anche qui. Spostarle o segnarle fatte vale da tutte e due le parti.'] },
+      'Una lavorazione nuova resta solo qui, tra quelle da fare, e la data si può lasciare vuota (finisce in «Senza data»); quando la segni fatta prende il giorno di oggi. Nel Programma ci va quando la aggiungi tu da lì («Parti da un lavoro aperto»). Le cose del Programma con una barca invece compaiono anche qui. Spostarle o segnarle fatte vale da tutte e due le parti.'] },
     calendario: { t: 'Calendario', p: 'Il mese a vista: i puntini colorati mostrano cosa c’è in ogni giorno.', li: [
       'Puntini per lavori, scadenze (rosse se scadute, arancioni se vicine), vari e alaggi, programma e scadenze del cantiere.',
       'Tocca un giorno per vedere il dettaglio: chi ha lavorato e quante ore, programma, vari, scadenze, assenti e meteo.',
@@ -7710,11 +7718,11 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     return list[0] || null;
   }
   function lavSheet(l, presetBoat, presetDate) {
-    var isNew = !l; l = l || { data: presetDate || todayISO(), stato: 'da_fare', categoria: 'Altro', barcaId: presetBoat || '' };
+    var isNew = !l; l = l || { data: presetDate || '', stato: 'da_fare', categoria: 'Altro', barcaId: presetBoat || '' }; // un lavoro scoperto oggi non ha ancora un giorno
     var body =
       field(lab('f-barca', 'Barca'), boatSelect(l.barcaId)) +
       field(lab('f-titolo', 'Lavorazione'), inp('f-titolo', l.titolo, 'type="text" required placeholder="es. Tagliando 100 ore"')) +
-      '<div class="grid2">' + field(lab('f-data', 'Data'), inp('f-data', l.data, 'type="date"')) + field(lab('f-statoL', 'Stato'), '<select id="f-statoL">' + opts([['da_fare', 'Da fare'], ['in_corso', 'In corso'], ['fatto', 'Fatto']], l.stato) + '</select>') + '</div>' +
+      '<div class="grid2">' + field(lab('f-data', 'Data (facoltativa)'), inp('f-data', l.data, 'type="date"')) + field(lab('f-statoL', 'Stato'), '<select id="f-statoL">' + opts([['da_fare', 'Da fare'], ['in_corso', 'In corso'], ['fatto', 'Fatto']], l.stato) + '</select>') + '</div>' +
       field(lab('f-categoria', 'Categoria'), '<select id="f-categoria">' + opts(CATEGORIE, l.categoria) + '</select>' + (isNew ? '<span class="hint" id="f-catHint">' + catHintTxt({ cat: '', src: '' }) + '</span>' : '')) +
       attrLinkBlock(l.attrId) + lfBlock(l.fuori) +
       field(lab('f-descr', 'Dettagli e ricambi'), '<textarea id="f-descr" placeholder="es. olio 15W-40, filtro olio, girante, anodi">' + esc(l.descr || '') + '</textarea>') +
@@ -7758,7 +7766,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       },
       onSubmit: async function (f) {
         var data = {
-          barcaId: val(f, 'f-barca'), titolo: val(f, 'f-titolo'), data: val(f, 'f-data') || todayISO(), stato: val(f, 'f-statoL'),
+          barcaId: val(f, 'f-barca'), titolo: val(f, 'f-titolo'), data: val(f, 'f-data') || (val(f, 'f-statoL') === 'fatto' ? todayISO() : ''), stato: val(f, 'f-statoL'),
           categoria: val(f, 'f-categoria'), descr: val(f, 'f-descr'), oreStima: parseDec(val(f, 'f-oreStima')), oreLavoro: parseDec(val(f, 'f-oreLavoro')),
           importo: parseDec(val(f, 'f-importo')), oreMotore: parseIntS(val(f, 'f-oreMotoreL')), ricambi: rcRead(f), foto: SHEET.foto.slice(), modificato: new Date().toISOString()
         };
@@ -8642,7 +8650,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
 
   async function markLavDone(l) {
     var r = S.db.collection('lavori').doc(l.id);
-    if (await w(function () { return r.update({ stato: 'fatto', modificato: new Date().toISOString() }); })) { await syncProg(Object.assign({}, l, { stato: 'fatto' })); toast('Lavorazione segnata come fatta'); }
+    var u = { stato: 'fatto', modificato: new Date().toISOString() }; if (!l.data) u.data = todayISO(); // senza data prende il giorno in cui è fatta
+    if (await w(function () { return r.update(u); })) { await syncProg(Object.assign({}, l, u)); toast('Lavorazione segnata come fatta'); }
   }
   async function deleteExamples() {
     var refs = [];
@@ -9018,7 +9027,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
         S.got[name] = true;
         if (S.got.barche && S.got.lavori && S.got.scadenze) S.status = 'ready';
         render();
-        if (name === 'lavori') resolveNames();
+        if (name === 'lavori') { resolveNames(); progPulizia(); }
       }, function (err) {
         var c = err && err.code;
         if (c === 'revoked' || c === 'not_granted' || c === 'capability_disabled' || c === 'capability_removed') { S.status = 'absent'; render(); }
@@ -9049,7 +9058,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     sub('operazioni', function (x) { S.ops = x; });
     sub('mezzi', function (x) { S.mezzi = x; });
     sub('attrezzatura', function (x) { S.attr = x; });
-    sub('programma', function (x) { S.prog = x; });
+    sub('programma', function (x) { S.prog = x; S.got.programma = true; progPulizia(); });
     sub('cariche', function (x) { S.cariche = x; });
     sub('posti', function (x) { S.posti = toMap(x); });
     sub('richieste', function (x) { S.richieste = x; });
@@ -9078,7 +9087,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
         if (c == null) S.writeUnknown = true;
       } else S.writeUnknown = true;
     } catch (e) { S.writeUnknown = true; }
-    render(); resolveNames();
+    render(); resolveNames(); progPulizia();
   }
   var nameReq = 0;
   async function resolveNames() {
