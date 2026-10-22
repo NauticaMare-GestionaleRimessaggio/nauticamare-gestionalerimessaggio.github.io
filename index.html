@@ -4707,6 +4707,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       else if (l.progId === x.id) { var rl = S.db.collection('lavori').doc(l.id); if (!(await w(function () { return rl.update({ progId: '', modificato: new Date().toISOString() }); }))) continue; }
       var r = S.db.collection('programma').doc(x.id); await w(function () { return r.delete(); });
     }
+    var dl = S.lavori.filter(function (l) { return l.fonte !== 'scheda' && l.stato !== 'fatto' && l.data === '2026-10-22'; }); // le lavorazioni da fare non hanno più una data
+    for (var j = 0; j < dl.length; j++) { var rd = S.db.collection('lavori').doc(dl[j].id); await w(function () { return rd.update({ data: '', modificato: new Date().toISOString() }); }); }
   }
   async function progTick(x) {
     var r = S.db.collection('programma').doc(x.id), now = new Date().toISOString(), on = !x.fatto;
