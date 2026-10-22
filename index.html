@@ -659,6 +659,53 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
 
 /* Computer e tablet: schermo largo = menù completo a sinistra, contenuto più largo, finestre al centro. Sul telefono non cambia niente. */
 .side-x { display: none; }
+/* Riquadri da sistemare (Home, Pannello, Riepiloghi): piccolo = metà riga, medio e grande = tutta la riga sul telefono */
+.ly { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.riep-chips + .ly, .riep-chips + .ly-bar { margin-top: 14px; }
+.ly-i { position: relative; min-width: 0; grid-column: span 2; }
+.ly-i.ly-s { grid-column: span 1; }
+.ly-c { height: 100%; }
+.ly-c > .sec-h:first-child { margin-top: 16px; }
+.ly-c > .dash, .ly-c > .tile, .ly-c > .notice { height: 100%; }
+.ly-w { width: 100%; }
+.ly-rows { display: flex; flex-direction: column; border-top: 1px solid var(--line); margin-top: 2px; }
+.ly-rows > span { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0 0; font-size: .86rem; }
+.ly-rows > span > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.ly-rows b { font-weight: 600; white-space: nowrap; }
+.ly-can .ly-i { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.ly-ed .ly-i { outline: 1.5px dashed var(--dim); outline-offset: 2px; border-radius: var(--r); cursor: grab; touch-action: manipulation; }
+.ly-ed .ly-c { pointer-events: none; }
+.ly-ed { gap: 16px 12px; padding-top: 6px; }
+.ly-x { position: absolute; top: -9px; left: -5px; z-index: 2; width: 26px; height: 26px; border-radius: 50%; border: 0; background: var(--ink); color: var(--bg); font: 700 18px/1 var(--font-body); display: grid; place-items: center; padding: 0 0 2px; }
+.ly-more { display: none; }
+.ly-ph { outline: 2px dashed var(--accent); border-radius: var(--r); background: transparent; }
+.ly-ph > * { visibility: hidden; }
+.ly-drag { box-shadow: 0 14px 36px rgba(0, 0, 0, .45); opacity: .96; border-radius: var(--r); }
+.ly-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0 4px; }
+.ly-bar b { font-size: 1rem; text-align: center; flex: 1; }
+.ly-hint { margin: 4px 2px 12px; text-align: center; }
+.ly-empty { background: var(--card); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 4px; height: 100%; }
+.ly-sizes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ly-sizes button { background: var(--card-2); color: var(--ink); border: 0; border-radius: var(--r); padding: 12px 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; font: inherit; font-weight: 600; }
+.ly-sizes button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--accent); }
+.ly-sz { display: block; height: 22px; border-radius: 4px; border: 1.5px solid currentColor; }
+.ly-sz.s { width: 22px; } .ly-sz.m { width: 46px; } .ly-sz.l { width: 46px; height: 34px; }
+.ly-sizes button:not([data-z]) { display: none; }
+.ly-acts { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+.ly-plus { color: var(--accent); display: flex; }
+.ly-plus svg { width: 20px; height: 20px; }
+@media (min-width: 768px) and (min-height: 500px) {
+  .ly { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  .ly-i { grid-column: span 4; }
+  .ly-i.ly-m { grid-column: span 2; }
+  .ly-c > .sec-h:first-child { margin-top: 12px; }
+  .ly-more { display: grid; place-items: center; position: absolute; top: 6px; right: 6px; z-index: 2; width: 30px; height: 30px; border: 0; border-radius: 50%; background: var(--card-2); color: var(--ink); opacity: 0; transition: opacity .15s; cursor: pointer; }
+  .ly-more svg { width: 18px; height: 18px; }
+  .ly-i:hover > .ly-more, .ly-more:focus-visible { opacity: 1; }
+  .ly-can .ly-c > .sec-h:first-child { padding-right: 38px; }
+  .ly-i:has(> .ly-c > .sec-h:first-child) > .ly-more { top: 8px; right: 0; }
+  .ly-ed { gap: 18px 16px; }
+}
 @media (min-width: 768px) and (min-height: 500px) {
   .tabs {
     background: linear-gradient(180deg, #0D1A3C, #06002E); border-right-color: #16304F;
@@ -1077,6 +1124,157 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     }
     return '<div class="empty"><span class="ic-circle">' + icon + '</span><h3>' + esc(title) + '</h3><p>' + esc(text) + '</p>' + acts + '</div>';
   }
+  /* ---------- Riquadri da sistemare: Home, Pannello e Riepiloghi ----------
+     Solo per gli amministratori, ognuno i suoi (impostazioni/layout_<uid>). Telefono: tieni premuto un riquadro; computer: «⋯» o tasto destro.
+     Un riquadro è { id, t: nome, z: grandezze possibili, d: grandezza di partenza (false = c'è solo se lo si aggiunge), h: function (grandezza) → html, opz: scelte di «Cosa mostrare» }. */
+  var LY_Z = { s: 'Piccolo', m: 'Medio', l: 'Grande' };
+  var LY = { page: '', blocks: {}, list: [], drag: null, press: null, skip: 0, menuAt: 0 };
+  function lyCan() { return !!(S.isOwner && S.canWrite && S.myId && S.db); }
+  function lyNome(page) { return page === 'home' ? 'la Home' : page === 'pannello' ? 'il Pannello' : 'il riepilogo'; }
+  function lyCfg() { return (S.layouts && S.myId && S.layouts['layout_' + S.myId]) || {}; }
+  function lyOpz(page, id) { return (lyCfg().opz || {})[page + '_' + id] || {}; }
+  function lyList(page, blocks) {
+    var saved = lyCan() ? lyCfg()[page] : null, by = {};
+    blocks.forEach(function (b) { by[b.id] = b; });
+    if (!Array.isArray(saved)) return blocks.filter(function (b) { return b.d; }).map(function (b) { return { id: b.id, z: b.d }; });
+    return saved.filter(function (x) { return x && by[x.id]; }).map(function (x) { var b = by[x.id]; return { id: x.id, z: b.z.indexOf(x.z) >= 0 ? x.z : b.d || b.z[0] }; });
+  }
+  async function lySave(patch) {
+    var id = 'layout_' + S.myId, cur = Object.assign({}, lyCfg(), patch, { modificato: new Date().toISOString() });
+    S.layouts = Object.assign({}, S.layouts); S.layouts[id] = cur; render(); // si vede subito
+    var r = S.db.collection('impostazioni').doc(id); return w(function () { return r.set(cur); });
+  }
+  function lySaveList(list) { var p = {}; p[LY.page] = list.map(function (x) { return { id: x.id, z: x.z }; }); return lySave(p); }
+  function lyRender(page, blocks) {
+    if (V.lyEdit && V.lyEdit !== page) V.lyEdit = '';
+    var can = lyCan(), ed = can && V.lyEdit === page, list = lyList(page, blocks), h = '';
+    LY.page = page; LY.blocks = {}; LY.list = list; blocks.forEach(function (b) { LY.blocks[b.id] = b; });
+    if (ed) h += '<div class="ly-bar"><button type="button" class="btn sec" data-act="ly-add">' + I.plus + 'Aggiungi</button><b>Sistema ' + esc(lyNome(page)) + '</b><button type="button" class="btn" data-act="ly-done">Fine</button></div>' +
+      '<p class="cap ly-hint">Trascina un riquadro per spostarlo, «−» per toglierlo. Toccalo per cambiare la grandezza.</p>';
+    var items = list.map(function (x) {
+      var b = LY.blocks[x.id], c = b.h(x.z) || '';
+      if (!c && !ed) return '';
+      if (!c) c = '<div class="ly-empty"><b>' + esc(b.t) + '</b><span class="cap">Ora non c’è niente da mostrare: comparirà quando serve.</span></div>';
+      return '<div class="ly-i ly-' + x.z + '" data-ly="' + x.id + '"' + (ed ? ' data-act="ly-menu"' : '') + '><div class="ly-c">' + c + '</div>' +
+        (ed ? '<button type="button" class="ly-x" data-act="ly-del" aria-label="Togli ' + esc(b.t) + '">−</button>' : can ? '<button type="button" class="ly-more" data-act="ly-menu" aria-label="Sistema ' + esc(b.t) + '">' + I.more + '</button>' : '') + '</div>';
+    }).join('');
+    if (ed && !list.length) items = '<div class="ly-i ly-l"><div class="notice">Nessun riquadro: toccane uno con «Aggiungi».</div></div>';
+    return h + '<div class="ly' + (ed ? ' ly-ed' : '') + (can ? ' ly-can' : '') + '">' + items + '</div>';
+  }
+  function lyMenu(id) {
+    var b = LY.blocks[id], x = LY.list.find(function (q) { return q.id === id; }); if (!b || !x) return;
+    LY.menuAt = Date.now();
+    var o = lyOpz(LY.page, id), ed = V.lyEdit === LY.page;
+    var body = (b.z.length > 1 ? '<div class="lbl">Grandezza</div><div class="ly-sizes">' + b.z.map(function (z) {
+      return '<button type="button" data-act="ly-size" data-ly="' + id + '" data-z="' + z + '" aria-pressed="' + (x.z === z) + '"><i class="ly-sz ' + z + '"></i>' + LY_Z[z] + '</button>'; }).join('') + '</div>' +
+      '<p class="cap" style="margin:6px 2px 0">Sul telefono il medio e il grande prendono tutta la riga.</p>' : '') +
+      (b.opz ? '<div class="lbl" style="margin-top:16px">Cosa mostrare</div><div class="group">' + b.opz.map(function (p) {
+        return '<label class="check"><input type="checkbox" class="ly-o" value="' + p[0] + '"' + (o.no && o.no.indexOf(p[0]) >= 0 ? '' : ' checked') + '> ' + esc(p[1]) + '</label>'; }).join('') + '</div>' +
+        '<button type="button" class="btn self-start" data-act="ly-opz" data-ly="' + id + '" style="margin-top:10px">Salva le scelte</button>' : '') +
+      '<div class="ly-acts">' + (ed ? '' : '<button type="button" class="btn sec" data-act="ly-edit">' + I.updown + 'Sistema ' + esc(lyNome(LY.page)) + '</button>') +
+      '<button type="button" class="btn danger-ghost" data-act="ly-del" data-ly="' + id + '">Togli questo riquadro</button></div>';
+    openSheet({ title: b.t, menu: true, body: body });
+  }
+  function lyAdd() {
+    var on = {}; LY.list.forEach(function (x) { on[x.id] = 1; });
+    var all = Object.keys(LY.blocks).map(function (k) { return LY.blocks[k]; });
+    var off = all.filter(function (b) { return !on[b.id]; });
+    openSheet({ title: 'Aggiungi un riquadro', menu: true, body: off.length ? '<div class="group">' + off.map(function (b) {
+      return '<button type="button" class="row" data-act="ly-add-one" data-ly="' + b.id + '"><span class="main"><span class="title">' + esc(b.t) + '</span>' + (b.sub ? '<span class="sub">' + esc(b.sub) + '</span>' : '') + '</span><span class="ly-plus">' + I.plus + '</span></button>'; }).join('') + '</div>' +
+      '<p class="cap" style="margin:8px 2px 0">Il riquadro va in cima: poi lo sposti dove vuoi.</p>' : '<div class="notice">Ci sono già tutti.</div>' });
+  }
+  function lyAct(a, t) { // azioni dei riquadri (dal gestore dei clic)
+    var id = t.getAttribute('data-ly') || ((t.closest('[data-ly]') || {}).getAttribute ? t.closest('[data-ly]').getAttribute('data-ly') : '');
+    var list = LY.list.slice();
+    if (a === 'ly-menu') { if (Date.now() - LY.menuAt > 600) lyMenu(id); }
+    else if (a === 'ly-edit') { closeSheet(); V.lyEdit = LY.page; V.lyTab = V.tab; render(); }
+    else if (a === 'ly-done') { V.lyEdit = ''; render(); toast('Sistemato'); }
+    else if (a === 'ly-add') lyAdd();
+    else if (a === 'ly-add-one') { var b = LY.blocks[id]; if (b) { list.unshift({ id: id, z: b.d || b.z[0] }); closeSheet(); lySaveList(list); } }
+    else if (a === 'ly-del') { closeSheet(); lySaveList(list.filter(function (x) { return x.id !== id; })); }
+    else if (a === 'ly-size') { list.forEach(function (x) { if (x.id === id) x.z = t.getAttribute('data-z'); }); closeSheet(); lySaveList(list); }
+    else if (a === 'ly-opz') {
+      var no = Array.prototype.filter.call(document.querySelectorAll('#sheet-form .ly-o'), function (c) { return !c.checked; }).map(function (c) { return c.value; });
+      var opz = Object.assign({}, lyCfg().opz); opz[LY.page + '_' + id] = { no: no }; closeSheet(); lySave({ opz: opz });
+    }
+  }
+  // tieni premuto (telefono), tasto destro (computer), trascina in modifica
+  document.addEventListener('pointerdown', function (e) {
+    var it = e.target.closest && e.target.closest('.ly-can .ly-i[data-ly]'); if (!it || e.button > 0) return;
+    if (it.closest('.ly-ed')) {
+      if (e.target.closest('.ly-x')) return;
+      LY.drag = { el: it, x0: e.clientX, y0: e.clientY, on: false, mouse: e.pointerType === 'mouse', id: e.pointerId };
+      if (!LY.drag.mouse) LY.drag.timer = setTimeout(function () { if (LY.drag && !LY.drag.on) lyDragStart(LY.drag.x0, LY.drag.y0); }, 220);
+      return;
+    }
+    if (e.pointerType === 'mouse' || e.target.closest('.ly-more')) return;
+    LY.press = { x: e.clientX, y: e.clientY, t: setTimeout(function () { LY.press = null; LY.fired = true; LY.skip = Date.now(); lyMenu(it.getAttribute('data-ly')); }, 550) };
+  });
+  document.addEventListener('pointermove', function (e) {
+    if (LY.press && (Math.abs(e.clientX - LY.press.x) > 10 || Math.abs(e.clientY - LY.press.y) > 10)) { clearTimeout(LY.press.t); LY.press = null; }
+    var d = LY.drag; if (!d) return;
+    if (!d.on) {
+      var far = Math.abs(e.clientX - d.x0) > 6 || Math.abs(e.clientY - d.y0) > 6;
+      if (far && d.mouse) lyDragStart(e.clientX, e.clientY); else if (far) { clearTimeout(d.timer); LY.drag = null; } // sul telefono muoversi subito vuol dire scorrere
+      return;
+    }
+    e.preventDefault();
+    d.el.style.left = (e.clientX - d.dx) + 'px'; d.el.style.top = (e.clientY - d.dy) + 'px';
+    var over = document.elementFromPoint(e.clientX, e.clientY), tg = over && over.closest && over.closest('.ly-ed .ly-i[data-ly]');
+    if (tg && tg !== d.ph && tg !== d.el) { var sib = Array.prototype.slice.call(d.ph.parentNode.children); if (sib.indexOf(d.ph) < sib.indexOf(tg)) tg.after(d.ph); else tg.before(d.ph); }
+    if (e.clientY < 70) window.scrollBy(0, -14); else if (e.clientY > window.innerHeight - 110) window.scrollBy(0, 14);
+  }, { passive: false });
+  document.addEventListener('touchmove', function (e) { if (LY.drag && LY.drag.on) e.preventDefault(); }, { passive: false });
+  function lyDragStart(x, y) {
+    var d = LY.drag, r = d.el.getBoundingClientRect(); d.on = true; clearTimeout(d.timer);
+    d.ph = document.createElement('div'); d.ph.className = d.el.className + ' ly-ph'; d.ph.style.height = r.height + 'px'; d.el.before(d.ph);
+    d.dx = x - r.left; d.dy = y - r.top;
+    Object.assign(d.el.style, { position: 'fixed', left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px', zIndex: 80, pointerEvents: 'none' });
+    d.el.classList.add('ly-drag');
+  }
+  function lyDragEnd() {
+    var d = LY.drag; LY.drag = null; if (!d) return; clearTimeout(d.timer); if (!d.on) return;
+    LY.skip = Date.now(); d.ph.replaceWith(d.el); d.el.removeAttribute('style'); d.el.classList.remove('ly-drag');
+    var by = {}; LY.list.forEach(function (x) { by[x.id] = x; });
+    var order = Array.prototype.map.call(d.el.parentNode.querySelectorAll('.ly-i[data-ly]'), function (el) { return by[el.getAttribute('data-ly')]; }).filter(Boolean);
+    lySaveList(order);
+  }
+  document.addEventListener('pointerup', function () { if (LY.press) { clearTimeout(LY.press.t); LY.press = null; } if (LY.fired) { LY.fired = false; LY.skip = Date.now(); } lyDragEnd(); });
+  document.addEventListener('pointercancel', function () { if (LY.press) { clearTimeout(LY.press.t); LY.press = null; } if (LY.drag && !LY.drag.on) { clearTimeout(LY.drag.timer); LY.drag = null; } else lyDragEnd(); });
+  document.addEventListener('click', function (e) { if (Date.now() - LY.skip < 400) { e.preventDefault(); e.stopPropagation(); } }, true); // il clic che segue il «tieni premuto» non apre niente
+  document.addEventListener('contextmenu', function (e) {
+    var it = e.target.closest && e.target.closest('.ly-can .ly-i[data-ly]'); if (!it || it.closest('.ly-ed')) return;
+    e.preventDefault(); if (Date.now() - LY.menuAt > 800) lyMenu(it.getAttribute('data-ly'));
+  });
+  // riquadri che si aggiungono: Scadenze, Magazzino, Porto, Rifiuti, Batterie (toccandoli si apre la sezione)
+  function lyTile(act, tab, cls, icon, title, big, cap, rows, z) {
+    var n = z === 'l' ? 6 : z === 'm' ? 3 : 0;
+    return '<button type="button" class="tile ly-w" data-act="' + act + '"' + (tab ? ' data-tab="' + tab + '"' : '') + '><span class="tile-h"><span class="t-' + cls + '">' + icon + '</span>' + esc(title) + '</span>' +
+      '<span class="big">' + big + '</span>' + (cap ? '<span class="cap">' + esc(cap) + '</span>' : '') +
+      (n && rows.length ? '<span class="ly-rows">' + rows.slice(0, n).map(function (r) { return '<span><span>' + esc(r[0]) + '</span><b' + (r[2] ? ' class="t-' + r[2] + '"' : '') + '>' + esc(r[1]) + '</b></span>'; }).join('') + '</span>' : '') + '</button>';
+  }
+  var LY_W = [
+    { id: 'w_scad', t: 'Scadenze', sub: 'scadute ed entro 30 giorni', z: ['s', 'm', 'l'], d: false, h: function (z) {
+      var o = openScad(null), late = o.filter(function (x) { return x.i.level === 'late'; }), soon = o.filter(function (x) { return x.i.level === 'soon'; });
+      return lyTile('tab', 'scadenze', late.length ? 'late' : 'ok', I.alarm, 'Scadenze', '<span class="' + (late.length ? 't-late' : '') + '">' + late.length + '</span> <small>scadute</small>', soon.length + ' entro 30 giorni',
+        late.concat(soon).map(function (x) { return [(x.s.tipo || 'Scadenza') + ' · ' + (x.i.boat ? x.i.boat.nome || '' : ''), x.i.text, x.i.level]; }), z); } },
+    { id: 'w_mag', t: 'Magazzino', sub: 'ricambi da riordinare', z: ['s', 'm', 'l'], d: false, h: function (z) {
+      var low = lowStock(), st = stockMap();
+      return lyTile('tab', 'magazzino', low.length ? 'soon' : 'ok', I.box, 'Magazzino', low.length + ' <small>da riordinare</small>', S.mag.length + (S.mag.length === 1 ? ' articolo' : ' articoli') + ' in magazzino',
+        low.map(function (m) { return [m.nome, fmtQ(st[m.id] || 0, m.um), (st[m.id] || 0) <= 0 ? 'late' : 'soon']; }), z); } },
+    { id: 'w_porto', t: 'Porto', sub: 'posti liberi e contratti in scadenza', z: ['s', 'm', 'l'], d: false, h: function (z) {
+      var ps = Porto.stats(), ct = Porto.contratti(60);
+      return lyTile('go-porto-tab', '', ps.due ? 'soon' : 'ok', I.map, 'Porto', ps.libero + ' <small>posti liberi</small>', ps.occupato + ' occupati · ' + ps.due + ' contratti entro 30 giorni',
+        ct.map(function (x) { var n = daysUntil(x.d.fino); return [(x.d.cliente || (x.boat && x.boat.proprietario) || x.id) + ' · ' + x.id, n < 0 ? 'scaduto' : fmtDate(x.d.fino), n < 0 ? 'late' : n <= 30 ? 'soon' : '']; }), z); } },
+    { id: 'w_rif', t: 'Rifiuti', sub: 'deposito e ultimo ritiro', z: ['s', 'm', 'l'], d: false, h: function (z) {
+      var dep = rifDep(), rit = (S.ritiri || []).slice().sort(function (a, b) { return String(b.data || '').localeCompare(String(a.data || '')); })[0];
+      return lyTile('tab', 'rifiuti', 'acc', I.trash, 'Rifiuti', '≈ ' + esc(fmtNum(rifDepKg(), 0)) + ' <small>kg in deposito</small>', rit && rit.data ? 'Ultimo ritiro ' + fmtDate(rit.data) : 'Nessun ritiro segnato',
+        Object.keys(dep).map(function (k) { var t = rifTipo(k); return [t ? t.nome : k, '≈ ' + fmtNum(dep[k].kg, 1) + ' kg', '', dep[k].kg]; }).sort(function (a, b) { return b[3] - a[3]; }), z); } },
+    { id: 'w_batt', t: 'Batterie', sub: 'barche da caricare', z: ['s', 'm', 'l'], d: false, h: function (z) {
+      var bd = battDue();
+      return lyTile('tab', 'batterie', bd.length ? 'soon' : 'ok', I.batt, 'Batterie', bd.length + ' <small>da caricare</small>', bd.length ? bd.slice(0, 3).map(function (b) { return b.nome; }).join(', ') : 'Tutte caricate',
+        bd.map(function (b) { var i = battInfo(b); return [b.nome || 'Barca', i.d == null ? 'mai caricate' : i.d + ' giorni fa', 'soon']; }), z); } }
+  ];
   function exampleBanner() {
     if (!hasExamples() || !S.canWrite) return '';
     if (V.exConfirm) return '<div class="banner"><p>Eliminare tutti i dati di esempio (barche, lavori, scadenze, articoli del magazzino)? I tuoi dati restano.</p><div class="acts"><button type="button" class="btn sec" data-act="ex-cancel">Annulla</button><button type="button" class="btn danger" data-act="ex-delete">Elimina</button></div></div>';
@@ -1094,53 +1292,54 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     var soon = open.filter(function (x) { return x.i.level === 'soon'; });
     var ok = open.filter(function (x) { return x.i.level === 'ok'; });
 
-    var cards = [], t0 = todayISO(), t1 = utcToISO(isoToUTC(t0) + 86400000);
-    [crHome(), giroHome(), lfHome()].forEach(function (c) { if (c) cards.push(c); });
+    var t0 = todayISO(), t1 = utcToISO(isoToUTC(t0) + 86400000);
+    function primo() { // «In primo piano»: con «Cosa mostrare» si scelgono i tipi di avviso
+    var cards = [], no = lyOpz('home', 'primo').no || [], push = function (k, c) { if (c && no.indexOf(k) < 0) cards.push(c); };
+    push('crono', crHome()); push('giro', giroHome()); push('fuori', lfHome());
     var pend = myPendingDays();
-    if (pend.length) cards.push(featCard('soon', I.check, pend.length === 1 ? 'Conferma la tua giornata' : 'Hai ' + pend.length + ' giornate da confermare',
+    if (pend.length) push('conferme', featCard('soon', I.check, pend.length === 1 ? 'Conferma la tua giornata' : 'Hai ' + pend.length + ' giornate da confermare',
       cap(fmtDayLong(pend[0])) + (pend.length > 1 ? ' e altre' : ''), '', '<button type="button" class="btn" data-act="go-scheda" data-d="' + pend[0] + '">Vai alla scheda lavoro</button>'));
     variOpen().filter(function (v) { return v.data <= t1; }).slice(0, 4).forEach(function (v) {
       var b = boatById(v.barcaId), lv = v.data < t0 ? 'late' : 'vio';
-      cards.push(featCard(lv, I.updown, (TIPI_V[v.tipo] || 'Movimento') + ' · ' + (b ? b.nome : 'Barca eliminata'), b ? [b.modello, b.posto].filter(Boolean).join(' · ') : '',
+      push('vari', featCard(lv, I.updown, (TIPI_V[v.tipo] || 'Movimento') + ' · ' + (b ? b.nome : 'Barca eliminata'), b ? [b.modello, b.posto].filter(Boolean).join(' · ') : '',
         '<div class="feat-status t-' + lv + '">' + esc(cap(variWhen(v))) + '</div>' + metChip(v.data, v.ora),
         (S.canWrite ? '<button type="button" class="btn" data-act="done-vari" data-id="' + esc(v.id) + '">Segna fatto</button>' : '') + (b ? '<button type="button" class="btn sec" data-act="open-boat" data-id="' + esc(b.id) + '">Apri scheda</button>' : '')));
     });
     late.concat(soon).slice(0, 5).forEach(function (x) {
-      cards.push(featCard(x.i.level, I.alarm, x.s.tipo || 'Scadenza', boatLabel(x.i.boat), '<div class="feat-status t-' + x.i.level + '">' + esc(x.i.text) + '</div>',
+      push('scad', featCard(x.i.level, I.alarm, x.s.tipo || 'Scadenza', boatLabel(x.i.boat), '<div class="feat-status t-' + x.i.level + '">' + esc(x.i.text) + '</div>',
         (S.canWrite ? '<button type="button" class="btn" data-act="done-scad" data-id="' + esc(x.s.id) + '">Segna come fatta</button>' : '') +
         (x.i.boat ? '<button type="button" class="btn sec" data-act="open-boat" data-id="' + esc(x.i.boat.id) + '">Apri scheda</button>' : '')));
     });
     if (assAdmin() && assPending().length) { var ap = assPending();
-      cards.push(featCard('soon', I.cal, ap.length === 1 ? 'Una richiesta di ferie o permesso' : ap.length + ' richieste di ferie o permessi', ap.slice(0, 3).map(function (a) { return nameOf(a.utente) + ' · ' + assWhen(a); }).join(', '), '', '<button type="button" class="btn" data-act="tab" data-tab="assenze">Vedi e approva</button>')); }
+      push('ferie', featCard('soon', I.cal, ap.length === 1 ? 'Una richiesta di ferie o permesso' : ap.length + ' richieste di ferie o permessi', ap.slice(0, 3).map(function (a) { return nameOf(a.utente) + ' · ' + assWhen(a); }).join(', '), '', '<button type="button" class="btn" data-act="tab" data-tab="assenze">Vedi e approva</button>')); }
     (S.assenze || []).filter(function (a) { return a.utente === S.myId && a.stato !== 'richiesta' && a.decisaDa && a.decisaDa !== S.myId && a.decisaIl && a.decisaIl >= addDays(t0, -3); }).slice(0, 2).forEach(function (a) {
       var okA = a.stato === 'approvata';
-      cards.push(featCard(okA ? 'ok' : 'late', I.cal, assTipo(a.tipo) + (okA ? ' approvata' : ' rifiutata'), assWhen(a), '', '<button type="button" class="btn sec" data-act="tab" data-tab="assenze">Ferie e permessi</button>'));
+      push('ferie', featCard(okA ? 'ok' : 'late', I.cal, assTipo(a.tipo) + (okA ? ' approvata' : ' rifiutata'), assWhen(a), '', '<button type="button" class="btn sec" data-act="tab" data-tab="assenze">Ferie e permessi</button>'));
     });
     scOpen().filter(function (x) { return x.i.level !== 'ok'; }).slice(0, 3).forEach(function (x) {
-      cards.push(featCard(x.i.level, I.alarm, (x.s.tipo || 'Scadenza') + ' · ' + (x.s.rif || ''), scGruppo(x.s.gruppo), '<div class="feat-status t-' + x.i.level + '">' + esc(x.i.text) + '</div>',
+      push('scadc', featCard(x.i.level, I.alarm, (x.s.tipo || 'Scadenza') + ' · ' + (x.s.rif || ''), scGruppo(x.s.gruppo), '<div class="feat-status t-' + x.i.level + '">' + esc(x.i.text) + '</div>',
         (S.canWrite ? '<button type="button" class="btn" data-act="sc-done" data-id="' + esc(x.s.id) + '">Segna come fatta</button>' : '') + '<button type="button" class="btn sec" data-act="tab" data-tab="scadcantiere">Scadenze del cantiere</button>'));
     });
     var bd = battDue();
     if (bd.length) { var bo = bd.map(function (b) { return { b: b, i: battInfo(b) }; }).sort(function (a, c) { return (c.i.d == null ? 1e6 : c.i.d) - (a.i.d == null ? 1e6 : a.i.d); });
-      cards.push(featCard('soon', I.batt, bd.length === 1 ? 'Batterie da caricare: ' + (bo[0].b.nome || 'barca') : bd.length + ' barche con le batterie da caricare', bo.slice(0, 3).map(function (x) { return x.b.nome + (x.i.d != null ? ' (' + x.i.d + ' gg)' : ' (mai)'); }).join(', '), '', '<button type="button" class="btn sec" data-act="tab" data-tab="batterie">Apri batterie</button>')); }
+      push('batt', featCard('soon', I.batt, bd.length === 1 ? 'Batterie da caricare: ' + (bo[0].b.nome || 'barca') : bd.length + ' barche con le batterie da caricare', bo.slice(0, 3).map(function (x) { return x.b.nome + (x.i.d != null ? ' (' + x.i.d + ' gg)' : ' (mai)'); }).join(', '), '', '<button type="button" class="btn sec" data-act="tab" data-tab="batterie">Apri batterie</button>')); }
     var low = lowStock();
-    if (low.length) cards.push(featCard('soon', I.box, low.length === 1 ? '1 ricambio da riordinare' : low.length + ' ricambi da riordinare',
+    if (low.length) push('mag', featCard('soon', I.box, low.length === 1 ? '1 ricambio da riordinare' : low.length + ' ricambi da riordinare',
       low.slice(0, 3).map(function (m) { return m.nome; }).join(', ') + (low.length > 3 ? '…' : ''), '', '<button type="button" class="btn sec" data-act="tab" data-tab="magazzino">Apri magazzino</button>'));
     if (!cards.length) cards.push(featCard('ok', I.check, 'Tutto in regola', 'Nessuna scadenza nei prossimi 30 giorni', '', ''));
     if (V.feat >= cards.length) V.feat = 0;
-    h += gqBar();
-    h += secH('In primo piano') + '<div class="feat" id="feat">' + cards.join('') + '</div>';
-    if (cards.length > 1) h += '<div class="dots" id="dots">' + cards.map(function (_, i) { return '<i' + (i === V.feat ? ' class="on"' : '') + '></i>'; }).join('') + '</div>';
-    h += metHome();
+    var o = secH('In primo piano') + '<div class="feat" id="feat">' + cards.join('') + '</div>';
+    if (cards.length > 1) o += '<div class="dots" id="dots">' + cards.map(function (_, i) { return '<i' + (i === V.feat ? ' class="on"' : '') + '></i>'; }).join('') + '</div>';
+    return o;
+    }
 
-    h += homeProgHtml();
     var lavOpen = S.lavori.filter(function (l) { return l.stato !== 'fatto'; });
     var inCorso = lavOpen.filter(function (l) { return l.stato === 'in_corso'; }).length;
     var mStats = monthStats(), cur = mStats[5], meseNome = MESI_L[+todayISO().slice(5, 7) - 1];
     var pct = (cur.n + lavOpen.length) ? cur.n / (cur.n + lavOpen.length) : 0;
     var st = {}; S.boats.forEach(function (b) { var k = b.stato || 'In rimessaggio'; st[k] = (st[k] || 0) + 1; });
 
-    h += secH('In breve', 'tab', 'Vedi tutto', ' data-tab="scadenze"') + '<div class="tiles">' +
+    function breve() { return secH('In breve', 'tab', 'Vedi tutto', ' data-tab="scadenze"') + '<div class="tiles">' +
       '<button type="button" class="tile" data-act="tab" data-tab="scadenze"><span class="tile-h"><span class="t-late">' + I.alarm + '</span>Scadenze aperte</span>' +
       gauge([{ v: late.length, c: 'var(--late)' }, { v: soon.length, c: 'var(--soon)' }, { v: ok.length, c: 'var(--ok)' }], open.length, String(open.length)) +
       '<span class="big"><span class="' + (late.length ? 't-late' : '') + '">' + late.length + '</span> <small>scadute</small></span>' +
@@ -1158,9 +1357,10 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       '<span class="big">' + (cur.sum ? esc(fmtEuro(cur.sum, true)) : cur.n + ' <small>' + (cur.n === 1 ? 'lavoro' : 'lavori') + '</small>') + '</span>' +
       '<span class="cap">' + (cur.sum ? cur.n + (cur.n === 1 ? ' lavoro fatto' : ' lavori fatti') + ' a ' + meseNome : 'Fatti a ' + meseNome) + '</span>' +
       barsSvg(mStats) + '<div class="axis"><span>' + mStats[0].label + '</span><span>' + mStats[5].label + '</span></div><span class="cap">Ultimi 6 mesi</span></button>' +
-      '</div>';
+      '</div>'; }
 
-    var tdE = entriesOn(todayISO()), tdBy = {}, tdOrder = [];
+    function oggi() {
+    var h = '', tdE = entriesOn(todayISO()), tdBy = {}, tdOrder = [];
     tdE.forEach(function (l) { if (!tdBy[l.utente]) { tdBy[l.utente] = []; tdOrder.push(l.utente); } tdBy[l.utente].push(l); });
     h += secH('Oggi in cantiere', 'go-scheda', 'Scheda lavoro');
     if (tdOrder.length) {
@@ -1171,21 +1371,35 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
           list.length + (list.length === 1 ? ' mansione' : ' mansioni') + (names.length ? ' · ' + esc(names.join(', ')) : '') + '</span></span><span class="side"><span class="amount">' + esc(fmtH(sumOre(list))) + '</span></span></button>';
       }).join('') + '</div>';
     } else h += emptyCard(I.clip, 'Nessuna mansione segnata oggi', 'Ogni dipendente segna dalla Scheda lavoro cosa ha fatto, su quale barca e per quante ore.', S.myId ? ['go-scheda', 'Apri la scheda lavoro'] : null);
+    return h; }
 
-    var wk = utcToISO(isoToUTC(t0) + 7 * 86400000), vw = variOpen().filter(function (v) { return v.data <= wk; });
-    if (vw.length) h += secH('Vari e alaggi', 'tab', 'Vedi tutto', ' data-tab="vari"') + '<div class="group">' + vw.slice(0, 5).map(function (v) { return variRow(v, true); }).join('') + '</div>';
+    function vari() { var wk = utcToISO(isoToUTC(t0) + 7 * 86400000), vw = variOpen().filter(function (v) { return v.data <= wk; });
+    return vw.length ? secH('Vari e alaggi', 'tab', 'Vedi tutto', ' data-tab="vari"') + '<div class="group">' + vw.slice(0, 5).map(function (v) { return variRow(v, true); }).join('') + '</div>' : ''; }
 
-    h += secH('Prossime scadenze', 'tab', 'Vedi tutto', ' data-tab="scadenze"');
+    function scad() { var h = secH('Prossime scadenze', 'tab', 'Vedi tutto', ' data-tab="scadenze"');
     if (ok.length) h += '<div class="group">' + ok.slice(0, 4).map(function (x) { return scadRow(x, true); }).join('') + '</div>';
     else if (!open.length) h += emptyCard(I.alarm, 'Nessuna scadenza aggiunta', 'Aggiungi tagliandi, antivegetativa, assicurazioni e contratti: per data, per ore motore o in entrambi i modi.', ['new-scad', 'Aggiungi scadenza'], ['new-boat', 'Aggiungi barca']);
     else h += '<div class="notice">Le scadenze aperte sono tutte in primo piano.</div>';
+    return h; }
 
-    var lavList = sortLavori(lavOpen).slice(0, 4), lavTitle = 'Lavorazioni da fare';
+    function lav() { var lavList = sortLavori(lavOpen).slice(0, 4), lavTitle = 'Lavorazioni da fare';
     if (!lavList.length) { lavList = S.lavori.slice().sort(function (a, b) { return String(b.data || '').localeCompare(String(a.data || '')); }).slice(0, 4); lavTitle = 'Ultime lavorazioni'; }
-    h += secH(lavTitle, 'tab', 'Vedi tutto', ' data-tab="lavori"');
-    h += lavList.length ? '<div class="group">' + lavList.map(function (l) { return lavRow(l, true); }).join('') + '</div>'
-      : emptyCard(I.wrench, 'Nessuna lavorazione registrata', 'Segna qui le lavorazioni da fare sulle barche: tagliandi, riparazioni, lucidature.', ['new-lav', 'Aggiungi lavorazione']);
-    return h;
+    return secH(lavTitle, 'tab', 'Vedi tutto', ' data-tab="lavori"') + (lavList.length ? '<div class="group">' + lavList.map(function (l) { return lavRow(l, true); }).join('') + '</div>'
+      : emptyCard(I.wrench, 'Nessuna lavorazione registrata', 'Segna qui le lavorazioni da fare sulle barche: tagliandi, riparazioni, lucidature.', ['new-lav', 'Aggiungi lavorazione'])); }
+
+    var sec = ['m', 'l'];
+    return h + lyRender('home', [
+      { id: 'cerca', t: 'Cerca', sub: 'barca, cliente, articolo, lavoro', z: ['l'], d: 'l', h: gqBar },
+      { id: 'primo', t: 'In primo piano', sub: 'gli avvisi da guardare subito', z: sec, d: 'l', h: primo, opz: [['crono', 'Cronometri in corso o dimenticati'], ['giro', 'Giro di controllo'], ['fuori', 'Barche fuori in ritardo o che rientrano oggi'],
+        ['conferme', 'Giornate da confermare'], ['vari', 'Vari e alaggi di oggi e domani'], ['scad', 'Scadenze delle barche'], ['ferie', 'Ferie e permessi'], ['scadc', 'Scadenze del cantiere'], ['batt', 'Batterie da caricare'], ['mag', 'Ricambi da riordinare']] },
+      { id: 'meteo', t: 'Meteo', sub: 'vento e mare dei prossimi giorni', z: sec, d: 'l', h: metHome },
+      { id: 'prog', t: 'Programma di oggi', z: sec, d: 'l', h: homeProgHtml },
+      { id: 'breve', t: 'In breve', sub: 'scadenze, lavorazioni, barche, lavori del mese', z: ['l'], d: 'l', h: breve },
+      { id: 'oggi', t: 'Oggi in cantiere', sub: 'chi lavora e su quali barche', z: sec, d: 'l', h: oggi },
+      { id: 'vari', t: 'Vari e alaggi', sub: 'dei prossimi 7 giorni', z: sec, d: 'l', h: vari },
+      { id: 'scad', t: 'Prossime scadenze', z: sec, d: 'l', h: scad },
+      { id: 'lav', t: 'Lavorazioni da fare', z: sec, d: 'l', h: lav }
+    ].concat(LY_W));
   }
 
   // filtro scadenze: per data, per cliente (proprietario della barca) o per articolo (tipo di scadenza)
@@ -4281,57 +4495,60 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     var lavOpen = S.lavori.filter(function (l) { return l.fonte !== 'scheda' && l.stato !== 'fatto'; }), inCorso = lavOpen.filter(function (l) { return l.stato === 'in_corso'; }).length;
     var opsOpen = S.ops.filter(function (o) { return !opDone(o); }).length, ps = Porto.stats(), low = lowStock().length, bd = battDue().length;
     var h = '<p class="cap" style="margin:12px 2px 10px">Aggiornato in tempo reale con quello che la squadra segna nell’app.</p>';
-    h += '<div class="tiles">' +
-      panTile('tab', 'ore', I.hours, 'acc', 'Ore della settimana', esc(fmtNum(wkH, 1)) + ' <small>h</small>', wkE.length ? (function (n) { return n + (n === 1 ? ' persona' : ' persone') + ' · da lunedì'; })(new Set(wkE.map(function (l) { return l.utente; })).size) : 'Nessuna ora segnata') +
-      panTile('tab', 'programma', I.plan, 'ok', 'Programma di oggi', pt.length ? ptDone + ' <small>su ' + pt.length + '</small>' : '–', pt.length ? 'cose fatte' : 'Niente in programma') +
-      panTile('tab', 'ore', I.check, pend ? 'soon' : 'ok', 'Giornate da confermare', String(pend), pend ? 'fino a ieri' : 'Tutte confermate') +
-      panTile('tab', 'lavori', I.wrench, 'acc', 'Lavorazioni aperte', String(lavOpen.length), inCorso + ' in corso · ' + opsOpen + (opsOpen === 1 ? ' servizio aperto' : ' servizi aperti')) +
-      panTile('go-porto-tab', '', I.map, ps.due ? 'soon' : 'ok', 'Contratti in scadenza', String(ps.due), 'entro 30 giorni al porto') +
-      panTile('tab', low ? 'magazzino' : 'batterie', I.box, low || bd ? 'soon' : 'ok', 'Da riordinare · batterie', low + ' <small>· ' + bd + '</small>', 'articoli sotto scorta · barche da caricare') +
-      '</div>';
+    var tl = ['s', 'm'], sec = ['m', 'l'], fn = function (x) { return function () { return x; }; }, B = [
+      { id: 'ore7', t: 'Ore della settimana', z: tl, d: 's', h: fn(panTile('tab', 'ore', I.hours, 'acc', 'Ore della settimana', esc(fmtNum(wkH, 1)) + ' <small>h</small>', wkE.length ? (function (n) { return n + (n === 1 ? ' persona' : ' persone') + ' · da lunedì'; })(new Set(wkE.map(function (l) { return l.utente; })).size) : 'Nessuna ora segnata')) },
+      { id: 'prog', t: 'Programma di oggi', z: tl, d: 's', h: fn(panTile('tab', 'programma', I.plan, 'ok', 'Programma di oggi', pt.length ? ptDone + ' <small>su ' + pt.length + '</small>' : '–', pt.length ? 'cose fatte' : 'Niente in programma')) },
+      { id: 'conf', t: 'Giornate da confermare', z: tl, d: 's', h: fn(panTile('tab', 'ore', I.check, pend ? 'soon' : 'ok', 'Giornate da confermare', String(pend), pend ? 'fino a ieri' : 'Tutte confermate')) },
+      { id: 'lav', t: 'Lavorazioni aperte', z: tl, d: 's', h: fn(panTile('tab', 'lavori', I.wrench, 'acc', 'Lavorazioni aperte', String(lavOpen.length), inCorso + ' in corso · ' + opsOpen + (opsOpen === 1 ? ' servizio aperto' : ' servizi aperti'))) },
+      { id: 'contr', t: 'Contratti in scadenza', z: tl, d: 's', h: fn(panTile('go-porto-tab', '', I.map, ps.due ? 'soon' : 'ok', 'Contratti in scadenza', String(ps.due), 'entro 30 giorni al porto')) },
+      { id: 'riord', t: 'Da riordinare · batterie', z: tl, d: 's', h: fn(panTile('tab', low ? 'magazzino' : 'batterie', I.box, low || bd ? 'soon' : 'ok', 'Da riordinare · batterie', low + ' <small>· ' + bd + '</small>', 'articoli sotto scorta · barche da caricare')) }
+    ];
     // Ore
     var r = panRange(V.panPer), E = panEntries(r), tot = E.reduce(function (a, l) { return a + num(l.oreLavoro); }, 0), cant = E.filter(function (l) { return !l.barcaId; }).reduce(function (a, l) { return a + num(l.oreLavoro); }, 0);
-    h += secH('Ore lavorate') + '<div class="chips" role="group" aria-label="Periodo" style="margin-top:0">' + [['sett', 'Settimana'], ['mese', 'Mese'], ['scorso', 'Mese scorso']].map(function (o) { return '<button type="button" data-act="pan-per" data-p="' + o[0] + '" aria-pressed="' + (V.panPer === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>';
-    h += '<div class="chips" role="group" aria-label="Dividi per" style="margin-top:8px">' + [['persona', 'Persona'], ['barca', 'Barca'], ['cliente', 'Cliente'], ['categoria', 'Categoria']].map(function (o) { return '<button type="button" data-act="pan-by" data-b="' + o[0] + '" aria-pressed="' + (V.panBy === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>';
-    h += '<p class="cap" style="margin:10px 2px 6px">Totale ' + esc(r.l) + ': <b style="color:var(--ink)">' + esc(fmtNum(tot, 1)) + ' h</b>' + (cant ? ' · di cui ' + esc(fmtNum(cant, 1)) + ' h per il cantiere' : '') + '</p>';
+    var o = secH('Ore lavorate') + '<div class="chips" role="group" aria-label="Periodo" style="margin-top:0">' + [['sett', 'Settimana'], ['mese', 'Mese'], ['scorso', 'Mese scorso']].map(function (o) { return '<button type="button" data-act="pan-per" data-p="' + o[0] + '" aria-pressed="' + (V.panPer === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>';
+    o += '<div class="chips" role="group" aria-label="Dividi per" style="margin-top:8px">' + [['persona', 'Persona'], ['barca', 'Barca'], ['cliente', 'Cliente'], ['categoria', 'Categoria']].map(function (o) { return '<button type="button" data-act="pan-by" data-b="' + o[0] + '" aria-pressed="' + (V.panBy === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>';
+    o += '<p class="cap" style="margin:10px 2px 6px">Totale ' + esc(r.l) + ': <b style="color:var(--ink)">' + esc(fmtNum(tot, 1)) + ' h</b>' + (cant ? ' · di cui ' + esc(fmtNum(cant, 1)) + ' h per il cantiere' : '') + '</p>';
     var keyFn = V.panBy === 'barca' ? function (l) { var b = l.barcaId && boatById(l.barcaId); return l.barcaId ? (b ? b.nome || 'Barca' : 'Barca eliminata') : 'Cantiere'; }
       : V.panBy === 'cliente' ? function (l) { var b = l.barcaId && boatById(l.barcaId); return !l.barcaId ? 'Cantiere' : b && b.proprietario ? b.proprietario : 'Proprietario non segnato'; }
       : V.panBy === 'categoria' ? function (l) { return l.categoria || 'Altro'; } : function (l) { return nameOf(l.utente); };
-    h += panBars(panGroup(E, keyFn), 'h');
+    o += panBars(panGroup(E, keyFn), 'h');
+    B.push({ id: 'ore', t: 'Ore lavorate', sub: 'per persona, barca, cliente o categoria', z: sec, d: 'l', h: fn(o) });
     // Servizi
     var since = utcToISO(isoToUTC(t) - 30 * 86400000), done = S.ops.filter(function (o) { return opDone(o) && String(o.completataIl || '').slice(0, 10) >= since && num(o.oreReali) > 0; });
     var vv = { ok: 0, late: 0, acc: 0, none: 0 }; done.forEach(function (o) { var v = verdict(o.oreReali, o.prevMin, o.prevMax); vv[v ? v.c : 'none']++; });
-    h += secH('Servizi completati · ultimi 30 giorni');
-    h += done.length ? '<div class="group pan"><div class="kv-row"><span class="k">Nei tempi previsti</span><span class="v"><span class="pill ok">' + I.check + ' ' + vv.ok + '</span></span></div><div class="kv-row"><span class="k">Più lunghi del previsto</span><span class="v"><span class="pill late">▲ ' + vv.late + '</span></span></div><div class="kv-row"><span class="k">Più veloci del previsto</span><span class="v"><span class="pill acc">▼ ' + vv.acc + '</span></span></div>' + (vv.none ? '<div class="kv-row"><span class="k">Senza tempo stimato</span><span class="v">' + vv.none + '</span></div>' : '') + '</div>'
-      : '<div class="notice">Nessun servizio completato negli ultimi 30 giorni.</div>';
+    B.push({ id: 'serv', t: 'Servizi completati', sub: 'ultimi 30 giorni', z: sec, d: 'l', h: fn(secH('Servizi completati · ultimi 30 giorni') + (done.length ? '<div class="group pan"><div class="kv-row"><span class="k">Nei tempi previsti</span><span class="v"><span class="pill ok">' + I.check + ' ' + vv.ok + '</span></span></div><div class="kv-row"><span class="k">Più lunghi del previsto</span><span class="v"><span class="pill late">▲ ' + vv.late + '</span></span></div><div class="kv-row"><span class="k">Più veloci del previsto</span><span class="v"><span class="pill acc">▼ ' + vv.acc + '</span></span></div>' + (vv.none ? '<div class="kv-row"><span class="k">Senza tempo stimato</span><span class="v">' + vv.none + '</span></div>' : '') + '</div>'
+      : '<div class="notice">Nessun servizio completato negli ultimi 30 giorni.</div>')) });
     // Cantiere e porto
     var st = {}; S.boats.forEach(function (b) { var k = b.stato || 'In rimessaggio'; st[k] = (st[k] || 0) + 1; });
     var cfg = mapCfg(), c = cfg.cap, inCap = 0, onMap = 0;
     S.boats.forEach(function (b) { var p = boatPos(b); if (p && boatDims(b)) { onMap++; if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) inCap++; } });
-    h += secH('Cantiere e porto') + '<div class="group pan">' +
+    B.push({ id: 'cant', t: 'Cantiere e porto', z: sec, d: 'l', h: fn(secH('Cantiere e porto') + '<div class="group pan">' +
       '<div class="kv-row"><span class="k">Barche in rimessaggio · in lavorazione · in acqua</span><span class="v">' + (st['In rimessaggio'] || 0) + ' · ' + (st['In lavorazione'] || 0) + ' · ' + (st['In acqua'] || 0) + '</span></div>' +
       '<div class="kv-row"><span class="k">Sulla mappa: nel capannone · sul piazzale</span><span class="v">' + inCap + ' · ' + (onMap - inCap) + '</span></div>' +
       '<div class="kv-row"><span class="k">Da posizionare sulla mappa</span><span class="v">' + unplacedBoats().length + '</span></div>' +
       '<div class="kv-row"><span class="k">Porto: posti vostri liberi · occupati</span><span class="v">' + ps.libero + ' · ' + ps.occupato + '</span></div>' +
       '<div class="kv-row"><span class="k">Clienti vostri in posti della Marina</span><span class="v">' + ps.clienteMarina + '</span></div>' +
       '<div class="kv-row"><span class="k">Barche in vendita · chi cerca una barca</span><span class="v">' + ps.vendita + ' · ' + ps.richieste + '</span></div>' +
-      '</div>';
+      '</div>') });
     // Magazzino e batterie
     var sl = shopList();
-    h += secH('Magazzino e batterie') + '<div class="group">' +
+    B.push({ id: 'magb', t: 'Magazzino e batterie', z: sec, d: 'l', h: fn(secH('Magazzino e batterie') + '<div class="group">' +
       '<button type="button" class="row" data-act="mag-shop"><span class="main"><span class="title">Lista della spesa</span><span class="sub">' + esc(sl.length ? sl.slice(0, 3).map(function (x) { return x.m.nome; }).join(', ') + (sl.length > 3 ? '…' : '') : 'Niente da ordinare') + '</span></span><span class="side"><span class="big" style="font-size:1.2rem">' + sl.length + '</span></span></button>' +
       '<button type="button" class="row" data-act="tab" data-tab="batterie"><span class="main"><span class="title">Batterie da caricare</span><span class="sub">' + esc(bd ? battDue().slice(0, 3).map(function (b) { return b.nome; }).join(', ') : 'Tutte a posto') + '</span></span><span class="side"><span class="big" style="font-size:1.2rem">' + bd + '</span></span></button>' +
-      '</div>';
-    return h;
+      '</div>') });
+    return h + lyRender('pannello', B.concat(LY_W));
   }
   /* ---------- Riepiloghi: scadenze, magazzino, porto e rifiuti in numeri e tabelle ---------- */
   var RIEP = [['scad', 'Scadenze in arrivo', I.alarm], ['mag', 'Magazzino e consumi', I.box], ['porto', 'Porto e posti', I.map], ['rif', 'Rifiuti e ritiri', I.trash]];
-  function rpKpi(t, v, sub, cls) { return '<div class="dash"><h3>' + esc(t) + '</h3><div class="kpi' + (cls ? ' t-' + cls : '') + '">' + v + '</div>' + (sub ? '<div class="mini-l">' + esc(sub) + '</div>' : '') + '</div>'; }
+  // ogni pezzo di un riepilogo è un riquadro da sistemare: numeri piccoli, grafici medi, tabelle grandi
+  function rpBlock(id, t, z, d, html) { return { id: id, t: t, z: z, d: d, h: function () { return html; } }; }
+  function rpTab(id, t, html) { return rpBlock(id, t, ['m', 'l'], 'l', html); }
+  function rpKpi(t, v, sub, cls) { return rpBlock('k_' + gqNorm(t).replace(/ /g, '_'), t, ['s', 'm'], 's', '<div class="dash"><h3>' + esc(t) + '</h3><div class="kpi' + (cls ? ' t-' + cls : '') + '">' + v + '</div>' + (sub ? '<div class="mini-l">' + esc(sub) + '</div>' : '') + '</div>'); }
   function rpBars(title, note, rows, empty) { // rows: [etichetta, valore, testo]
     var mx = Math.max.apply(null, rows.map(function (r) { return r[1]; }).concat([0]));
-    return '<div class="dash"><h3>' + esc(title) + (note ? ' <small>' + esc(note) + '</small>' : '') + '</h3>' + (rows.length ? rows.map(function (r) {
+    return rpBlock('g_' + gqNorm(title).replace(/ /g, '_'), title, ['m', 'l'], 'm', '<div class="dash"><h3>' + esc(title) + (note ? ' <small>' + esc(note) + '</small>' : '') + '</h3>' + (rows.length ? rows.map(function (r) {
       return '<div class="brow"><span title="' + esc(r[0]) + '">' + esc(r[0]) + '</span><div class="bar"><i style="width:' + (mx ? Math.round(r[1] / mx * 100) : 0) + '%"></i></div><span>' + esc(r[2]) + '</span></div>';
-    }).join('') : '<p class="mini-l">' + esc(empty || 'Niente da mostrare') + '</p>') + '</div>';
+    }).join('') : '<p class="mini-l">' + esc(empty || 'Niente da mostrare') + '</p>') + '</div>');
   }
   function rpMonths(n, back) { // ultimi o prossimi n mesi: [chiave 'aaaa-mm', etichetta]
     var t = todayISO(), y = +t.slice(0, 4), m = +t.slice(5, 7) - 1, out = [];
@@ -4340,9 +4557,9 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   }
   function rpCols(title, note, months, vals, fmt) {
     var mx = Math.max.apply(null, vals.concat([0]));
-    return '<div class="dash"><h3>' + esc(title) + (note ? ' <small>' + esc(note) + '</small>' : '') + '</h3><div class="cols">' + months.map(function (m, i) {
+    return rpBlock('g_' + gqNorm(title).replace(/ /g, '_'), title, ['m', 'l'], 'm', '<div class="dash"><h3>' + esc(title) + (note ? ' <small>' + esc(note) + '</small>' : '') + '</h3><div class="cols">' + months.map(function (m, i) {
       return '<div><b>' + (vals[i] ? esc(fmt ? fmt(vals[i]) : String(vals[i])) : '') + '</b><i style="height:' + (mx ? Math.max(2, Math.round(vals[i] / mx * 100)) : 2) + '%"></i>' + esc(m[1]) + '</div>';
-    }).join('') + '</div></div>';
+    }).join('') + '</div></div>');
   }
   function rpTable(cols, rows, empty) { // cols: [titolo, 'n' se numero]; rows: { c: [celle html], act: attributi della riga }
     if (!rows.length) return '<div class="notice">' + esc(empty) + '</div>';
@@ -4352,7 +4569,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   function viewRiepiloghi() {
     var k = V.riep || 'scad';
     var h = '<div class="chips riep-chips" role="group" aria-label="Riepilogo">' + RIEP.map(function (r) { return '<button type="button" data-act="riep" data-v="' + r[0] + '" aria-pressed="' + (k === r[0]) + '">' + r[1] + '</button>'; }).join('') + '</div>';
-    return h + ({ scad: riepScad, mag: riepMag, porto: riepPorto, rif: riepRif }[k] || riepScad)();
+    if (!RIEP.some(function (r) { return r[0] === k; })) k = 'scad';
+    return h + lyRender('riep_' + k, { scad: riepScad, mag: riepMag, porto: riepPorto, rif: riepRif }[k]().concat(LY_W));
   }
   function riepScad() {
     var open = openScad(), late = open.filter(function (x) { return x.i.level === 'late'; }), soon = open.filter(function (x) { return x.i.level === 'soon'; });
@@ -4361,15 +4579,16 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     var ms = rpMonths(6), byM = ms.map(function (m) { return open.filter(function (x) { return String(x.s.data || '').slice(0, 7) === m[0]; }).length; });
     var tipi = {}; d90.forEach(function (x) { var t = x.s.tipo || 'Altro'; tipi[t] = (tipi[t] || 0) + 1; });
     var tr = Object.keys(tipi).sort(function (a, b) { return tipi[b] - tipi[a]; }).slice(0, 6).map(function (t) { return [t, tipi[t], String(tipi[t])]; });
-    var h = '<div class="don">' + rpKpi('Scadute', String(late.length), late.length ? 'da sistemare subito' : 'nessuna', late.length ? 'late' : 'ok') + rpKpi('Entro 30 giorni', String(soon.length), soon.length ? 'da avvisare i clienti' : '', soon.length ? 'soon' : '') +
-      rpKpi('Entro 90 giorni', String(d90.length), 'a data', '') + rpKpi('Fatte questo mese', String(fatte), '', fatte ? 'ok' : '') + '</div>';
-    h += '<div class="g2">' + rpCols('Scadenze per mese', 'prossimi 6 mesi', ms, byM) + rpBars('Per tipo', 'prossimi 90 giorni', tr, 'Nessuna scadenza nei prossimi 90 giorni') + '</div>';
-    h += secH('Da avvisare (' + (late.length + soon.length) + ')');
+    var B = [rpKpi('Scadute', String(late.length), late.length ? 'da sistemare subito' : 'nessuna', late.length ? 'late' : 'ok'), rpKpi('Entro 30 giorni', String(soon.length), soon.length ? 'da avvisare i clienti' : '', soon.length ? 'soon' : ''),
+      rpKpi('Entro 90 giorni', String(d90.length), 'a data', ''), rpKpi('Fatte questo mese', String(fatte), '', fatte ? 'ok' : '')];
+    B.push(rpCols('Scadenze per mese', 'prossimi 6 mesi', ms, byM), rpBars('Per tipo', 'prossimi 90 giorni', tr, 'Nessuna scadenza nei prossimi 90 giorni'));
+    var h = secH('Da avvisare (' + (late.length + soon.length) + ')');
     h += rpTable([['Cliente'], ['Barca'], ['Scadenza'], ['Data'], ['Stato'], ['Telefono']], late.concat(soon).map(function (x) {
       var b = x.i.boat;
       return { act: b ? ' data-act="open-boat" data-id="' + esc(b.id) + '"' : '', c: ['<b>' + esc(b && b.proprietario || '–') + '</b>', esc(boatLabel(b)), esc(x.s.tipo || ''), esc(x.s.data ? fmtDate(x.s.data) : ''), '<span class="pill ' + x.i.level + '">' + esc(x.i.text) + '</span>', esc(b && b.telefono || '')] };
     }), 'Nessun cliente da avvisare: niente di scaduto o in scadenza nei prossimi 30 giorni.');
-    return h;
+    B.push(rpTab('avvisa', 'Da avvisare', h));
+    return B;
   }
   function riepMag() {
     var st = stockMap(), low = lowStock(), mese = todayISO().slice(0, 7), anno = utcToISO(isoToUTC(todayISO()) - 365 * 86400000);
@@ -4381,51 +4600,55 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     var magById = {}; S.mag.forEach(function (m) { magById[m.id] = m; });
     var top = usati.map(function (id) { var m = magById[id]; return m ? [m.nome, uso[id], fmtNum(uso[id], 1) + ' ' + (m.um || '')] : null; }).filter(Boolean).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 6);
     var ms = rpMonths(6, true);
-    var h = '<div class="don">' + rpKpi('Articoli', String(S.mag.length), 'in magazzino', '') + rpKpi('Sotto la scorta minima', String(low.length), low.length ? 'da riordinare' : 'tutto a posto', low.length ? 'soon' : 'ok') +
-      rpKpi('Usati questo mese', String(usati.length), usati.length === 1 ? 'articolo sulle barche' : 'articoli sulle barche', '') + rpKpi('Fermi da un anno', String(fermi.length), 'in giacenza, mai usati', fermi.length ? 'late' : '') + '</div>';
-    h += '<div class="g2">' + rpBars('Più usati', 'questo mese', top, 'Nessun ricambio usato questo mese') + rpCols('Ricambi usati', 'righe, ultimi 6 mesi', ms, ms.map(function (m) { return usoM[m[0]] || 0; })) + '</div>';
-    h += secH('Da riordinare (' + shopList().length + ')', 'mag-shop', 'Lista della spesa');
+    var B = [rpKpi('Articoli', String(S.mag.length), 'in magazzino', ''), rpKpi('Sotto la scorta minima', String(low.length), low.length ? 'da riordinare' : 'tutto a posto', low.length ? 'soon' : 'ok'),
+      rpKpi('Usati questo mese', String(usati.length), usati.length === 1 ? 'articolo sulle barche' : 'articoli sulle barche', ''), rpKpi('Fermi da un anno', String(fermi.length), 'in giacenza, mai usati', fermi.length ? 'late' : '')];
+    B.push(rpBars('Più usati', 'questo mese', top, 'Nessun ricambio usato questo mese'), rpCols('Ricambi usati', 'righe, ultimi 6 mesi', ms, ms.map(function (m) { return usoM[m[0]] || 0; })));
+    var h = secH('Da riordinare (' + shopList().length + ')', 'mag-shop', 'Lista della spesa');
     h += rpTable([['Articolo'], ['Fornitore'], ['Ci sono', 'n'], ['Minimo', 'n'], ['Da ordinare', 'n'], ['Ultimo carico']], shopList().map(function (x) {
       var m = x.m, um = m.um ? ' ' + esc(m.um) : '';
       return { c: ['<b>' + esc(m.nome) + '</b>', esc(m.fornitore || '–'), fmtNum(st[m.id] || 0, 1) + um, num(m.minimo) != null ? fmtNum(m.minimo, 1) + um : '–', fmtNum(x.q, 1) + um, esc(carico[m.id] ? fmtDate(carico[m.id]) : '–')] };
     }), 'Niente da riordinare.');
+    B.push(rpTab('riord', 'Da riordinare', h)); h = '';
     if (fermi.length) {
-      h += secH('Fermi da più di un anno (' + fermi.length + ')');
+      h = secH('Fermi da più di un anno (' + fermi.length + ')');
       h += rpTable([['Articolo'], ['Fornitore'], ['Ci sono', 'n'], ['Ultimo uso']], fermi.slice(0, 30).map(function (m) { return { c: ['<b>' + esc(m.nome) + '</b>', esc(m.fornitore || '–'), fmtNum(st[m.id] || 0, 1) + (m.um ? ' ' + esc(m.um) : ''), esc(last[m.id] ? fmtDate(last[m.id]) : 'mai')] }; }), '');
     }
-    return h;
+    B.push(rpTab('fermi', 'Fermi da più di un anno', h));
+    return B;
   }
   function riepPorto() {
     var ps = Porto.stats(), zone = Porto.zone(), tot = ps.libero + ps.occupato, acqua = S.boats.filter(function (b) { return b.stato === 'In acqua'; }).length;
     var wk = utcToISO(isoToUTC(todayISO()) + 7 * 86400000), vw = variOpen().filter(function (v) { return v.data <= wk; }).length, ct = Porto.contratti(60);
     var ms = rpMonths(6), byM = ms.map(function (m) { return S.vari.filter(function (v) { return String(v.data || '').slice(0, 7) === m[0]; }).length; });
-    var h = '<div class="don">' + rpKpi('Posti vostri occupati', ps.occupato + '<small> / ' + tot + '</small>', tot ? Math.round(ps.occupato / tot * 100) + '% pieno · ' + ps.libero + ' liberi' : '', '') +
-      rpKpi('Barche in acqua', String(acqua), (S.boats.length - acqua) + ' a terra', '') + rpKpi('Vari e alaggi', String(vw), 'nei prossimi 7 giorni', vw ? 'vio' : '') +
-      rpKpi('Contratti in scadenza', String(ct.length), 'entro 60 giorni', ct.length ? 'soon' : '') + '</div>';
-    h += '<div class="g2">' + rpBars('Posti vostri occupati', 'per zona', zone.map(function (z) { return [z.zona, z.nostri ? z.occupati / z.nostri : 0, z.occupati + '/' + z.nostri]; }), 'Nessun posto vostro segnato sulla mappa del porto') +
-      rpCols('Vari e alaggi', 'prossimi 6 mesi', ms, byM) + '</div>';
-    h += secH('Contratti in scadenza (' + ct.length + ')');
+    var B = [rpKpi('Posti vostri occupati', ps.occupato + '<small> / ' + tot + '</small>', tot ? Math.round(ps.occupato / tot * 100) + '% pieno · ' + ps.libero + ' liberi' : '', ''),
+      rpKpi('Barche in acqua', String(acqua), (S.boats.length - acqua) + ' a terra', ''), rpKpi('Vari e alaggi', String(vw), 'nei prossimi 7 giorni', vw ? 'vio' : ''),
+      rpKpi('Contratti in scadenza', String(ct.length), 'entro 60 giorni', ct.length ? 'soon' : '')];
+    B.push(rpBars('Posti vostri occupati', 'per zona', zone.map(function (z) { return [z.zona, z.nostri ? z.occupati / z.nostri : 0, z.occupati + '/' + z.nostri]; }), 'Nessun posto vostro segnato sulla mappa del porto'),
+      rpCols('Vari e alaggi', 'prossimi 6 mesi', ms, byM));
+    var h = secH('Contratti in scadenza (' + ct.length + ')');
     h += rpTable([['Cliente'], ['Barca'], ['Posto'], ['Fine contratto'], ['Stato']], ct.map(function (x) {
       var n = daysUntil(x.d.fino), cl = n < 0 ? 'late' : n <= 30 ? 'soon' : 'ok';
       return { act: ' data-act="go-porto" data-id="' + esc(x.id) + '"', c: ['<b>' + esc(x.d.cliente || (x.boat && x.boat.proprietario) || '–') + '</b>', esc(x.boat ? x.boat.nome || '' : '–'), esc(x.id), esc(fmtDate(x.d.fino)), '<span class="pill ' + cl + '">' + (n < 0 ? 'scaduto da ' + (-n) + ' gg' : n === 0 ? 'scade oggi' : 'tra ' + n + ' gg') + '</span>'] };
     }), 'Nessun contratto in scadenza nei prossimi 60 giorni.');
-    return h;
+    B.push(rpTab('contr', 'Contratti in scadenza', h));
+    return B;
   }
   function riepRif() {
     var dep = rifDep(), kg = rifDepKg(), per = 0, eur = 0, rit = (S.ritiri || []).slice().sort(function (a, b) { return String(b.data || '').localeCompare(String(a.data || '')); });
     Object.keys(dep).forEach(function (k) { var t = rifTipo(k); if (rifPer(t)) per += dep[k].kg; if (t && !t.dare && num(t.euro) != null) eur += dep[k].kg * t.euro; });
     var ms = rpMonths(6, true), byM = ms.map(function (m) { var t = 0; (S.rif || []).forEach(function (r) { if (String(r.data || '').slice(0, 7) === m[0]) t += num(r.kg) || 0; }); return Math.round(t); });
     var tr = Object.keys(dep).map(function (k) { var t = rifTipo(k); return [t ? t.nome : k, dep[k].kg, '≈ ' + fmtNum(dep[k].kg, 1) + ' kg']; }).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 6);
-    var h = '<div class="don">' + rpKpi('In deposito', '≈ ' + fmtNum(kg, 0) + '<small> kg</small>', 'dall’ultimo ritiro', '') + rpKpi('Pericolosi', '≈ ' + fmtNum(per, 0) + '<small> kg</small>', 'in deposito', per ? 'soon' : '') +
-      rpKpi('Ultimo ritiro', rit[0] && rit[0].data ? esc(fmtDate(rit[0].data).replace(/ \d{4}$/, '')) : '–', rit[0] && rit[0].data ? (daysUntil(rit[0].data) === 0 ? 'oggi' : (-daysUntil(rit[0].data)) + ' giorni fa') : 'nessun ritiro segnato', '') +
-      rpKpi('Costo stimato', eur ? fmtEuro(eur, true) : '–', 'per smaltire il deposito', '') + '</div>';
-    h += '<div class="g2">' + rpBars('In deposito', 'per tipo', tr, 'Deposito vuoto') + rpCols('Rifiuti segnati', 'kg, ultimi 6 mesi', ms, byM) + '</div>';
-    h += secH('Ritiri della ditta (' + rit.length + ')', 'tab', 'Apri rifiuti', ' data-tab="rifiuti"');
+    var B = [rpKpi('In deposito', '≈ ' + fmtNum(kg, 0) + '<small> kg</small>', 'dall’ultimo ritiro', ''), rpKpi('Pericolosi', '≈ ' + fmtNum(per, 0) + '<small> kg</small>', 'in deposito', per ? 'soon' : ''),
+      rpKpi('Ultimo ritiro', rit[0] && rit[0].data ? esc(fmtDate(rit[0].data).replace(/ \d{4}$/, '')) : '–', rit[0] && rit[0].data ? (daysUntil(rit[0].data) === 0 ? 'oggi' : (-daysUntil(rit[0].data)) + ' giorni fa') : 'nessun ritiro segnato', ''),
+      rpKpi('Costo stimato', eur ? fmtEuro(eur, true) : '–', 'per smaltire il deposito', '')];
+    B.push(rpBars('In deposito', 'per tipo', tr, 'Deposito vuoto'), rpCols('Rifiuti segnati', 'kg, ultimi 6 mesi', ms, byM));
+    var h = secH('Ritiri della ditta (' + rit.length + ')', 'tab', 'Apri rifiuti', ' data-tab="rifiuti"');
     h += rpTable([['Data'], ['Ditta'], ['Formulario'], ['Tipi', 'n'], ['Kg', 'n']], rit.slice(0, 20).map(function (x) {
       var k = 0, dit = {}; (x.righe || []).forEach(function (r) { k += num(r.kg) || 0; var t = rifTipo(r.tipo); if (t) dit[rifDittaNome(t.ditta)] = 1; });
       return { act: ' data-act="rif-rit-edit" data-id="' + esc(x.id) + '"', c: ['<b>' + esc(x.data ? fmtDate(x.data) : '–') + '</b>', esc(Object.keys(dit).join(', ') || '–'), x.fir ? esc(x.fir) : '<span class="pill soon">da scrivere</span>', String((x.righe || []).length), fmtNum(k, 1)] };
     }), 'Nessun ritiro segnato.');
-    return h;
+    B.push(rpTab('ritiri', 'Ritiri della ditta', h));
+    return B;
   }
   /* ---------- Varo e alaggio: porto e cantiere si aggiornano insieme ---------- */
   function moveKind(x) { var t = String(x || '').toLowerCase(); return /varo/.test(t) ? 'varo' : /alagg/.test(t) ? 'alaggio' : ''; }
@@ -6796,6 +7019,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   function render() {
     if (window.__NM_FB && window.__NM_FB.vista && S.status === 'ready') window.__NM_FB.vista(vistaNome());
     if (V.tab !== 'mappa' && M.three) dispose3D();
+    if (V.lyEdit && V.tab !== V.lyTab) V.lyEdit = '';
     var onPorto = V.tab === 'mappa' && M.area === 'porto';
     if (!onPorto) Porto.unmount();
     if (onPorto && S.status === 'ready' && Porto.isMounted()) { renderTop(); renderTabs(); Porto.refresh(); return; }
@@ -6922,7 +7146,9 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'La campanella in alto a sinistra porta alle scadenze scadute e ne mostra il numero.',
       'Meteo della Marina con il vento in nodi: il semaforo diventa giallo da 10 nodi di raffica e rosso da 18.',
       '«Oggi in cantiere» mostra chi ha segnato ore oggi e su quali barche.',
-      'La barra di ricerca cerca in tutta l’app.'] },
+      'La barra di ricerca cerca in tutta l’app.',
+      'A|Puoi sistemare i riquadri come sul telefono: sul telefono tieni premuto un riquadro, sul computer usa i puntini «⋯» in alto a destra (o il tasto destro). Scegli la grandezza (piccolo, medio, grande), «Sistema» per spostarli trascinandoli, «−» per toglierli e «Aggiungi» per rimetterli. Ogni amministratore ha i suoi.',
+      'A|Con «Aggiungi» metti in Home anche Scadenze, Magazzino, Porto, Rifiuti e Batterie: toccandoli si apre la sezione. In «In primo piano» con «Cosa mostrare» scegli quali avvisi vedere.'] },
     scheda: { t: 'Scheda lavoro', p: 'Il rapportino del giorno: ognuno segna cosa ha fatto e per quante ore.', li: [
       'Tocca «+ Mansione», scegli la barca (cerca per nome, cliente, posto o misura) oppure «Lavori di cantiere».',
       'Scrivi cosa hai fatto e le ore (per esempio 2,5). Con «Aggiungi riga» metti più lavori sulla stessa barca.',
@@ -6955,7 +7181,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'Scadenze in arrivo: scadute, entro 30 e 90 giorni, quante per mese e per tipo, e i clienti da avvisare con il telefono. Tocca una riga per aprire la barca.',
       'Magazzino e consumi: articoli sotto scorta con quanto ordinare, i ricambi più usati del mese e gli articoli fermi da più di un anno.',
       'Porto e posti: posti vostri occupati per zona, barche in acqua e a terra, vari e alaggi in arrivo, contratti in scadenza nei prossimi 60 giorni.',
-      'Rifiuti e ritiri: kg in deposito (e quanti pericolosi), costo stimato, rifiuti segnati per mese e ritiri della ditta.'] },
+      'Rifiuti e ritiri: kg in deposito (e quanti pericolosi), costo stimato, rifiuti segnati per mese e ritiri della ditta.',
+      'A|Ognuno dei quattro riepiloghi ha i suoi riquadri da sistemare come in Home: tieni premuto (o «⋯» sul computer) per grandezza, posizione o per toglierli.'] },
     barca: { t: 'Scheda della barca', p: 'Qui c’è tutta la storia della barca.', li: [
       'La matita in alto modifica i dati: modello, misure, motori, stato, ore motore, proprietario con telefono ed email.',
       'Nella matita ogni motore è una riga con marca e modello, matricola, cv e ore: «Aggiungi riga» per un altro motore (copia marca e cv del primo), × per toglierlo. Il numero dei motori si conta da solo.',
@@ -6993,7 +7220,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'Ore della settimana, programma di oggi, giornate da confermare, lavori e servizi aperti.',
       'Contratti del porto in scadenza, posti liberi e occupati, barche in vendita.',
       'Servizi degli ultimi 30 giorni: nei tempi, più lunghi o più veloci del previsto.',
-      'Magazzino da riordinare e batterie da caricare.'] },
+      'Magazzino da riordinare e batterie da caricare.',
+      'A|Anche qui i riquadri si sistemano come in Home: tieni premuto (o «⋯» sul computer), e con «Aggiungi» metti anche Scadenze, Porto, Rifiuti e Batterie.'] },
     batterie: { t: 'Batterie', p: 'Per le barche a terra: quando sono state caricate o controllate le batterie.', li: [
       'Ogni batteria è una riga con numero (o matricola) e descrizione, come le righe della scheda lavoro: «Aggiungi riga» per un’altra, × per toglierla.',
       'Con «Caricate oggi? Sì» spunti quali batterie hai caricato e, se vuoi, la tensione letta di ognuna. «Caricate oggi» nella lista le segna tutte.',
@@ -8763,6 +8991,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       case 'nt-on': ntAttiva(); break;
       case 'nt-off': ntDisattiva(); break;
       case 'nt-cfg': ntCfgSave(); break;
+      case 'ly-menu': case 'ly-edit': case 'ly-done': case 'ly-add': case 'ly-add-one': case 'ly-del': case 'ly-size': case 'ly-opz': lyAct(act, t); break;
       case 'riep': V.tab = 'riepiloghi'; V.riep = t.getAttribute('data-v'); V.boatId = null; window.scrollTo(0, 0); render(); break;
       case 'b-sort': var bk = t.getAttribute('data-k'); V.bSortDir = V.bSort === bk ? -(V.bSortDir || 1) : 1; V.bSort = bk; renderBoatList(); break;
       case 'b-filt': V.bFilt = t.getAttribute('data-v'); renderBoatList(); break;
@@ -9065,10 +9294,10 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     }
     sub('conferme', function (x) { S.conf = toMap(x); });
     db.collection('impostazioni').onSnapshot(function (snap) {
-      var m = null, b = null;
-      snap.docs.forEach(function (d) { if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); else if (d.id === 'rifiuti') S.rifCfg = d.data(); else if (d.id === 'notifiche') S.notifCfg = d.data(); else if (d.id === 'meteo') S.meteoCfg = d.data(); else if (d.id === 'percorso') S.percorso = d.data(); else if (d.id === 'categorie') { S.catCfg = d.data(); catApply(); } });
-      var mc = m !== S.mapCfg; S.mapCfg = m; S.bkInfo = b;
-      if ((V.tab === 'mappa' && mc) || V.tab === 'backup' || V.tab === 'batterie' || V.tab === 'rifiuti' || V.tab === 'notifiche' || V.tab === 'categorie' || V.tab === 'home' || V.tab === 'barche') render();
+      var m = null, b = null, ly = {};
+      snap.docs.forEach(function (d) { if (/^layout_/.test(d.id)) ly[d.id] = d.data(); else if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); else if (d.id === 'rifiuti') S.rifCfg = d.data(); else if (d.id === 'notifiche') S.notifCfg = d.data(); else if (d.id === 'meteo') S.meteoCfg = d.data(); else if (d.id === 'percorso') S.percorso = d.data(); else if (d.id === 'categorie') { S.catCfg = d.data(); catApply(); } });
+      var mc = m !== S.mapCfg; S.mapCfg = m; S.bkInfo = b; S.layouts = ly;
+      if ((V.tab === 'mappa' && mc) || V.tab === 'backup' || V.tab === 'batterie' || V.tab === 'rifiuti' || V.tab === 'notifiche' || V.tab === 'categorie' || V.tab === 'home' || V.tab === 'barche' || V.tab === 'pannello' || V.tab === 'riepiloghi') { if (!LY.drag) render(); }
     }, function () { });
     sub('magazzino', function (x) { S.mag = x; });
     sub('movimenti', function (x) { S.mov = x; });
