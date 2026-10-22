@@ -37,7 +37,7 @@ service cloud.firestore {
     function raccolteCantiere() {
       return ['barche', 'lavori', 'scadenze', 'dipendenti', 'conferme', 'impostazioni', 'magazzino', 'movimenti', 'vari', 'modelli',
         'checkBarca', 'checklist', 'opModelli', 'operazioni', 'mezzi', 'attrezzatura', 'programma', 'cariche', 'posti', 'richieste',
-        'rifiuti', 'ritiri', 'scadCantiere', 'preventivi', 'assenze', 'kit', 'inventari'];
+        'rifiuti', 'ritiri', 'scadCantiere', 'preventivi', 'assenze', 'kit', 'inventari', 'giri', 'cronometri'];
     }
 
     // Cestino: ogni cancellazione ne lascia qui una copia (per 60 giorni).
@@ -64,7 +64,7 @@ service cloud.firestore {
     // ciò che hanno aggiunto loro (creatoDa), le proprie mansioni della scheda, le proprie giornate
     // confermate, le proprie richieste di ferie non ancora decise, e i posti al porto (spostare le barche).
     // Chi ha aggiunto una cosa non si può cambiare.
-    // Le mansioni della scheda, le giornate confermate, le ferie e le iscrizioni alle notifiche si modificano solo se sono proprie.
+    // Le mansioni della scheda, le giornate confermate, le ferie, le iscrizioni alle notifiche e i cronometri si modificano solo se sono propri.
     match /{coll}/{id} {
       function nuovo() { return request.resource.data; }
       function cancellato(d) { return d.get('_del', false) == true; }
@@ -73,7 +73,7 @@ service cloud.firestore {
       function proprio(d) {
         return cancellato(d)
           || ((coll != 'lavori' || d.get('fonte', '') != 'scheda' || mio(d))
-            && (!(coll in ['conferme', 'assenze', 'notifiche']) || mio(d)));
+            && (!(coll in ['conferme', 'assenze', 'notifiche', 'cronometri']) || mio(d)));
       }
       // le ferie le approva solo l'amministratore; la malattia si comunica e basta
       function ferieOk(d) { return coll != 'assenze' || cancellato(d) || d.get('stato', '') == 'richiesta' || (d.get('stato', '') == 'approvata' && d.get('tipo', '') == 'malattia'); }
