@@ -259,6 +259,24 @@ button.row:active, .row .hit:active { opacity: .65; }
 .sd-sum .row .pill { margin-left: 0; }
 .day i.stripe { background: repeating-linear-gradient(135deg, var(--accent) 0 3px, transparent 3px 5px); }
 .day .more { position: absolute; right: 3px; bottom: 2px; font-size: .62rem; font-weight: 600; color: var(--accent); }
+/* calendario: nel mese etichette con i numeri, nella settimana una colonna per giorno */
+.cal-vista { margin: 10px 0 2px; }
+.day .ccs { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.cc { --c: var(--accent); display: inline-flex; align-items: center; gap: 3px; max-width: 100%; font-size: .66rem; font-weight: 700; line-height: 1.2; color: var(--c); background: color-mix(in srgb, var(--c) 17%, transparent); padding: 2px 5px; border-radius: 999px; white-space: nowrap; overflow: hidden; }
+.cc svg { width: 11px; height: 11px; flex: none; }
+.cc em { font-style: normal; display: none; overflow: hidden; text-overflow: ellipsis; }
+.cc.teal { --c: #3BC0C9; } .cc.vio { --c: var(--vio); } .cc.late { --c: var(--late); } .cc.soon { --c: var(--soon); } .cc.ok { --c: var(--ok); } .cc.grey { --c: var(--muted); }
+.cal-leg { gap: 8px 10px; } .cal-leg .cc { font-size: .74rem; padding: 3px 8px; } .cal-leg .cc em { display: inline; } .cal-leg .cc span:empty { display: none; }
+.cw { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin-top: 8px; }
+.cw-col { border: 0; font: inherit; color: var(--ink); text-align: left; background: var(--cell); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; cursor: pointer; }
+.cw-col.today { box-shadow: inset 0 0 0 1.5px var(--accent); } .cw-col.sel { box-shadow: inset 0 0 0 2px var(--ink); }
+.cw-h { display: flex; align-items: baseline; gap: 6px; padding: 0 2px 4px; border-bottom: 1px solid var(--line); }
+.cw-h span { font-size: .75rem; color: var(--muted); text-transform: uppercase; } .cw-h b { font-size: 1.1rem; }
+.cw-card { --c: var(--accent); border-left: 3px solid var(--c); background: color-mix(in srgb, var(--c) 12%, var(--card)); border-radius: 4px; padding: 5px 7px; display: flex; flex-direction: column; gap: 1px; font-size: .8rem; min-width: 0; }
+.cw-card b { font-weight: 600; overflow-wrap: anywhere; } .cw-card span { color: var(--muted); font-size: .74rem; }
+.cw-card small { font-size: .64rem; color: var(--c); font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.cw-card.teal { --c: #3BC0C9; } .cw-card.vio { --c: var(--vio); } .cw-card.late { --c: var(--late); } .cw-card.soon { --c: var(--soon); } .cw-card.ok { --c: var(--ok); } .cw-card.grey { --c: var(--dim); }
+.cw-sq { margin-top: auto; font-size: .74rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 6px; } .cw-sq b { color: var(--accent); font-size: .9rem; } .cw-sq span { display: block; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: .78rem; color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { display: inline-block; width: 16px; height: 5px; border-radius: 1px; }
@@ -723,6 +741,10 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   .tab[aria-current="page"] { background: var(--accent-bg); }
   .tab .badge { position: static; margin-left: auto; }
   .side-x { display: block; }
+  .cc em { display: inline; }
+  .day { min-height: 92px; }
+  .cw { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .cw-col { min-height: 360px; }
   .side-pen { position: absolute; top: calc(18px + env(safe-area-inset-top, 0px)); right: 14px; z-index: 2; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: var(--dim); display: grid; place-items: center; cursor: pointer; }
   .side-pen:hover { background: var(--card); color: var(--ink); }
   .side-pen svg { width: 16px; height: 16px; }
@@ -901,7 +923,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   /* ---------- Stato ---------- */
   var S = { posti: {}, richieste: [], db: null, status: 'loading', canWrite: true, writeUnknown: false, boats: [], lavori: [], lavoriAll: [], scadenze: [], got: {}, pendingBoat: null, user: null, myId: null, me: {}, isOwner: false, dip: {}, prof: {},
     conf: {}, mag: [], mov: [], vari: [], modelli: [], ckBarca: {}, check: [], assets: null, opModelli: [], ops: [], mezzi: [], attr: [], prog: [], cariche: [], isEditor: false, battCfg: null, dl: undefined, bkInfo: null, rif: [], ritiri: [], rifCfg: null, meteoCfg: null, scadC: [], prev: [], kit: [], inv: [], assenze: [], giri: [], crono: {}, ditte: [] };
-  var V = { tab: 'home', boatId: null, q: '', lavFilter: 'aperti', showDone: false, exConfirm: false, calMonth: todayISO().slice(0, 7), calDay: todayISO(), feat: 0, boatLavAll: false, schedaDay: todayISO(), nomeDraft: null,
+  var V = { tab: 'home', boatId: null, q: '', lavFilter: 'aperti', showDone: false, exConfirm: false, calMonth: todayISO().slice(0, 7), calDay: todayISO(), calVista: (function () { try { return localStorage.getItem('nm-cal-vista') === 'sett' ? 'sett' : 'mese'; } catch (e) { return 'mese'; } })(), feat: 0, boatLavAll: false, schedaDay: todayISO(), nomeDraft: null,
     boatView: null, resRange: 'anno', oreMonth: todayISO().slice(0, 7), oreOpen: null, magQ: '', magGroup: 'tipo', progDay: null, progView: 'ora', panPer: 'sett', panBy: 'persona', variDone: false, rifTab: 'deposito', rifEuro: false, scShowDone: false, prevFilter: 'aperti' };
   var SHEET = { onDelete: null, foto: [], run: null };
   function CLD() { return window.__NM_DEMO || window.__NM_FB || window.claude; } // prova: dati sul dispositivo · sito proprio: Firebase · altrimenti Claude
@@ -1484,22 +1506,73 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     (S.scadC || []).forEach(function (x) { if (!x.fatta) add(x.data, { k: 'z', cls: scInfo(x).level, o: x }); else if (x.fattaIl) add(x.fattaIl, { k: 'z', cls: 'grey', o: x }); });
     return m;
   }
+  // calendario: le cose di un giorno riassunte (le mansioni della scheda lavoro diventano le ore della squadra)
+  var CAL_ORD = 'vszpl';
+  function calSum(items) {
+    var r = { h: 0, chi: {}, p: 0, pf: 0, v: [], s: [], fatti: 0, aperti: 0, cose: [] };
+    items.forEach(function (it) {
+      var o = it.o;
+      if (it.k === 'l' && o.fonte === 'scheda') { r.h += num(o.oreLavoro) || 0; if (o.utente) r.chi[o.utente] = 1; return; }
+      r.cose.push(it);
+      if (it.k === 'p') { r.p++; if (o.fatto) r.pf++; }
+      else if (it.k === 'v') r.v.push(it);
+      else if (it.k === 's' || it.k === 'z') r.s.push(it);
+      else if (it.k === 'l') { if (o.stato === 'fatto') r.fatti++; else r.aperti++; }
+    });
+    r.cose.sort(function (a, b) { return CAL_ORD.indexOf(a.k) - CAL_ORD.indexOf(b.k); });
+    return r;
+  }
+  function calChip(cls, icon, n, word) { return '<b class="cc ' + cls + '">' + icon + '<span>' + n + '</span>' + (word ? '<em> ' + esc(word) + '</em>' : '') + '</b>'; }
+  function calChips(r) {
+    var lv = r.s.some(function (x) { return x.cls === 'late'; }) ? 'late' : r.s.some(function (x) { return x.cls === 'soon'; }) ? 'soon' : r.s.some(function (x) { return x.cls === 'grey'; }) && r.s.every(function (x) { return x.cls === 'grey'; }) ? 'grey' : 'ok';
+    return (r.h ? calChip('acc', I.clip, esc(fmtNum(r.h, 1)) + ' h', '') : '') +
+      (r.p ? calChip(r.pf === r.p ? 'grey' : 'teal', I.plan, r.p, 'in programma') : '') +
+      (r.v.length ? calChip(r.v.every(function (x) { return x.o.fatto; }) ? 'grey' : 'vio', I.updown, r.v.length, r.v.length === 1 ? (TIPI_V[r.v[0].o.tipo] || 'Varo o alaggio').toLowerCase() : 'vari e alaggi') : '') +
+      (r.s.length ? calChip(lv, I.alarm, r.s.length, r.s.length === 1 ? 'scadenza' : 'scadenze') : '') +
+      (r.fatti ? calChip('ok', I.check, r.fatti, r.fatti === 1 ? 'lavoro fatto' : 'lavori fatti') : '') +
+      (r.aperti ? calChip('grey', I.wrench, r.aperti, r.aperti === 1 ? 'lavoro' : 'lavori') : '');
+  }
+  function calCard(it) { // schedina della vista settimana
+    var o = it.o, b = o.barcaId ? boatById(o.barcaId) : null, bn = o.barcaId ? (b ? b.nome || 'Barca' : 'Barca eliminata') : '';
+    var k = it.k, cls = it.cls === 'stripe' ? 'acc' : it.cls || 'acc', lab, tit, sub;
+    if (k === 'v') { lab = (TIPI_V[o.tipo] || 'Movimento') + (o.ora ? ' · ' + o.ora : '') + (o.fatto ? ' · fatto' : ''); tit = bn || 'Barca'; sub = ''; }
+    else if (k === 's') { lab = 'Scadenza' + (o.fatta ? ' · fatta' : ''); tit = o.tipo || 'Scadenza'; sub = bn; }
+    else if (k === 'z') { lab = 'Scadenza del cantiere' + (o.fatta ? ' · fatta' : ''); tit = o.tipo || 'Scadenza'; sub = o.rif || ''; }
+    else if (k === 'p') { lab = 'Programma' + (o.fatto ? ' · fatto' : ''); tit = o.testo || 'Lavoro'; sub = bn || 'Cantiere'; }
+    else { lab = o.stato === 'fatto' ? 'Lavoro fatto' : o.stato === 'in_corso' ? 'In corso' : 'Da fare'; tit = o.titolo || 'Lavorazione'; sub = bn; cls = o.stato === 'fatto' ? 'ok' : o.stato === 'in_corso' ? 'acc' : 'grey'; }
+    return '<span class="cw-card ' + cls + '"><small>' + esc(lab) + '</small><b>' + esc(tit) + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</span>';
+  }
   function viewCalendario() {
-    var p = V.calMonth.split('-'), y = +p[0], mo = +p[1] - 1;
-    var first = Date.UTC(y, mo, 1), offset = (new Date(first).getUTCDay() + 6) % 7;
-    var start = first - offset * 86400000, daysIn = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
-    var total = Math.ceil((offset + daysIn) / 7) * 7;
-    var map = calMap(utcToISO(start), utcToISO(start + (total - 1) * 86400000)), today = todayISO();
-    var h = '<div class="cal-nav"><button type="button" class="icon-btn blue" data-act="cal-prev" aria-label="Mese precedente">' + I.left + '</button><h2>' + monthLabel(V.calMonth) + '</h2><button type="button" class="icon-btn blue" data-act="cal-next" aria-label="Mese successivo">' + I.right + '</button></div>';
-    h += '<div class="cal">' + ['L', 'M', 'M', 'G', 'V', 'S', 'D'].map(function (d) { return '<div class="dow">' + d + '</div>'; }).join('');
-    for (var k = 0; k < total; k++) {
-      var t = start + k * 86400000, iso = utcToISO(t), d = new Date(t), items = map[iso] || [];
-      var cls = 'day' + (d.getUTCMonth() !== mo ? ' out' : '') + (iso === today ? ' today' : '') + (iso === V.calDay ? ' sel' : '');
-      h += '<button type="button" class="' + cls + '" data-act="cal-day" data-d="' + iso + '" aria-label="' + esc(fmtDayLong(iso)) + (items.length ? ', ' + items.length + ' voci' : '') + '"><span class="n">' + d.getUTCDate() + '</span>' +
-        items.slice(0, 4).map(function (it) { return '<i class="' + it.cls + '"></i>'; }).join('') + (items.length > 4 ? '<span class="more">+' + (items.length - 4) + '</span>' : '') + '</button>';
+    var wk = V.calVista === 'sett', today = todayISO(), h = '';
+    h += '<div class="chips cal-vista" role="group" aria-label="Vista"><button type="button" data-act="cal-vista" data-v="mese" aria-pressed="' + !wk + '">Mese</button><button type="button" data-act="cal-vista" data-v="sett" aria-pressed="' + wk + '">Settimana</button></div>';
+    if (wk) {
+      var w0 = addDays(V.calDay, -((new Date(isoToUTC(V.calDay)).getUTCDay() + 6) % 7)), w6 = addDays(w0, 6);
+      var wm = calMap(w0, w6), dn = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+      var t0 = w0.slice(8) * 1, t6 = w6.slice(8) * 1, sameM = w0.slice(0, 7) === w6.slice(0, 7);
+      var title = t0 + (sameM ? '' : ' ' + MESI_L[+w0.slice(5, 7) - 1].toLowerCase()) + ' – ' + t6 + ' ' + MESI_L[+w6.slice(5, 7) - 1].toLowerCase() + ' ' + w6.slice(0, 4);
+      h += '<div class="cal-nav"><button type="button" class="icon-btn blue" data-act="cal-prev" aria-label="Settimana precedente">' + I.left + '</button><h2 style="text-transform:none">' + esc(title) + '</h2><button type="button" class="icon-btn blue" data-act="cal-next" aria-label="Settimana successiva">' + I.right + '</button></div>';
+      h += '<div class="cw">' + dn.map(function (n, i) {
+        var iso = addDays(w0, i), r = calSum(wm[iso] || []), chi = Object.keys(r.chi).map(nameOf);
+        return '<button type="button" class="cw-col' + (iso === today ? ' today' : '') + (iso === V.calDay ? ' sel' : '') + '" data-act="cal-day" data-d="' + iso + '" aria-label="' + esc(fmtDayLong(iso)) + '">' +
+          '<span class="cw-h"><span>' + n + '</span><b>' + (+iso.slice(8)) + '</b></span>' + r.cose.map(calCard).join('') +
+          (r.h ? '<span class="cw-sq"><b>' + esc(fmtNum(r.h, 1)) + ' h</b> squadra' + (chi.length ? '<span>' + esc(chi.join(', ')) + '</span>' : '') + '</span>' : '') + '</button>';
+      }).join('') + '</div>';
+    } else {
+      var p = V.calMonth.split('-'), y = +p[0], mo = +p[1] - 1;
+      var first = Date.UTC(y, mo, 1), offset = (new Date(first).getUTCDay() + 6) % 7;
+      var start = first - offset * 86400000, daysIn = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
+      var total = Math.ceil((offset + daysIn) / 7) * 7;
+      var map = calMap(utcToISO(start), utcToISO(start + (total - 1) * 86400000));
+      h += '<div class="cal-nav"><button type="button" class="icon-btn blue" data-act="cal-prev" aria-label="Mese precedente">' + I.left + '</button><h2>' + monthLabel(V.calMonth) + '</h2><button type="button" class="icon-btn blue" data-act="cal-next" aria-label="Mese successivo">' + I.right + '</button></div>';
+      h += '<div class="cal">' + ['L', 'M', 'M', 'G', 'V', 'S', 'D'].map(function (d) { return '<div class="dow">' + d + '</div>'; }).join('');
+      for (var k = 0; k < total; k++) {
+        var t = start + k * 86400000, iso = utcToISO(t), d = new Date(t), items = map[iso] || [];
+        var cls = 'day' + (d.getUTCMonth() !== mo ? ' out' : '') + (iso === today ? ' today' : '') + (iso === V.calDay ? ' sel' : '');
+        h += '<button type="button" class="' + cls + '" data-act="cal-day" data-d="' + iso + '" aria-label="' + esc(fmtDayLong(iso)) + (items.length ? ', ' + items.length + ' voci' : '') + '"><span class="n">' + d.getUTCDate() + '</span><span class="ccs">' + calChips(calSum(items)) + '</span></button>';
+      }
+      h += '</div>';
+      h += '<div class="legend cal-leg">' + calChip('acc', I.clip, '', 'ore della squadra') + calChip('teal', I.plan, '', 'programma') + calChip('vio', I.updown, '', 'vari e alaggi') + calChip('soon', I.alarm, '', 'scadenze') + calChip('ok', I.check, '', 'lavori fatti') + calChip('grey', I.wrench, '', 'lavori da fare') + '</div>';
     }
-    h += '</div>';
-    h += '<div class="legend"><span><i style="background:var(--accent)"></i>Lavoro fatto</span><span><i style="background:repeating-linear-gradient(135deg,var(--accent) 0 3px,transparent 3px 5px)"></i>In corso</span><span><i style="background:var(--dim)"></i>Da fare o completata</span><span><i style="background:#3BC0C9"></i>Programma</span><span><i style="background:var(--vio)"></i>Varo o alaggio</span><span><i style="background:var(--late)"></i><i style="background:var(--soon)"></i><i style="background:var(--ok)"></i>Scadenza</span></div>';
 
     var sel = V.calDay, its = calMap(sel, sel)[sel] || [];
     var progIts = its.filter(function (it) { return it.k === 'p'; }).map(function (it) { return it.o; }).sort(progSort), rest = its.filter(function (it) { return it.k !== 'p'; });
@@ -7217,8 +7290,9 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'Se un lavoro lo fa una ditta esterna (velaio, tappezziere, elettricista…), in «Chi lo fa» scegli «Una ditta esterna»: scrivi la ditta, cosa è uscito dal cantiere e quando deve tornare. La ditta e il suo telefono l’app li ricorda per la volta dopo; in Altro › Ditte esterne puoi segnare anche referente, email e note.',
       '«Fuori» elenca cosa è dalle ditte, diviso per ditta, con i ritardi in rosso e i tasti per chiamare o sollecitare su WhatsApp o per email. Quando torna tocca «Rientrato»: la lavorazione resta da fare finché non la segni fatta.',
       'Una lavorazione nuova resta solo qui, tra quelle da fare; quando la segni fatta prende il giorno di oggi (o quello del Programma). Nel Programma ci va quando la aggiungi tu da lì («Parti da un lavoro aperto»). Le cose del Programma con una barca invece compaiono anche qui. Spostarle o segnarle fatte vale da tutte e due le parti.'] },
-    calendario: { t: 'Calendario', p: 'Il mese a vista: i puntini colorati mostrano cosa c’è in ogni giorno.', li: [
-      'Puntini per lavori, scadenze (rosse se scadute, arancioni se vicine), vari e alaggi, programma e scadenze del cantiere.',
+    calendario: { t: 'Calendario', p: 'Il mese o la settimana a vista: in alto scegli «Mese» o «Settimana» (l’app si ricorda la scelta).', li: [
+      'Mese: ogni casella dice quanto c’è con piccole etichette: le ore della squadra (le mansioni della scheda lavoro tutte insieme), quante cose in programma, vari e alaggi, scadenze (rosse se scadute, arancioni se vicine), lavori fatti e da fare. Sul computer c’è anche la parola, sul telefono solo il simbolo e il numero.',
+      'Settimana: una colonna per giorno (sul telefono un giorno sotto l’altro) con una schedina per ogni cosa e il nome della barca, e in fondo le ore della squadra con chi ha lavorato. Le frecce passano alla settimana prima o dopo.',
       'Tocca un giorno per vedere il dettaglio: chi ha lavorato e quante ore, programma, vari, scadenze, assenti e meteo.',
       'Dal giorno aperto puoi aggiungere qualcosa direttamente in quella data.'] },
     barche: { t: 'Barche', p: 'Tutte le barche del cantiere. Tutto ruota attorno alla barca: lavori, scadenze, vari e ricambi sono collegati a lei.', li: [
@@ -9102,7 +9176,9 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       case 'giro-chiudi': var gc = giroById(V.giroId); if (gc) giroChiudi(gc); break;
       case 'lav-fatti': V.tab = 'lavori'; V.lavFilter = 'fatti'; window.scrollTo(0, 0); render(); break;
       case 'toggle-done': V.showDone = !V.showDone; render(); break;
+      case 'cal-vista': V.calVista = t.getAttribute('data-v'); try { localStorage.setItem('nm-cal-vista', V.calVista); } catch (e) { } if (V.calVista === 'mese') V.calMonth = V.calDay.slice(0, 7); render(); break;
       case 'cal-prev': case 'cal-next':
+        if (V.calVista === 'sett') { V.calDay = addDays(V.calDay, act === 'cal-next' ? 7 : -7); V.calMonth = V.calDay.slice(0, 7); render(); break; }
         var p = V.calMonth.split('-'), mm = +p[1] - 1 + (act === 'cal-next' ? 1 : -1), yy = +p[0];
         if (mm < 0) { mm = 11; yy--; } if (mm > 11) { mm = 0; yy++; }
         V.calMonth = yy + '-' + pad(mm + 1); render(); break;
