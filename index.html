@@ -1894,7 +1894,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   }
   function lfRow(l) {
     var b = boatById(l.barcaId), wh = lfWhen(l), f = l.fuori;
-    return '<div class="row"><button type="button" class="hit" data-act="edit-lav" data-id="' + esc(l.id) + '">' + dateBlock(f.uscito || l.data, wh.lv) +
+    return '<div class="row"><button type="button" class="hit" data-act="edit-lav" data-id="' + esc(l.id) + '">' + // niente data: resta solo sulle lavorazioni fatte
       '<span class="main"><span class="title">' + esc(l.titolo || 'Lavoro') + (b ? ' · ' + esc(b.nome || '') : '') + '</span>' + (f.cosa ? '<span class="sub">' + esc(f.cosa) + '</span>' : '') +
       '<span class="status" style="color:var(--' + (wh.lv || 'muted') + ')">' + esc(wh.t) + '</span></span></button>' +
       (S.canWrite ? '<button type="button" class="chk" data-act="lf-rientro" data-id="' + esc(l.id) + '">' + I.check + 'Rientrato</button>' : '') + '</div>';
