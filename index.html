@@ -593,30 +593,43 @@ a.btn { text-decoration: none; }
 }
 .toast.err { background: var(--late); color: #fff; }
 
-/* Computer: schermo largo = menù a sinistra, contenuto più largo, finestre al centro. Sul telefono non cambia niente. */
-@media (min-width: 1024px) {
+/* Computer e tablet: schermo largo = menù completo a sinistra, contenuto più largo, finestre al centro. Sul telefono non cambia niente. */
+.side-x { display: none; }
+@media (min-width: 768px) and (min-height: 500px) {
   .tabs {
-    top: 0; right: auto; width: 232px; flex-direction: column; justify-content: flex-start;
-    padding: calc(70px + env(safe-area-inset-top, 0px)) 12px 16px; border-top: 0; border-right: 1px solid var(--line);
+    top: 0; right: auto; width: 236px; flex-direction: column; justify-content: flex-start; overflow-y: auto; scrollbar-width: thin;
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 10px 16px; border-top: 0; border-right: 1px solid var(--line);
   }
-  .tabs-inner { grid-template-columns: minmax(0, 1fr); gap: 4px; max-width: none; }
+  .tabs-inner { grid-template-columns: minmax(0, 1fr); gap: 2px; max-width: none; }
+  .tabs-inner .tab[data-tab="altro"] { display: none; }
   .tab {
-    flex-direction: row; justify-content: flex-start; gap: 12px; padding: 10px 12px; border-radius: 10px;
-    font-size: .98rem; font-weight: 600; text-align: left; letter-spacing: 0;
+    flex-direction: row; justify-content: flex-start; gap: 11px; padding: 8px 10px; border-radius: 10px;
+    font-size: .92rem; font-weight: 600; text-align: left; letter-spacing: 0; width: 100%;
   }
+  .tab svg { width: 20px; height: 20px; flex: none; }
   .tab:hover { background: var(--card); color: var(--ink); }
   .tab[aria-current="page"] { background: var(--accent-bg); }
   .tab .badge { position: static; margin-left: auto; }
-  .top { margin-left: 232px; padding-inline: 20px; }
-  .app { margin-left: 232px; max-width: 1180px; padding-inline: 36px; padding-bottom: 48px; }
-  @media (min-width: 1412px) { .app { margin-left: max(232px, calc(232px + (100vw - 232px - 1180px) / 2)); } }
-  .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .side-x { display: block; }
+  .side-g { margin-top: 14px; display: flex; flex-direction: column; gap: 2px; }
+  .side-h { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); padding: 0 10px 4px; }
+  .side-n { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--card-2); color: var(--muted); font-size: .7rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+  .side-n.late { background: var(--late); color: #fff; } .side-n.soon { background: var(--soon-bg); color: var(--soon); }
+  .side-n.acc { background: var(--accent-bg); color: var(--accent); } .side-n.vio { background: var(--vio-bg); color: var(--vio); }
+  .top .l [data-tab="altro"] { display: none; }
+  .top { margin-left: 236px; padding-inline: 20px; }
+  .app { margin-left: 236px; max-width: 1180px; padding-inline: 32px; padding-bottom: 48px; }
+  @media (min-width: 1416px) { .app { margin-left: calc(236px + (100vw - 236px - 1180px) / 2); } }
   .feat { margin-inline: -8px; }
-  .feat-w { flex-basis: 50%; padding-inline: 8px; }
+  .feat-w { padding-inline: 8px; }
   button.row:hover, .row .hit:hover, button.tile:hover { background: var(--card-2); }
   .sheet-wrap { align-items: center; padding: 40px 24px; }
   .sheet { max-width: 640px; max-height: calc(100vh - 80px); border-radius: 14px; }
-  .toast { bottom: 28px; left: calc(50% + 116px); }
+  .toast { bottom: 28px; left: calc(50% + 118px); }
+}
+@media (min-width: 1100px) and (min-height: 500px) {
+  .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .feat-w { flex-basis: 50%; }
 }
 </style>
 
@@ -6109,7 +6122,7 @@ a.btn { text-decoration: none; }
     var r = S.db.collection('impostazioni').doc('notifiche');
     if (await w(function () { return r.set(Object.assign({}, S.notifCfg || {}, d)); })) toast('Regole delle notifiche salvate');
   }
-  function viewAltro() {
+  function altroRows() {
     var lavOpen = S.lavori.filter(function (l) { return l.stato !== 'fatto'; }).length;
     var wk = utcToISO(isoToUTC(todayISO()) + 7 * 86400000), vN = variOpen().filter(function (v) { return v.data <= wk; }).length;
     var low = lowStock().length, runs = S.ops.filter(function (o) { return !opDone(o); }).length, late = lateCount();
@@ -6137,6 +6150,10 @@ a.btn { text-decoration: none; }
     ];
     var fbRows = window.__NM_FB && window.__NM_FB.altroRows ? window.__NM_FB.altroRows() : [];
     fbRows.forEach(function (r) { rows.push(['fb:' + r[0], I[r[1]] || I.list, r[2] || '', r[3], r[4], r[5] || '']); });
+    return rows;
+  }
+  function viewAltro() {
+    var rows = altroRows();
     return exampleBanner() + gqBar() + '<div class="group" style="margin-top:14px">' + rows.map(function (r) {
       if (r[0].slice(0, 3) === 'fb:') return '<button type="button" class="row" data-act="fb" data-k="' + esc(r[0].slice(3)) + '"><span class="ic-circle ' + r[2] + '">' + r[1] + '</span><span class="main"><span class="title">' + esc(r[3]) + '</span><span class="sub">' + esc(r[4]) + '</span></span>' +
         (r[5] ? '<span class="side">' + r[5] + '</span>' : '') + '<span style="color:var(--dim);width:18px;flex:none">' + I.right + '</span></button>';
@@ -6515,7 +6532,27 @@ a.btn { text-decoration: none; }
     var cur = ALTRO.indexOf(V.tab) >= 0 || V.tab === 'inventario' ? 'altro' : V.tab;
     $('#tabs').innerHTML = '<div class="tabs-inner">' + items.map(function (it) {
       return '<button type="button" class="tab" data-act="tab" data-tab="' + it[0] + '"' + (cur === it[0] ? ' aria-current="page"' : '') + '>' + it[2] + '<span>' + it[1] + '</span></button>';
-    }).join('') + '</div>';
+    }).join('') + '</div>' + sideMenu(cur);
+  }
+  /* menù completo a sinistra, solo su computer e tablet (sul telefono resta nascosto) */
+  var SIDE_GRUPPI = [['Cantiere', ['programma', 'vari', 'operazioni', 'giro', 'mappa']], ['Scadenze', ['scadenze', 'scadcantiere', 'batterie']],
+    ['Magazzino e ufficio', ['magazzino', 'preventivi', 'ditte', 'rifiuti']], ['Personale', ['ore', 'assenze', 'pannello']], ['Strumenti', ['misure', 'notifiche', 'categorie', 'backup']]];
+  function sideMenu(cur) {
+    if (S.status !== 'ready') return '';
+    var rows = altroRows(), by = {}, used = {};
+    rows.forEach(function (r) { by[r[0]] = r; });
+    function item(r) {
+      used[r[0]] = 1;
+      var fb = r[0].slice(0, 3) === 'fb:', pill = String(r[5] || '').replace(/<span class="pill( [a-z]+)?">([^<]*)<\/span>/, function (m, c, t) { var n = t.match(/[\d.,]+/); return n ? '<span class="side-n' + (c || '') + '" title="' + t + '">' + n[0] + '</span>' : ''; });
+      return '<button type="button" class="tab" ' + (fb ? 'data-act="fb" data-k="' + esc(r[0].slice(3)) + '"' : 'data-act="tab" data-tab="' + r[0] + '"') + (V.tab === r[0] ? ' aria-current="page"' : '') + '>' + r[1] + '<span>' + esc(r[0] === 'mappa' ? 'Mappa e porto' : TITOLI[r[0]] || String(r[3]).split(':')[0]) + '</span>' + pill + '</button>';
+    }
+    var h = SIDE_GRUPPI.map(function (g) {
+      var its = g[1].filter(function (k) { return by[k]; }).map(function (k) { return item(by[k]); }).join('');
+      return its ? '<div class="side-g"><div class="side-h">' + g[0] + '</div>' + its + '</div>' : '';
+    }).join('');
+    var rest = rows.filter(function (r) { return !used[r[0]]; }).map(item).join('');
+    if (rest) h += '<div class="side-g"><div class="side-h">Altro</div>' + rest + '</div>';
+    return '<div class="side-x">' + h + '</div>';
   }
   function bindFeat() {
     var feat = $('#feat'); if (!feat) return;
