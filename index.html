@@ -423,6 +423,14 @@ button.row:active, .row .hit:active { opacity: .65; }
 #f-righe:not(:empty) { display: flex; flex-direction: column; gap: 8px; margin-top: -4px; }
 .rc-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 40px; gap: 8px; align-items: center; }
 .rc-x { height: 44px; border: 0; border-radius: 8px; background: var(--card-2); color: var(--muted); font-size: 1.2rem; }
+.bt-rows { display: flex; flex-direction: column; gap: 10px; }
+.bt-row { display: flex; flex-direction: column; gap: 6px; }
+.bt-l { display: grid; grid-template-columns: 72px minmax(0, 1fr) 40px; gap: 8px; align-items: center; }
+.bt-c { display: none; grid-template-columns: minmax(0, 1fr) 110px; gap: 8px; align-items: center; padding-left: 80px; }
+.bt-rows.carica .bt-c { display: grid; }
+.bt-c label { display: flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--muted); }
+.bt-c input[type=checkbox] { width: 22px; height: 22px; flex: none; accent-color: var(--ok); }
+.bt-row input[type=text] { width: 100%; min-width: 0; min-height: 44px; font: inherit; font-size: 16px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
 .self-start { align-self: flex-start; }
 .link.self-start { white-space: normal; text-align: left; max-width: 100%; }
 
@@ -4446,13 +4454,16 @@ button.row:active, .row .hit:active { opacity: .65; }
   function lastCarica(bid) { return S.cariche.filter(function (c) { return c.barcaId === bid; }).sort(function (a, c) { return String(c.data || '').localeCompare(String(a.data || '')) || String(c.creato || '').localeCompare(String(a.creato || '')); })[0] || null; }
   function battBoats() { return S.boats.filter(function (b) { return b.stato !== 'In acqua' && num(b.batterie) !== 0; }); }
   function battDue() { var g = battDays(); return battBoats().filter(function (b) { if (!(num(b.batterie) > 0)) return false; var c = lastCarica(b.id); return !c || -daysUntil(c.data) >= g; }); }
+  // ogni batteria è una riga con numero (o matricola) e descrizione; «batterie» resta il conteggio
+  function battList(b) { return (Array.isArray(b.batterieList) ? b.batterieList : []).filter(function (x) { return x && (x.num || x.desc); }); }
   function battInfo(b) {
-    var n = num(b.batterie), c = lastCarica(b.id), d = c ? -daysUntil(c.data) : null;
+    var l = battList(b), n = l.length || num(b.batterie), c = lastCarica(b.id), d = c ? -daysUntil(c.data) : null;
     return { n: n, c: c, d: d, txt: (n > 0 ? n + (n === 1 ? ' batteria' : ' batterie') : 'Quante batterie?') + ' · ' + (c ? 'caricate ' + (d === 0 ? 'oggi' : d === 1 ? 'ieri' : d + ' giorni fa') + (c.utente ? ' da ' + nameOf(c.utente) : '') : 'mai segnate'), late: n > 0 && (!c || d >= battDays()) };
   }
   function battRow(b) {
-    var i = battInfo(b);
-    return '<div class="row"><button type="button" class="hit" data-act="batt-open" data-id="' + esc(b.id) + '"><span class="main"><span class="title">' + esc(b.nome || 'Barca') + '</span><span class="sub' + (i.late ? ' t-soon' : '') + '">' + esc(i.txt) + '</span></span></button>' +
+    var i = battInfo(b), l = battList(b);
+    var el = l.length ? '<span class="sub">' + esc(l.map(function (x) { return x.num ? 'N.' + x.num + (x.desc ? ': ' + x.desc : '') : x.desc; }).join(' · ')) + '</span>' : '';
+    return '<div class="row"><button type="button" class="hit" data-act="batt-open" data-id="' + esc(b.id) + '"><span class="main"><span class="title">' + esc(b.nome || 'Barca') + '</span><span class="sub' + (i.late ? ' t-soon' : '') + '">' + esc(i.txt) + '</span>' + el + '</span></button>' +
       (S.canWrite && i.n > 0 ? '<button type="button" class="chk" data-act="batt-quick" data-id="' + esc(b.id) + '">' + I.check + 'Caricate oggi</button>' : '') + '</div>';
   }
   function viewBatterie() {
@@ -4465,20 +4476,68 @@ button.row:active, .row .hit:active { opacity: .65; }
     h += '<p class="cap" style="margin:12px 2px 0">Il promemoria in Home compare dopo ' + battDays() + ' giorni dall’ultima carica. ' + (S.canWrite ? '<button type="button" class="link" data-act="batt-cfg">Cambia</button>' : '') + '</p>';
     return h;
   }
+  function battCarTxt(c) {
+    var bt = Array.isArray(c.batt) ? c.batt : [];
+    if (bt.length) return bt.map(function (x) { return (x.num ? 'N.' + x.num : 'batt.') + (num(x.volt) ? ': ' + fmtNum(x.volt, 1) + ' V' : ''); }).join(', ');
+    return (num(c.volt) ? fmtNum(c.volt, 1) + ' V' : '') + (num(c.n) ? (num(c.volt) ? ' · ' : '') + c.n + ' batt.' : '');
+  }
   function battSheet(b) {
     var list = S.cariche.filter(function (c) { return c.barcaId === b.id; }).sort(function (a, c) { return String(c.data || '').localeCompare(String(a.data || '')); });
+    // righe di partenza: quelle salvate; per le barche di prima, una riga per batteria contata e la vecchia nota nella prima
+    var start = battList(b).map(function (x) { return { num: x.num || '', desc: x.desc || '' }; });
+    if (!start.length) { var n0 = num(b.batterie) > 0 ? Math.min(20, num(b.batterie)) : 0; for (var i = 0; i < n0; i++) start.push({ num: String(i + 1), desc: '' }); }
+    if (!battList(b).length && b.batterieNote) { if (start.length) start[0].desc = b.batterieNote; else start.push({ num: '1', desc: b.batterieNote }); }
+    if (!start.length) start.push({ num: '', desc: '' });
     openSheet({
       title: 'Batterie · ' + (b.nome || 'Barca'), submitLabel: 'Salva',
-      body: aiFillBtn('batt', 'Leggi l’etichetta dalla foto') + '<div class="grid2">' + field(lab('f-bn', 'Quante batterie'), inp('f-bn', num(b.batterie) != null ? String(b.batterie) : '', 'type="text" inputmode="numeric" placeholder="es. 2"')) + field(lab('f-bc', 'Caricate oggi?'), '<select id="f-bc"><option value="">No, aggiorno solo i dati</option><option value="si">Sì, segna la carica</option></select>') + '</div>' +
-        field(lab('f-bnote', 'Note sulle batterie (facoltative)'), inp('f-bnote', b.batterieNote, 'type="text" placeholder="es. 2 servizi + 1 motore, staccabatterie a poppa"')) +
-        '<div class="grid2">' + field(lab('f-bv', 'Tensione letta (facoltativa)'), inp('f-bv', '', 'type="text" inputmode="decimal" placeholder="es. 12,6 V"')) + field(lab('f-bq', 'Quante ne hai caricate'), inp('f-bq', '', 'type="text" inputmode="numeric" placeholder="tutte"')) + '</div>' +
-        (list.length ? '<div class="lbl">Ultime cariche</div><div class="group">' + list.slice(0, 8).map(function (c) { return '<div class="hist"><span>' + esc(fmtDate(c.data) + (c.utente ? ' · ' + nameOf(c.utente) : '') + (num(c.volt) ? ' · ' + fmtNum(c.volt, 1) + ' V' : '') + (num(c.n) ? ' · ' + c.n + ' batt.' : '')) + '</span></div>'; }).join('') + '</div>' : '<p class="cap">Nessuna carica segnata.</p>'),
+      body: aiFillBtn('batt', 'Leggi l’etichetta dalla foto') +
+        field(lab('f-bc', 'Caricate oggi?'), '<select id="f-bc"><option value="">No, aggiorno solo i dati</option><option value="si">Sì, segna la carica</option></select>') +
+        '<div class="lbl">Batterie a bordo: numero e descrizione</div><div class="bt-rows" id="f-brows"></div>' +
+        '<button type="button" class="link self-start" id="f-baddRiga" style="margin:6px 0 4px">＋ Aggiungi riga: un’altra batteria</button>' +
+        '<label class="cap" id="f-bzero-l" style="display:flex;align-items:center;gap:8px;margin:4px 2px 10px"><input type="checkbox" id="f-bzero"' + (num(b.batterie) === 0 && !battList(b).length ? ' checked' : '') + ' style="width:20px;height:20px"> Questa barca non ha batterie (non compare nella lista)</label>' +
+        (list.length ? '<div class="lbl">Ultime cariche</div><div class="group">' + list.slice(0, 8).map(function (c) { var t = battCarTxt(c); return '<div class="hist"><span>' + esc(fmtDate(c.data) + (c.utente ? ' · ' + nameOf(c.utente) : '') + (t ? ' · ' + t : '')) + '</span></div>'; }).join('') + '</div>' : '<p class="cap">Nessuna carica segnata.</p>'),
+      onOpen: function (f) {
+        var box = f.querySelector('#f-brows'), sel = f.querySelector('#f-bc');
+        function row(x, focus) {
+          var d = document.createElement('div'); d.className = 'bt-row';
+          d.innerHTML = '<div class="bt-l"><input class="bt-n" type="text" placeholder="N°" aria-label="Numero o matricola della batteria"><input class="bt-d" type="text" placeholder="es. servizi AGM 100 Ah" aria-label="Descrizione della batteria"><button type="button" class="rc-x" aria-label="Togli batteria">×</button></div>' +
+            '<div class="bt-c"><label><input type="checkbox" class="bt-k" checked> Caricata</label><input class="bt-v" type="text" inputmode="decimal" placeholder="Volt" aria-label="Tensione letta (facoltativa)"></div>';
+          d.querySelector('.bt-n').value = x.num || ''; d.querySelector('.bt-d').value = x.desc || '';
+          d.querySelector('.rc-x').addEventListener('click', function () { d.remove(); });
+          box.appendChild(d); if (focus) d.querySelector(x.num ? '.bt-d' : '.bt-n').focus();
+          return d;
+        }
+        function nextNum() { var m = 0; Array.prototype.forEach.call(box.querySelectorAll('.bt-n'), function (i) { var v = parseInt(i.value, 10); if (v > m) m = v; }); return String(m + 1); }
+        start.forEach(function (x) { row(x); });
+        f.querySelector('#f-baddRiga').addEventListener('click', function () { row({ num: nextNum() }, true); });
+        sel.addEventListener('change', function () { box.classList.toggle('carica', sel.value === 'si'); });
+        // la foto dell'etichetta riempie le righe senza descrizione, poi ne aggiunge di nuove
+        f._battFill = function (t, q) {
+          q = Math.max(1, Math.min(10, q || 1));
+          var vuote = Array.prototype.filter.call(box.querySelectorAll('.bt-d'), function (i) { return !i.value.trim(); });
+          for (var k = 0; k < q; k++) {
+            if (!vuote[k]) { row({ num: nextNum(), desc: t }); continue; }
+            var ni = vuote[k].parentNode.querySelector('.bt-n'); if (!ni.value.trim()) ni.value = nextNum();
+            vuote[k].value = t;
+          }
+        };
+      },
       onSubmit: async function (f) {
-        var n = parseIntS(val(f, 'f-bn')), now = new Date().toISOString(), r = S.db.collection('barche').doc(b.id);
-        if (!(await w(function () { return r.update({ batterie: n, batterieNote: val(f, 'f-bnote'), modificato: now }); }))) return false;
-        if (val(f, 'f-bc') === 'si') {
-          var c = S.db.collection('cariche').doc(), q = parseIntS(val(f, 'f-bq'));
-          if (!(await w(function () { return c.set({ barcaId: b.id, data: todayISO(), n: q || n || null, volt: parseDec(val(f, 'f-bv')), utente: S.myId || '', creato: now }); }))) return false;
+        var rows = [], car = [], si = val(f, 'f-bc') === 'si', bad = false, now = new Date().toISOString(), r = S.db.collection('barche').doc(b.id);
+        Array.prototype.forEach.call(f.querySelectorAll('#f-brows .bt-row'), function (d) {
+          var nu = d.querySelector('.bt-n').value.trim(), de = d.querySelector('.bt-d').value.trim(), vs = d.querySelector('.bt-v').value.trim(), v = parseDec(vs);
+          if (!nu && !de) return;
+          if (vs && (v == null || v <= 0 || v > 60)) bad = true;
+          rows.push({ num: nu, desc: de });
+          if (si && d.querySelector('.bt-k').checked) car.push({ num: nu, desc: de, volt: v });
+        });
+        if (bad) { formErr('La tensione è un numero in volt, per esempio 12,6.'); return false; }
+        if (si && rows.length && !car.length) { formErr('Spunta almeno una batteria caricata, oppure scegli «No» in alto.'); return false; }
+        var zero = !rows.length && f.querySelector('#f-bzero').checked;
+        if (!(await w(function () { return r.update({ batterieList: rows, batterie: rows.length || (zero ? 0 : null), batterieNote: '', modificato: now }); }))) return false;
+        if (si) {
+          var c = S.db.collection('cariche').doc(), vv = car.map(function (x) { return x.volt; }).filter(function (x) { return x != null; });
+          if (!(await w(function () { return c.set({ barcaId: b.id, data: todayISO(), n: car.length || null, volt: vv.length === 1 ? vv[0] : null, batt: car, utente: S.myId || '', creato: now }); }))) return false;
           toast('Carica segnata');
         } else toast('Batterie aggiornate');
         return true;
@@ -4487,7 +4546,8 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
   async function battQuick(b) {
     var c = S.db.collection('cariche').doc();
-    if (await w(function () { return c.set({ barcaId: b.id, data: todayISO(), n: num(b.batterie) || null, volt: null, utente: S.myId || '', creato: new Date().toISOString() }); })) toast('Batterie di ' + (b.nome || 'questa barca') + ' caricate oggi');
+    var l = battList(b), bt = l.map(function (x) { return { num: x.num || '', desc: x.desc || '', volt: null }; });
+    if (await w(function () { return c.set({ barcaId: b.id, data: todayISO(), n: l.length || num(b.batterie) || null, volt: null, batt: bt, utente: S.myId || '', creato: new Date().toISOString() }); })) toast('Batterie di ' + (b.nome || 'questa barca') + ' caricate oggi');
   }
   function battCfgSheet() {
     openSheet({
@@ -6101,7 +6161,9 @@ button.row:active, .row .hit:active { opacity: .65; }
       'Servizi degli ultimi 30 giorni: nei tempi, più lunghi o più veloci del previsto.',
       'Magazzino da riordinare e batterie da caricare.'] },
     batterie: { t: 'Batterie', p: 'Per le barche a terra: quando sono state caricate o controllate le batterie.', li: [
-      'Segna la carica con quante batterie, la tensione letta e le note. I dati si possono leggere dalla foto dell’etichetta.',
+      'Ogni batteria è una riga con numero (o matricola) e descrizione, come le righe della scheda lavoro: «Aggiungi riga» per un’altra, × per toglierla.',
+      'Con «Caricate oggi? Sì» spunti quali batterie hai caricato e, se vuoi, la tensione letta di ognuna. «Caricate oggi» nella lista le segna tutte.',
+      'La foto dell’etichetta compila la descrizione: marca, volt, Ah e tipo.',
       'In cima ci sono quelle ferme da più tempo; dopo i giorni scelti compare il promemoria in Home.'] },
     vari: { t: 'Vari e alaggi', p: 'Le uscite e i rientri in acqua delle barche, con data e ora.', li: [
       'Con il + programmi un varo o un alaggio.',
@@ -7418,7 +7480,7 @@ button.row:active, .row .hit:active { opacity: .65; }
         if (!d) msg = 'Non ho letto la data di scadenza: scrivila tu.';
       } else if (k === 'batt') {
         var t = [[aiStr(r.marca), aiStr(r.modello)].filter(Boolean).join(' '), num(r.volt) ? fmtNum(num(r.volt), 1) + ' V' : '', num(r.ah) ? fmtNum(num(r.ah), 0) + ' Ah' : '', num(r.spunto) ? fmtNum(num(r.spunto), 0) + ' A spunto' : '', aiStr(r.tipo), r.data ? 'prodotta ' + aiStr(r.data) : ''].filter(Boolean).join(' ');
-        addNote('f-bnote', t); if (num(r.quante) > 1) set('f-bn', String(Math.round(num(r.quante))));
+        if (t && f._battFill) f._battFill(t, num(r.quante) > 1 ? Math.round(num(r.quante)) : 1);
         if (!t) msg = 'Non sono riuscito a leggere l’etichetta: prova più vicino.';
       } else {
         var tp = rifTipo(aiStr(r.tipo));
