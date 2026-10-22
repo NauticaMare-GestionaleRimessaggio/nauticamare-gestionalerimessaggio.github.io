@@ -4684,11 +4684,17 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     }
   }
   var progPulita = false;
-  async function progPulizia() { // una tantum (Torcio, 22/10/2026): le lavorazioni segnate il 22/10 erano entrate da sole nel programma; si tolgono, la lavorazione resta
+  async function progPulizia() { // una tantum (Torcio, 22/10/2026): tolte dal programma le lavorazioni entrate da sole il 22/10 e quelle con la barca rimaste dai giorni prima; restano (o vanno) tra le lavorazioni da fare
     if (progPulita || !S.isOwner || !S.got.lavori || !S.got.programma) return;
     progPulita = true;
-    var list = (S.prog || []).filter(function (x) { return x.daLavorazione && !x.fatto && String(x.creato || '').slice(0, 10) === '2026-10-22' && x.lavId && S.lavori.some(function (l) { return l.id === x.lavId && l.progId !== x.id; }); });
-    for (var i = 0; i < list.length; i++) { var r = S.db.collection('programma').doc(list[i].id); await w(function () { return r.delete(); }); }
+    var list = (S.prog || []).filter(function (x) { return !x.fatto && x.barcaId && ((x.daLavorazione && String(x.creato || '').slice(0, 10) === '2026-10-22') || String(x.data || '') < '2026-10-22'); });
+    for (var i = 0; i < list.length; i++) {
+      var x = list[i], l = x.lavId && S.lavori.find(function (q) { return q.id === x.lavId; });
+      if (l && l.stato === 'fatto') continue;
+      if (!l) { if (!(await lavFromProg(Object.assign({}, x, { data: '' }), ''))) continue; } // senza lavorazione: la crea
+      else if (l.progId === x.id) { var rl = S.db.collection('lavori').doc(l.id); if (!(await w(function () { return rl.update({ progId: '', modificato: new Date().toISOString() }); }))) continue; }
+      var r = S.db.collection('programma').doc(x.id); await w(function () { return r.delete(); });
+    }
   }
   async function progTick(x) {
     var r = S.db.collection('programma').doc(x.id), now = new Date().toISOString(), on = !x.fatto;
