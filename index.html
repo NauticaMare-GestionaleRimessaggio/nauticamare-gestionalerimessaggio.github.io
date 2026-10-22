@@ -869,9 +869,10 @@ a.btn { text-decoration: none; }
     if (num(oreFallback) != null) return '<span class="' + cls + '"><b class="sm">' + fmtNum(oreFallback) + '</b><small>ore</small></span>';
     return '<span class="' + cls + '"><b>–</b></span>';
   }
-  function scadRow(x, showBoat) {
+  function scadRow(x, showBoat, showOwner) {
     var s = x.s, i = x.i, done = !!s.fatta, lvl = done ? '' : i.level, sub = [];
     if (showBoat) sub.push(esc(boatLabel(i.boat)));
+    if (showOwner && i.boat && i.boat.proprietario) sub.push(esc(i.boat.proprietario));
     if (num(s.ricorrenzaMesi) || num(s.ricorrenzaOre)) {
       var r = []; if (num(s.ricorrenzaMesi)) r.push('ogni ' + s.ricorrenzaMesi + ' mesi'); if (num(s.ricorrenzaOre)) r.push('ogni ' + fmtNum(s.ricorrenzaOre) + ' h');
       sub.push('si ripete ' + r.join(' o '));
@@ -1076,20 +1077,55 @@ a.btn { text-decoration: none; }
     return h;
   }
 
+  // filtro scadenze: per data, per cliente (proprietario della barca) o per articolo (tipo di scadenza)
+  function scadKey(s, by) {
+    if (by === 'cliente') { var b = boatById(s.barcaId), o = b && String(b.proprietario || '').trim(); return o ? [normT(o), o] : ['', 'Proprietario non segnato']; }
+    var t = String(s.tipo || '').trim(); return t ? [normT(t), t] : ['', 'Senza nome'];
+  }
+  function scadGroups(list, by) {
+    var gs = [], gm = {};
+    list.forEach(function (x) { var k = scadKey(x.s, by); if (!gm[k[0]]) { gm[k[0]] = { k: k[0], label: k[1], items: [] }; gs.push(gm[k[0]]); } gm[k[0]].items.push(x); });
+    return gs.sort(function (a, b) { return (a.k === '') - (b.k === '') || a.label.localeCompare(b.label, 'it', { sensitivity: 'base' }); });
+  }
   function viewScadenze() {
     if (!S.boats.length) return '<div style="margin-top:14px">' + emptyCard(I.boat, 'Prima aggiungi una barca', 'Ogni scadenza è collegata a una barca.', ['new-boat', 'Aggiungi barca']) + '</div>';
-    var open = openScad(null);
+    var by = V.scadBy || 'data', all = openScad(null), open = all, h = '';
+    var doneAll = S.scadenze.filter(function (s) { return s.fatta; }).sort(function (a, b) { return String(b.fattaIl || '').localeCompare(String(a.fattaIl || '')); }), done = doneAll;
+    if (all.length || doneAll.length) h += '<div class="chips" role="group" aria-label="Filtra le scadenze">' + [['data', 'Per data'], ['cliente', 'Per cliente'], ['articolo', 'Per articolo']].map(function (o) {
+      return '<button type="button" data-act="scad-by" data-v="' + o[0] + '" aria-pressed="' + (by === o[0]) + '">' + o[1] + '</button>';
+    }).join('') + '</div>';
+    var owner = by === 'articolo';
+    function row(x) { return scadRow(x, true, owner); }
+    if (by !== 'data' && (all.length || doneAll.length)) {
+      var gs = scadGroups(all.concat(doneAll.map(function (s) { return { s: s, i: scadInfo(s) }; })), by), sel = V.scadSel || '';
+      if (sel && !gs.some(function (g) { return (g.k || '-') === sel; })) sel = V.scadSel = '';
+      h += '<div style="margin-top:12px">' + field(lab('scad-sel', by === 'cliente' ? 'Cliente' : 'Articolo'), '<select id="scad-sel">' + opts([['', by === 'cliente' ? 'Tutti i clienti' : 'Tutti gli articoli']].concat(gs.map(function (g) {
+        var n = g.items.filter(function (x) { return !x.s.fatta; }).length; return [g.k || '-', g.label + ' (' + n + (n === 1 ? ' aperta' : ' aperte') + ')'];
+      })), sel) + '</select>') + '</div>';
+      if (!sel) {
+        var shown = 0;
+        gs.forEach(function (g) {
+          var its = g.items.filter(function (x) { return !x.s.fatta; }); if (!its.length) return; shown++;
+          var nl = its.filter(function (x) { return x.i.level === 'late'; }).length;
+          h += '<div class="lbl" style="margin:14px 4px 6px">' + esc(g.label) + ' (' + its.length + ')' + (nl ? ' · <span class="t-late">' + nl + (nl === 1 ? ' scaduta' : ' scadute') + '</span>' : '') + '</div><div class="group">' + its.map(row).join('') + '</div>';
+        });
+        if (!shown) h += '<div class="notice" style="margin-top:14px">Nessuna scadenza aperta.</div>';
+        return h;
+      }
+      var key = sel === '-' ? '' : sel;
+      open = all.filter(function (x) { return scadKey(x.s, by)[0] === key; });
+      done = doneAll.filter(function (s) { return scadKey(s, by)[0] === key; });
+      if (!open.length) h += '<div class="notice" style="margin-top:14px">Nessuna scadenza aperta per ' + (by === 'cliente' ? 'questo cliente' : 'questo articolo') + '.</div>';
+    }
     var late = open.filter(function (x) { return x.i.level === 'late'; });
     var soon = open.filter(function (x) { return x.i.level === 'soon'; });
     var ok = open.filter(function (x) { return x.i.level === 'ok'; });
-    var h = '';
-    if (!open.length) h += '<div style="margin-top:14px">' + emptyCard(I.alarm, 'Nessuna scadenza aperta', 'Aggiungi le scadenze delle barche: per data, per ore motore o entrambe.', ['new-scad', 'Aggiungi scadenza']) + '</div>';
-    function sec(title, list) { return list.length ? secH(title + ' (' + list.length + ')') + '<div class="group">' + list.map(function (x) { return scadRow(x, true); }).join('') + '</div>' : ''; }
+    if (!all.length) h += '<div style="margin-top:14px">' + emptyCard(I.alarm, 'Nessuna scadenza aperta', 'Aggiungi le scadenze delle barche: per data, per ore motore o entrambe.', ['new-scad', 'Aggiungi scadenza']) + '</div>';
+    function sec(title, list) { return list.length ? secH(title + ' (' + list.length + ')') + '<div class="group">' + list.map(row).join('') + '</div>' : ''; }
     h += sec('Scadute', late) + sec('Entro 30 giorni', soon) + sec('Più avanti', ok);
-    var done = S.scadenze.filter(function (s) { return s.fatta; }).sort(function (a, b) { return String(b.fattaIl || '').localeCompare(String(a.fattaIl || '')); });
     if (done.length) {
       h += secH('Completate', 'toggle-done', V.showDone ? 'Nascondi' : 'Mostra (' + done.length + ')');
-      if (V.showDone) h += '<div class="group">' + done.slice(0, 50).map(function (s) { return scadRow({ s: s, i: scadInfo(s) }, true); }).join('') + '</div>';
+      if (V.showDone) h += '<div class="group">' + done.slice(0, 50).map(function (s) { return row({ s: s, i: scadInfo(s) }); }).join('') + '</div>';
     }
     return h;
   }
@@ -6716,6 +6752,7 @@ a.btn { text-decoration: none; }
       'Dopo qualche servizio il tempo stimato si aggiorna da solo con la media dei tempi veri.'] },
     scadenze: { t: 'Scadenze', p: 'Tagliandi, antivegetativa, assicurazioni, contratti e dotazioni di sicurezza delle barche.', li: [
       'Una scadenza può essere a data, a ore motore o tutte e due, e può ripetersi.',
+      'In alto scegli come vederle: «Per data» (scadute, entro 30 giorni, più avanti), «Per cliente» o «Per articolo» (tagliando, estintori, zattera…). Dall’elenco sotto prendi un solo cliente o articolo, oppure lascia «Tutti» per vederle raggruppate.',
       'Quando la segni fatta passa da sola alla prossima; puoi registrarla anche tra i lavori fatti.',
       'Sono divise in scadute (rosse), entro 30 giorni (arancioni) e più avanti.',
       'Con la fotocamera l’app legge la scadenza da un’etichetta o un documento: controlla prima di salvare.'] },
@@ -8452,6 +8489,7 @@ a.btn { text-decoration: none; }
       case 'ck-delrun2': if (SHEET.run) { var rid = SHEET.run.id; closeSheet(); delSeq([S.db.collection('checklist').doc(rid)]).then(function (ok) { if (ok) toast('Checklist eliminata'); }); } break;
       case 'boat-lav-all': V.boatLavAll = !V.boatLavAll; render(); break;
       case 'lav-filter': V.lavFilter = t.getAttribute('data-f'); render(); break;
+      case 'scad-by': V.scadBy = t.getAttribute('data-v'); V.scadSel = ''; render(); break;
       case 'lav-fuori': V.tab = 'lavori'; V.lavFilter = 'fuori'; V.boatId = null; V.boatView = null; window.scrollTo(0, 0); render(); break;
       case 'lf-rientro': var lfl = S.lavori.find(function (x) { return x.id === id; }); if (lfl && S.canWrite) lfRientro(lfl); break;
       case 'cr-start': if (S.canWrite) crStartSheet(t.getAttribute('data-boat')); break;
@@ -8646,6 +8684,7 @@ a.btn { text-decoration: none; }
   });
   document.addEventListener('change', async function (e) {
     var t = e.target; if (!t) return;
+    if (t.id === 'scad-sel') { V.scadSel = t.value; render(); return; }
     if (t.id === 'bk-file') { var bf = t.files && t.files[0]; t.value = ''; bkPick(bf); return; }
     if (t.getAttribute && t.getAttribute('data-nt') === 'scadenze') { if (await ntSave({ scadenze: !!t.checked })) toast(t.checked ? 'Riceverai le scadenze' : 'Non riceverai più le scadenze'); return; }
     if (t.getAttribute && t.getAttribute('data-nt') === 'cronometro') { if (await ntSave({ cronometro: !!t.checked })) toast(t.checked ? 'Ti avviso se dimentichi il cronometro acceso' : 'Niente più avvisi del cronometro'); return; }
