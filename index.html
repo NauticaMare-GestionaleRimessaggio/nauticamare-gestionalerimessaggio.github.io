@@ -2117,7 +2117,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
             oreStima: null, oreLavoro: null, importo: null, oreMotore: null, ricambi: [], foto: voce.foto.slice(), creato: now, modificato: now, giroId: g.id };
           var lr = S.db.collection('lavori').doc();
           if (!(await w(function () { return lr.set(ld); }))) return false;
-          voce.lavId = lr.id; nuova = true; await progFromLav(ld, lr.id);
+          voce.lavId = lr.id; nuova = true;
         }
         var u = { modificato: now }; u['v_' + b.id] = voce;
         var ok = await w(function () { return S.db.collection('giri').doc(g.id).update(u); });
@@ -4651,9 +4651,9 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       }
     });
   }
-  // Programma ↔ lavorazioni: una cosa da fare con la barca è anche una lavorazione da fare, e viceversa.
-  // Creare, spostare, segnare fatto e cancellare da una parte vale anche per l'altra.
-  function lavCreataDa(x) { var l = x.lavId && S.lavori.find(function (q) { return q.id === x.lavId; }); return l && (l.progId === x.id || progsOfLav(l.id).some(function (p) { return p.id === x.id && p.daLavorazione; })) ? l.id : ''; }
+  // Programma → lavorazioni: una cosa da fare con la barca è anche una lavorazione da fare; una lavorazione nuova invece
+  // resta solo tra le lavorazioni finché non la si mette nel programma. Spostare e segnare fatto vale per tutte e due.
+  function lavCreataDa(x) { var l = x.lavId && S.lavori.find(function (q) { return q.id === x.lavId; }); return l && l.progId === x.id ? l.id : ''; } // solo se la lavorazione è nata da questa cosa del programma
   function progsOfLav(id) { return (S.prog || []).filter(function (x) { return x.lavId === id; }); }
   async function lavFromProg(d, progId) { // crea la lavorazione per una cosa da fare con la barca; torna l'id
     var now = new Date().toISOString(), ref = S.db.collection('lavori').doc();
@@ -4681,11 +4681,6 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       if (!Object.keys(u).length) continue;
       u.modificato = new Date().toISOString(); var r = S.db.collection('programma').doc(x.id); await w(function () { return r.update(u); });
     }
-  }
-  async function progFromLav(l, id) { // una lavorazione da fare nuova va anche nel programma del suo giorno
-    var now = new Date().toISOString(), r = S.db.collection('programma').doc();
-    var d = { testo: l.titolo, data: l.data, ora: '', durata: l.oreStima || null, nPers: null, pers: [], chi: '', barcaId: l.barcaId, opId: '', lavId: id, mezzi: [], dove: '', materiali: [], urgente: false, avvisare: false, note: '', fatto: false, creato: now, modificato: now, creatoDa: S.myId || '', daLavorazione: true };
-    await w(function () { return r.set(d); });
   }
   async function progTick(x) {
     var r = S.db.collection('programma').doc(x.id), now = new Date().toISOString(), on = !x.fatto;
@@ -6917,7 +6912,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'In alto scegli «Da fare e in corso», «Fatte» o «Tutte».',
       'Se un lavoro lo fa una ditta esterna (velaio, tappezziere, elettricista…), in «Chi lo fa» scegli «Una ditta esterna»: scrivi la ditta, cosa è uscito dal cantiere e quando deve tornare. La ditta e il suo telefono l’app li ricorda per la volta dopo; in Altro › Ditte esterne puoi segnare anche referente, email e note.',
       '«Fuori» elenca cosa è dalle ditte, diviso per ditta, con i ritardi in rosso e i tasti per chiamare o sollecitare su WhatsApp o per email. Quando torna tocca «Rientrato»: la lavorazione resta da fare finché non la segni fatta.',
-      'Le lavorazioni da fare entrano anche nel Programma del loro giorno, e viceversa: spostarle o segnarle fatte vale da tutte e due le parti.'] },
+      'Una lavorazione nuova resta solo qui, tra quelle da fare: nel Programma ci va quando la aggiungi tu da lì («Parti da un lavoro aperto»). Le cose del Programma con una barca invece compaiono anche qui. Spostarle o segnarle fatte vale da tutte e due le parti.'] },
     calendario: { t: 'Calendario', p: 'Il mese a vista: i puntini colorati mostrano cosa c’è in ogni giorno.', li: [
       'Puntini per lavori, scadenze (rosse se scadute, arancioni se vicine), vari e alaggi, programma e scadenze del cantiere.',
       'Tocca un giorno per vedere il dettaglio: chi ha lavorato e quante ore, programma, vari, scadenze, assenti e meteo.',
@@ -6964,6 +6959,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'Si può ripetere nei giorni lavorativi seguenti o ogni settimana.',
       'Guarda «Per persona» o tutta la squadra; le cose rimaste indietro si portano a oggi con un tocco.',
       'L’app avvisa se un mezzo o una persona sono già impegnati o se qualcuno è in ferie.',
+      'Per mettere in programma una lavorazione già segnata, scegli «Parti da un lavoro aperto». Toglierla dal programma non la cancella dalle lavorazioni.',
       'Quando segni una cosa fatta, ricordati di mettere le ore nella Scheda lavoro.'] },
     pannello: { t: 'Pannello', p: 'Una pagina unica di controllo, aggiornata in tempo reale.', li: [
       'Ore della settimana, programma di oggi, giornate da confermare, lavori e servizi aperti.',
@@ -7772,7 +7768,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
         var aid = await attrLinkSave(f, data.barcaId); if (aid === null) return false; if (aid !== undefined) data.attrId = aid === '__nuova' ? '' : aid;
         var ok;
         var lid = null;
-        if (isNew) { data.creato = data.modificato; var ref = S.db.collection('lavori').doc(); lid = ref.id; ok = await w(function () { return ref.set(data); }); if (ok && data.stato !== 'fatto') await progFromLav(data, lid); }
+        if (isNew) { data.creato = data.modificato; var ref = S.db.collection('lavori').doc(); lid = ref.id; ok = await w(function () { return ref.set(data); }); }
         else { lid = l.id; var r2 = S.db.collection('lavori').doc(l.id); ok = await w(function () { return r2.update(data); }); if (ok) await syncProg(Object.assign({ id: l.id }, data)); }
         if (ok) { await bumpOre(data.barcaId, data.oreMotore); toast(isNew ? 'Lavorazione aggiunta' : 'Lavorazione salvata'); if (data.stato === 'fatto') rifSuggest(data, lid, isNew ? [] : l.ricambi, isNew || l.stato !== 'fatto'); }
         return ok;
