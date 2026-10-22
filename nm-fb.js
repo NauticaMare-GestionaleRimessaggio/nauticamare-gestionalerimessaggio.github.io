@@ -107,6 +107,8 @@
     '#nmfb .upd{color:#8a8db0;font-size:.82rem;margin-top:10px}#nmfb .more{background:none;border:0;color:#8cc2ff;font:inherit;padding:8px 0;cursor:pointer}' +
     '#nmpan .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;width:100%}#nmpan .chip{display:inline-flex;align-items:center;gap:4px;background:#1e3a5f;color:#d6e8ff;border-radius:99px;padding:4px 4px 4px 10px;font-size:.9rem}' +
     '#nmpan .chip button{background:none;border:0;color:#d6e8ff;font-size:1.1rem;line-height:1;padding:2px 6px;cursor:pointer}' +
+    /* computer e tablet: il pannello lascia libero il menù a sinistra dell'app (largo 236px) */
+    '@media (min-width:768px) and (min-height:500px){#nmpan{left:236px}}' +
     '#nmatt{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 76px);right:10px;left:10px;z-index:100001;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}' +
     '#nmatt .it{pointer-events:auto;position:relative;max-width:420px;width:100%;box-sizing:border-box;background:#2b2c33;color:#fff;border-radius:14px;padding:10px 40px 10px 14px;font:14px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3)}#nmatt .x{position:absolute;top:4px;right:4px;width:32px;height:32px;border:0;background:none;color:#c9cbe0;font-size:20px;line-height:1;cursor:pointer}' +
     '#nmatt .it b{display:block}#nmatt .it span{color:#c9cbe0}#nmattv{width:100%;text-align:left}#nmattv .ar{display:block;padding:10px 0;border-top:1px solid #2a2d55}#nmattv .ar:first-child{border-top:0}#nmattv .ar b{display:block}#nmattv .ar div{color:#b7bad8;font-size:.9rem}' +
@@ -623,6 +625,8 @@
     }));
   }
   function closePanel() { PAN = null; var p = $('#nmpan'); if (p) p.remove(); }
+  // sul computer il menù a sinistra resta visibile: toccando una sua voce il pannello si chiude
+  document.addEventListener('click', function (e) { if ($('#nmpan') && e.target.closest && e.target.closest('#tabs [data-act]')) closePanel(); }, true);
   function oldPeople() {
     var D = LIVE.dipendenti ? LIVE.dipendenti.map : {};
     return Object.keys(D).filter(function (id) { return !UT[id]; }).map(function (id) { return { id: id, nome: D[id].nome || id }; });

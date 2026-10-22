@@ -277,6 +277,13 @@ button.row:active, .row .hit:active { opacity: .65; }
 .cw-card small { font-size: .64rem; color: var(--c); font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
 .cw-card.teal { --c: #3BC0C9; } .cw-card.vio { --c: var(--vio); } .cw-card.late { --c: var(--late); } .cw-card.soon { --c: var(--soon); } .cw-card.ok { --c: var(--ok); } .cw-card.grey { --c: var(--dim); }
 .cw-sq { margin-top: auto; font-size: .74rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 6px; } .cw-sq b { color: var(--accent); font-size: .9rem; } .cw-sq span { display: block; }
+.cat-row .main { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.cat-go { color: var(--dim); width: 18px; flex: none; }
+.cat-r { cursor: pointer; }
+.cat-r input { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
+.cat-move { position: sticky; bottom: calc(100px + env(safe-area-inset-bottom, 0px)); display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 12px; border-radius: var(--r); background: var(--card-2); box-shadow: 0 6px 20px rgba(0, 0, 0, .35); }
+.cat-move select { flex: 1; min-width: 0; height: 42px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--edge); background: var(--card); color: var(--ink); font: inherit; }
+.cat-move .btn { flex: none; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: .78rem; color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { display: inline-block; width: 16px; height: 5px; border-radius: 1px; }
@@ -741,6 +748,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   .tab[aria-current="page"] { background: var(--accent-bg); }
   .tab .badge { position: static; margin-left: auto; }
   .side-x { display: block; }
+  .cat-move { bottom: 14px; }
   .cc em { display: inline; }
   .day { min-height: 92px; }
   .cw { grid-template-columns: repeat(7, minmax(0, 1fr)); }
@@ -6547,15 +6555,46 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     var el = document.getElementById('iq-' + m.id); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); el.select(); }
   }
   /* ---------- Categorie dei lavori: le cambia l'amministratore ---------- */
+  function catDi(l) { return CATEGORIE.indexOf(l.categoria) >= 0 ? l.categoria : 'Altro'; } // senza categoria o con una tolta = «Altro»
+  function catLavori(c) { return (S.lavoriAll || []).filter(function (l) { return !l.annullata && catDi(l) === c; }); }
   function catUse(c) {
-    return { lav: (S.lavoriAll || []).filter(function (l) { return !l.annullata && l.categoria === c; }).length, mag: S.mag.filter(function (m) { return m.categoria === c; }).length };
+    return { lav: catLavori(c).length, mag: S.mag.filter(function (m) { return m.categoria === c; }).length };
+  }
+  // dentro una categoria: i lavori e le mansioni che ci sono, da spostare in un'altra (solo l'amministratore)
+  function viewCategoria(c) {
+    var adm = S.isOwner && S.canWrite, list = catLavori(c).sort(function (a, b) { return String(b.data || '').localeCompare(String(a.data || '')); }), max = V.catAll ? list.length : 100;
+    var h = '<div style="margin-top:12px"><button type="button" class="link" data-act="cat-close">‹ Tutte le categorie</button></div>';
+    h += secH(c + ' (' + list.length + ')', adm && list.length ? 'cat-ckall' : '', 'Seleziona tutti');
+    if (!list.length) return h + '<div class="notice">Nessun lavoro in questa categoria.</div>';
+    if (adm) h += '<p class="cap" style="margin:-4px 4px 10px">Spunta i lavori da spostare e scegli in fondo la nuova categoria. L’app se lo ricorda: la prossima volta la stessa mansione va già lì.</p>';
+    h += '<div class="group">' + list.slice(0, max).map(function (l) {
+      var sch = l.fonte === 'scheda';
+      return '<label class="row cat-r">' + (adm ? '<input type="checkbox" class="cat-ck" value="' + esc(l.id) + '">' : '') + '<span class="main"><span class="title">' + esc(l.titolo || (sch ? 'Mansione' : 'Lavorazione')) + '</span>' +
+        '<span class="sub">' + esc([lavBoatLabel(l), l.data ? fmtDate(l.data) : '', sch ? 'mansione' + (l.utente ? ' di ' + nameOf(l.utente) : '') : 'lavorazione'].filter(Boolean).join(' · ')) + '</span></span></label>';
+    }).join('') + '</div>';
+    if (list.length > max) h += '<button type="button" class="btn sec" data-act="cat-all" style="width:100%;margin-top:10px">Mostra tutti (' + list.length + ')</button>';
+    if (adm) h += '<div class="cat-move"><select id="cat-to">' + opts([['', 'Sposta in…']].concat(CATEGORIE.filter(function (x) { return x !== c; })), '') + '</select><button type="button" class="btn" data-act="cat-move">Sposta</button></div>';
+    return h;
+  }
+  async function catMoveSel() {
+    var to = val(document, 'cat-to'), ids = Array.prototype.map.call(document.querySelectorAll('.cat-ck:checked'), function (x) { return x.value; });
+    if (!ids.length) { toast('Spunta almeno un lavoro', true); return; }
+    if (!to) { toast('Scegli la categoria in cui spostarli', true); return; }
+    var now = new Date().toISOString();
+    for (var i = 0; i < ids.length; i += 20) {
+      var part = ids.slice(i, i + 20);
+      if (!(await w(function () { return Promise.all(part.map(function (id) { return S.db.collection('lavori').doc(id).update({ categoria: to, modificato: now }); })); }))) return;
+    }
+    toast(ids.length === 1 ? 'Spostato in «' + to + '»' : ids.length + ' lavori spostati in «' + to + '»');
   }
   function viewCategorie() {
+    if (V.catOpen && CATEGORIE.indexOf(V.catOpen) >= 0) return viewCategoria(V.catOpen);
+    V.catOpen = '';
     var adm = S.isOwner && S.canWrite;
     var h = '<p class="context" style="margin-top:12px">Le categorie dei lavori e degli articoli del magazzino. La categoria si sceglie da sola mentre scrivete: guarda il testo, lo storico e le lavorazioni dello stesso cliente.</p>';
     h += '<div class="group">' + CATEGORIE.map(function (c, i) {
       var u = catUse(c), fixed = c === 'Altro';
-      return '<div class="row"><span class="main"><span class="title">' + esc(c) + '</span><span class="sub">' + esc(u.lav + (u.lav === 1 ? ' lavoro' : ' lavori') + (u.mag ? ' · ' + u.mag + (u.mag === 1 ? ' articolo' : ' articoli') : '') + (fixed ? ' · quando non si riconosce' : '')) + '</span></span>' +
+      return '<div class="row cat-row"><button type="button" class="main" data-act="cat-open" data-i="' + i + '" aria-label="Apri ' + esc(c) + '"><span class="title">' + esc(c) + '</span><span class="sub">' + esc(u.lav + (u.lav === 1 ? ' lavoro' : ' lavori') + (u.mag ? ' · ' + u.mag + (u.mag === 1 ? ' articolo' : ' articoli') : '') + (fixed ? ' · quando non si riconosce' : '')) + '</span></button>' + (adm && !fixed ? '' : '<span class="side cat-go">' + I.right + '</span>') +
         (adm && !fixed ? '<span class="side" style="flex-direction:row;gap:4px">' + (i > 0 ? '<button type="button" class="mini" data-act="cat-up" data-i="' + i + '" aria-label="Sposta su">↑</button>' : '') +
           '<button type="button" class="mini" data-act="cat-ren" data-i="' + i + '">Rinomina</button><button type="button" class="mini" data-act="cat-del" data-i="' + i + '">Togli</button></span>' : '') + '</div>';
     }).join('') + '</div>';
@@ -7421,7 +7460,9 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     categorie: { t: 'Categorie dei lavori', p: 'L’elenco delle categorie: motore, carena, coperta…', li: [
       'La categoria di un lavoro si sceglie da sola leggendo il testo, o ricordando com’era l’ultima volta.',
       'D|Solo l’amministratore può aggiungere, rinominare o togliere le categorie.',
-      'A|Puoi aggiungere, rinominare o togliere le categorie, e indicare le parole che le fanno riconoscere.'] },
+      'A|Puoi aggiungere, rinominare o togliere le categorie, e indicare le parole che le fanno riconoscere.',
+      'Tocca una categoria per vedere i lavori e le mansioni che ci sono dentro (anche quelli finiti in «Altro»).',
+      'A|Dentro una categoria spunti i lavori da spostare, scegli in fondo la nuova categoria e tocchi «Sposta»: la prossima volta la stessa mansione va già lì.'] },
     backup: { t: 'Copia dei dati', p: 'Un file unico con tutti i dati del gestionale.', li: [
       '«Scarica» salva il file sul telefono o sul computer: conviene farlo ogni tanto e tenerlo su Drive o iCloud.',
       '«Recupera ciò che manca» rimette dalla copia solo quello che non c’è più, senza toccare il resto.',
@@ -9060,6 +9101,11 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       case 'cat-ren': if (S.isOwner) catRenSheet(+t.getAttribute('data-i')); break;
       case 'cat-del': if (S.isOwner) catDelSheet(+t.getAttribute('data-i')); break;
       case 'cat-up': if (S.isOwner) catUp(+t.getAttribute('data-i')); break;
+      case 'cat-open': V.catOpen = CATEGORIE[+t.getAttribute('data-i')] || ''; V.catAll = false; window.scrollTo(0, 0); render(); break;
+      case 'cat-close': V.catOpen = ''; render(); break;
+      case 'cat-all': V.catAll = true; render(); break;
+      case 'cat-ckall': x = document.querySelectorAll('.cat-ck'); var on = Array.prototype.some.call(x, function (c) { return !c.checked; }); Array.prototype.forEach.call(x, function (c) { c.checked = on; }); break;
+      case 'cat-move': if (S.isOwner) catMoveSel(); break;
       case 'mag-move': if (S.canWrite) scanMove(); break;
       case 'mv-tipo': x = t.getAttribute('data-t'); $('#f-mvt').value = x; Array.prototype.forEach.call(t.parentNode.children, function (c) { c.setAttribute('aria-pressed', String(c === t)); }); $('#f-mvbW').hidden = x === 'carico'; break;
       case 'mv-next': (function () { // la fotocamera si apre subito (serve il tocco), intanto salvo
