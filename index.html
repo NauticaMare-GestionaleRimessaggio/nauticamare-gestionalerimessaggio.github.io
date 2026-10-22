@@ -431,6 +431,13 @@ button.row:active, .row .hit:active { opacity: .65; }
 .bt-c label { display: flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--muted); }
 .bt-c input[type=checkbox] { width: 22px; height: 22px; flex: none; accent-color: var(--ok); }
 .bt-row input[type=text] { width: 100%; min-width: 0; min-height: 44px; font: inherit; font-size: 16px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.mt-rows { display: flex; flex-direction: column; gap: 12px; margin-bottom: 4px; }
+.mt-row { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card-2); }
+.mt-h { display: flex; align-items: center; justify-content: space-between; font-size: .85rem; font-weight: 600; color: var(--muted); }
+.mt-h .rc-x { width: 40px; height: 36px; }
+.mt-g { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.mt-lb { margin-bottom: -4px; font-size: .75rem; color: var(--muted); }
+.mt-row input { width: 100%; min-width: 0; min-height: 44px; font: inherit; font-size: 16px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
 .self-start { align-self: flex-start; }
 .link.self-start { white-space: normal; text-align: left; max-width: 100%; }
 
@@ -1179,7 +1186,9 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (num(b.lunghezza) != null) { var bbm = beamOf(b); sv.push([fmtNum(b.lunghezza, 2) + ' × ' + fmtNum(bbm.B, 2) + ' m', bbm.est ? 'Lunghezza × larghezza (stimata)' : 'Lunghezza × larghezza']); }
     var oreB = boatOre(b.id); if (oreB) sv.push([fmtH(oreB), 'Ore lavorate, tutti']);
     if (b.anno) sv.push([b.anno, 'Anno']);
-    if (num(b.potenza) != null) sv.push([fmtNum(b.potenza) + ' cv' + (num(b.nMotori) > 1 ? ' ×' + b.nMotori : ''), 'Potenza']);
+    var cvs = motList(b).map(function (x) { return num(x.cv); }).filter(function (x) { return x != null; });
+    if (cvs.length > 1) sv.push([cvs.every(function (x) { return x === cvs[0]; }) ? fmtNum(cvs[0]) + ' cv ×' + cvs.length : cvs.map(function (x) { return fmtNum(x); }).join(' + ') + ' cv', 'Potenza']);
+    else if (num(b.potenza) != null) sv.push([fmtNum(b.potenza) + ' cv' + (num(b.nMotori) > 1 ? ' ×' + b.nMotori : ''), 'Potenza']);
     var schedaTile = '<div class="tile"><span class="tile-h"><span class="t-ok">' + I.boat + '</span>Scheda</span>' +
       (sv.length ? '<div class="stack">' + sv.map(function (x) { return '<div><b>' + esc(x[0]) + '</b><span>' + esc(x[1]) + '</span></div>'; }).join('') + '</div>' : '<span class="cap">Aggiungi lunghezza, anno e potenza con la matita in alto</span>') + '</div>';
     h += '<div class="tiles" style="margin-top:18px">' + oreTile + schedaTile + '</div>';
@@ -1198,9 +1207,16 @@ button.row:active, .row .hit:active { opacity: .65; }
     }
 
     var kv = [];
-    var mot = [b.motore, b.motoreTipo && b.motoreTipo !== 'Nessuno' ? b.motoreTipo.toLowerCase() : ''].filter(Boolean);
-    if (mot.length) kv.push(['Motore', esc(mot.join(' · '))]);
-    if (b.matricolaMotore) kv.push(['Matricola motore', '<span class="sel">' + esc(b.matricolaMotore) + '</span>']);
+    var ml = motList(b), mtp = b.motoreTipo && b.motoreTipo !== 'Nessuno' ? b.motoreTipo : '';
+    if (ml.length > 1) {
+      if (mtp) kv.push(['Installazione', esc(mtp)]);
+      ml.forEach(function (x, i) { kv.push(['Motore ' + (i + 1), esc(motTxt(x) || '–') + (x.matricola ? '<br><span class="sel">' + esc(x.matricola) + '</span>' : '')]); });
+    } else {
+      var mot = [ml[0] ? ml[0].modello : b.motore, mtp.toLowerCase()].filter(Boolean);
+      if (mot.length) kv.push(['Motore', esc(mot.join(' · '))]);
+      var mat = ml[0] ? ml[0].matricola : b.matricolaMotore;
+      if (mat) kv.push(['Matricola motore', '<span class="sel">' + esc(mat) + '</span>']);
+    }
     if (b.immatricolazione) kv.push(['Immatricolazione', '<span class="sel">' + esc(b.immatricolazione) + '</span>']);
     if (b.proprietario) kv.push(['Proprietario', esc(b.proprietario)]);
     if (b.telefono) kv.push(['Telefono', '<span class="sel">' + esc(b.telefono) + '</span><button type="button" class="mini" data-act="copy" data-text="' + esc(b.telefono) + '">Copia</button>']);
@@ -6127,6 +6143,8 @@ button.row:active, .row .hit:active { opacity: .65; }
       'Con il + in alto aggiungi una barca nuova.'] },
     barca: { t: 'Scheda della barca', p: 'Qui c’è tutta la storia della barca.', li: [
       'La matita in alto modifica i dati: modello, misure, motori, stato, ore motore, proprietario con telefono ed email.',
+      'Nella matita ogni motore è una riga con marca e modello, matricola, cv e ore: «Aggiungi riga» per un altro motore (copia marca e cv del primo), × per toglierlo. Il numero dei motori si conta da solo.',
+      'Toccando «Ore motore» si aggiornano le ore di ogni motore; per scadenze e tagliandi conta il motore con più ore.',
       'Sotto trovi attrezzatura di bordo, ricambi montati, batterie, vari, scadenze, servizi, preventivi e lavori: ognuno ha il suo + per aggiungere da qui.',
       '«Trasporto: passa?» controlla se la barca sul carrello passa dai portoni e dalla strada fino alla Marina.',
       '«Resoconto» prepara il riepilogo dei lavori di un periodo, pronto da copiare e mandare al cliente.',
@@ -6603,6 +6621,56 @@ button.row:active, .row .hit:active { opacity: .65; }
     });
   }
 
+  /* Motori a righe: una riga per motore con marca e modello, matricola, cv e ore. I campi di prima (motore, nMotori,
+     potenza, matricolaMotore, oreMotore) restano allineati perché li usano mappa 3D, scadenze a ore, ricambi e notifiche:
+     oreMotore è il valore più alto tra i motori. */
+  function motList(b) {
+    var l = (Array.isArray(b.motori) ? b.motori : []).filter(function (x) { return x && (x.modello || x.matricola || num(x.cv) != null || num(x.ore) != null); });
+    if (l.length) return l;
+    if (!b.motore && !b.matricolaMotore && num(b.potenza) == null && num(b.oreMotore) == null) return [];
+    var n = Math.max(1, Math.min(4, num(b.nMotori) || 1)), out = [{ modello: b.motore || '', matricola: b.matricolaMotore || '', cv: num(b.potenza), ore: num(b.oreMotore) }];
+    for (var i = 1; i < n; i++) out.push({ modello: b.motore || '', matricola: '', cv: num(b.potenza), ore: null });
+    return out;
+  }
+  function motSync(rows) {
+    var ore = rows.map(function (x) { return x.ore; }).filter(function (x) { return x != null; }), mods = [], mats = rows.map(function (x) { return x.matricola; }).filter(Boolean);
+    rows.forEach(function (x) { if (x.modello && mods.indexOf(x.modello) < 0) mods.push(x.modello); });
+    return { motori: rows, nMotori: rows.length || 1, motore: mods.join(' + '), potenza: rows.length && rows[0].cv != null ? rows[0].cv : null, matricolaMotore: mats.join(' · '), oreMotore: ore.length ? Math.max.apply(null, ore) : null };
+  }
+  function motTxt(x) { return [x.modello, num(x.cv) != null ? fmtNum(x.cv) + ' cv' : '', num(x.ore) != null ? fmtOre(x.ore) : ''].filter(Boolean).join(' · '); }
+  function motInit(f, b) {
+    var box = f.querySelector('#f-mrows'), add = f.querySelector('#f-maddRiga');
+    function renum() { Array.prototype.forEach.call(box.querySelectorAll('.mt-row'), function (d, i) { d.querySelector('.mt-n').textContent = 'Motore ' + (i + 1); }); }
+    function row(x, focus) {
+      var d = document.createElement('div'); d.className = 'mt-row';
+      d.innerHTML = '<div class="mt-h"><span class="mt-n"></span><button type="button" class="rc-x" aria-label="Togli motore">×</button></div>' +
+        '<input class="mt-m" type="text" placeholder="Marca e modello, es. Volvo Penta D4-300" aria-label="Marca e modello">' +
+        '<div class="mt-g mt-lb"><span>Matricola</span><span>Potenza (cv)</span><span>Ore</span></div><div class="mt-g"><input class="mt-s" type="text" autocapitalize="characters" placeholder="Matricola" aria-label="Matricola"><input class="mt-c" type="text" inputmode="numeric" placeholder="cv" aria-label="Potenza in cv"><input class="mt-o" type="text" inputmode="numeric" placeholder="Ore" aria-label="Ore motore"></div>';
+      d.querySelector('.mt-m').value = x.modello || ''; d.querySelector('.mt-s').value = x.matricola || '';
+      d.querySelector('.mt-c').value = num(x.cv) != null ? String(x.cv) : ''; d.querySelector('.mt-o').value = num(x.ore) != null ? String(x.ore) : '';
+      d.querySelector('.rc-x').addEventListener('click', function () { d.remove(); renum(); });
+      box.appendChild(d); renum(); if (focus) d.querySelector('.mt-m').focus();
+    }
+    var start = motList(b); if (!start.length) start = [{}];
+    start.forEach(function (x) { row(x); });
+    // un motore in più: di solito è uguale al primo, ne copio marca e cv
+    add.addEventListener('click', function () { var p = box.querySelector('.mt-row'); row(p ? { modello: p.querySelector('.mt-m').value.trim(), cv: parseIntS(p.querySelector('.mt-c').value) } : {}, true); });
+    var tp = f.querySelector('#f-motoreTipo');
+    function vis() { var no = tp.value === 'Nessuno'; box.hidden = no; add.hidden = no; }
+    tp.addEventListener('change', vis); vis();
+  }
+  function motRead(f) {
+    var out = [], bad = false;
+    Array.prototype.forEach.call(f.querySelectorAll('#f-mrows .mt-row'), function (d) {
+      var m = d.querySelector('.mt-m').value.trim(), s = d.querySelector('.mt-s').value.trim(), cs = d.querySelector('.mt-c').value.trim(), os = d.querySelector('.mt-o').value.trim();
+      var c = parseIntS(cs), o = parseIntS(os);
+      if (!m && !s && !cs && !os) return;
+      if ((cs && (c == null || c < 0)) || (os && (o == null || o < 0))) bad = true;
+      out.push({ modello: m, matricola: s, cv: c, ore: o });
+    });
+    if (bad) { formErr('Potenza e ore dei motori vanno scritte in numeri, per esempio 300 e 1250.'); return null; }
+    return out;
+  }
   function boatSheet(b) {
     var isNew = !b; b = b || { tipo: 'Motore', stato: 'In rimessaggio', motoreTipo: 'Fuoribordo', nMotori: 1 };
     var nL = isNew ? 0 : S.lavori.filter(function (l) { return l.barcaId === b.id; }).length;
@@ -6616,10 +6684,9 @@ button.row:active, .row .hit:active { opacity: .65; }
       '<div class="grid2">' + field(lab('f-anno', 'Anno'), inp('f-anno', b.anno, 'type="text" inputmode="numeric" placeholder="es. 2018"')) + field(lab('f-posto', 'Posto'), inp('f-posto', b.posto, 'type="text" placeholder="es. B12"')) + '</div>' +
       field(lab('f-immatricolazione', 'Immatricolazione'), inp('f-immatricolazione', b.immatricolazione, 'type="text" autocapitalize="characters"')) +
       '<div class="lbl">Motore</div>' +
-      field(lab('f-motore', 'Marca e modello'), inp('f-motore', b.motore, 'type="text" placeholder="es. Volvo Penta D4-300"')) +
-      '<div class="grid2">' + field(lab('f-motoreTipo', 'Installazione'), '<select id="f-motoreTipo">' + opts(TIPI_MOTORE, b.motoreTipo) + '</select>') + field(lab('f-nMotori', 'Numero motori'), '<select id="f-nMotori">' + opts(['1', '2', '3', '4'], String(b.nMotori || 1)) + '</select>') + '</div>' +
-      '<div class="grid2">' + field(lab('f-potenza', 'Potenza (cv)'), inp('f-potenza', b.potenza, 'type="text" inputmode="numeric"')) + field(lab('f-oreMotore', 'Ore motore'), inp('f-oreMotore', b.oreMotore, 'type="text" inputmode="numeric"')) + '</div>' +
-      field(lab('f-matricolaMotore', 'Matricola motore'), inp('f-matricolaMotore', b.matricolaMotore, 'type="text" autocapitalize="characters"')) +
+      field(lab('f-motoreTipo', 'Installazione'), '<select id="f-motoreTipo">' + opts(TIPI_MOTORE, b.motoreTipo) + '</select>') +
+      '<div class="mt-rows" id="f-mrows"></div>' +
+      '<button type="button" class="link self-start" id="f-maddRiga" style="margin:0 0 12px">＋ Aggiungi riga: un altro motore</button>' +
       '<div class="lbl">Forma e colori (per il 3D e per sapere se passa)</div>' +
       field(lab('f-tipologia', 'Tipologia'), '<select id="f-tipologia">' + opts(TIPOLOGIE, b.tipologia || '') + '</select>') +
       '<div class="grid2">' + field(lab('f-altScafo', 'Altezza scafo, chiglia → coperta (m)'), inp('f-altScafo', num(b.altezzaScafo) != null ? String(b.altezzaScafo).replace('.', ',') : '', 'type="text" inputmode="decimal" placeholder="es. 1,10"')) +
@@ -6640,17 +6707,19 @@ button.row:active, .row .hit:active { opacity: .65; }
           .concat([S.db.collection('barche').doc(b.id)]);
         if (await delSeq(refs)) { closeSheet(); V.boatId = null; render(); toast('Barca eliminata'); }
       },
+      onOpen: function (f) { motInit(f, b); },
       onSubmit: async function (f) {
         var data = {
           nome: val(f, 'f-nome'), modello: val(f, 'f-modello'), tipo: val(f, 'f-tipo'), stato: val(f, 'f-stato'),
           lunghezza: parseDec(val(f, 'f-lunghezza')), larghezza: parseDec(val(f, 'f-larghezza')), anno: val(f, 'f-anno'), posto: val(f, 'f-posto'), immatricolazione: val(f, 'f-immatricolazione'),
-          motore: val(f, 'f-motore'), motoreTipo: val(f, 'f-motoreTipo'), nMotori: parseIntS(val(f, 'f-nMotori')) || 1,
-          potenza: parseIntS(val(f, 'f-potenza')), oreMotore: parseIntS(val(f, 'f-oreMotore')), matricolaMotore: val(f, 'f-matricolaMotore'),
+          motoreTipo: val(f, 'f-motoreTipo'),
           proprietario: val(f, 'f-proprietario'), telefono: val(f, 'f-telefono'), email: val(f, 'f-email'), note: val(f, 'f-note'),
           tipologia: val(f, 'f-tipologia'), altezzaScafo: parseDec(val(f, 'f-altScafo')), altezzaMax: parseDec(val(f, 'f-altMax')), coloreScafo: val(f, 'f-colS'), coloreCarena: val(f, 'f-colC'), fascia: val(f, 'f-fascia') || 'nessuna', coloreFascia: val(f, 'f-colF'),
           daCompletare: false, modificato: new Date().toISOString()
         };
         if (!data.nome) { formErr('Scrivi il nome della barca.'); return false; }
+        var mr = motRead(f); if (!mr) return false;
+        Object.assign(data, motSync(mr));
         if (isNew && !dupAsk(f, data.nome, function (gia) { closeSheet(); V.tab = 'barche'; V.boatId = gia.id; window.scrollTo(0, 0); render(); toast('Ti ho aperto la scheda di ' + (gia.nome || 'questa barca')); })) return false;
         if (isNew) {
           data.creato = data.modificato;
@@ -6730,6 +6799,8 @@ button.row:active, .row .hit:active { opacity: .65; }
     if (foto.length !== (a.foto || []).length) out.foto = foto;
     if (d.creato && (!a.creato || String(d.creato) < String(a.creato))) out.creato = d.creato;
     if (a.daCompletare && !d.daCompletare) out.daCompletare = false;
+    // motori a righe: se un dato del motore arriva dal doppione, le righe si rifanno dai campi uniti
+    if (!('motori' in out) && ['motore', 'nMotori', 'potenza', 'oreMotore', 'matricolaMotore'].some(function (k) { return k in out; })) out.motori = [];
     return out;
   }
   function mergePick(b) {
@@ -6823,8 +6894,9 @@ button.row:active, .row .hit:active { opacity: .65; }
   async function bumpOre(boatId, ore) {
     var b = boatById(boatId);
     if (!b || ore == null || (num(b.oreMotore) != null && ore <= b.oreMotore)) return true;
-    var r = S.db.collection('barche').doc(boatId);
-    return w(function () { return r.update({ oreMotore: ore }); });
+    var r = S.db.collection('barche').doc(boatId), u = { oreMotore: ore };
+    if (Array.isArray(b.motori) && b.motori.length) u.motori = b.motori.map(function (x) { return num(x.ore) == null || x.ore < ore ? Object.assign({}, x, { ore: ore }) : x; });
+    return w(function () { return r.update(u); });
   }
 
   function normT(t) { return String(t || '').toLowerCase().replace(/[^a-z0-9àèéìòù]+/g, ' ').trim(); }
@@ -6983,15 +7055,27 @@ button.row:active, .row .hit:active { opacity: .65; }
   }
 
   function oreSheet(b) {
+    var ml = motList(b), multi = ml.length > 1;
     openSheet({
       title: 'Ore motore',
       body: '<p class="context">' + esc(boatLabel(b)) + (num(b.oreMotore) != null ? ' · ora in scheda ' + esc(fmtOre(b.oreMotore)) : '') + '</p>' +
-        field(lab('f-oreN', 'Ore lette sul contaore'), inp('f-oreN', b.oreMotore, 'type="text" inputmode="numeric" required')),
+        (multi ? ml.map(function (x, i) { return field(lab('f-oreN' + i, 'Motore ' + (i + 1) + (x.modello || x.matricola ? ' · ' + [x.modello, x.matricola].filter(Boolean).join(' ') : '')), inp('f-oreN' + i, x.ore, 'type="text" inputmode="numeric"')); }).join('') +
+          '<p class="cap">Per scadenze e tagliandi conta il motore con più ore.</p>'
+          : field(lab('f-oreN', 'Ore lette sul contaore'), inp('f-oreN', b.oreMotore, 'type="text" inputmode="numeric" required'))),
       onSubmit: async function (f) {
-        var n = parseIntS(val(f, 'f-oreN'));
-        if (n == null) { formErr('Scrivi le ore lette sul contaore.'); return false; }
+        var u = { modificato: new Date().toISOString() }, n;
+        if (multi) {
+          var rows = ml.map(function (x, i) { return Object.assign({}, x, { ore: parseIntS(val(f, 'f-oreN' + i)) }); });
+          if (rows.every(function (x) { return x.ore == null; })) { formErr('Scrivi le ore lette su almeno un motore.'); return false; }
+          Object.assign(u, motSync(rows));
+        } else {
+          n = parseIntS(val(f, 'f-oreN'));
+          if (n == null) { formErr('Scrivi le ore lette sul contaore.'); return false; }
+          u.oreMotore = n;
+          if (ml.length === 1) u.motori = [Object.assign({}, ml[0], { ore: n })];
+        }
         var r = S.db.collection('barche').doc(b.id);
-        var ok = await w(function () { return r.update({ oreMotore: n, modificato: new Date().toISOString() }); });
+        var ok = await w(function () { return r.update(u); });
         if (ok) toast('Ore aggiornate');
         return ok;
       }
