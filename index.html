@@ -723,6 +723,21 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   .tab[aria-current="page"] { background: var(--accent-bg); }
   .tab .badge { position: static; margin-left: auto; }
   .side-x { display: block; }
+  .side-pen { position: absolute; top: calc(18px + env(safe-area-inset-top, 0px)); right: 14px; z-index: 2; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: var(--dim); display: grid; place-items: center; cursor: pointer; }
+  .side-pen:hover { background: var(--card); color: var(--ink); }
+  .side-pen svg { width: 16px; height: 16px; }
+  .side-bar { margin: 12px 0 2px; padding: 12px; border-radius: 12px; background: var(--card); display: flex; flex-direction: column; gap: 6px; }
+  .side-bar .acts { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
+  .side-bar .btn { min-height: 34px; padding: 0 16px; }
+  .side-ed { outline: 1.5px dashed var(--dim); outline-offset: 2px; border-radius: 12px; padding: 6px 0 4px; }
+  .side-ed .side-h { display: flex; align-items: center; padding-right: 4px; }
+  .side-it { cursor: default; }
+  .side-it:hover { background: transparent; }
+  .side-mv { margin-left: auto; display: flex; flex-direction: row; gap: 4px; flex: none; }
+  .side-mv button { width: 26px; height: 26px; border: 0; border-radius: 8px; background: var(--card-2); color: var(--ink); display: grid; place-items: center; padding: 0; cursor: pointer; }
+  .side-mv button:disabled { opacity: .3; cursor: default; }
+  .side-mv svg { width: 14px !important; height: 14px !important; transform: rotate(90deg); }
+  .side-mv button + button svg { transform: rotate(-90deg); }
   .side-g { margin-top: 14px; display: flex; flex-direction: column; gap: 2px; }
   .side-h { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); padding: 0 10px 4px; }
   .side-n { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--card-2); color: var(--muted); font-size: .7rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
@@ -6986,9 +7001,28 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   /* menù completo a sinistra, solo su computer e tablet (sul telefono resta nascosto) */
   var SIDE_GRUPPI = [['Officina', ['scheda', 'lavori', 'programma', 'calendario', 'assenze', 'misure']], ['Barche e clienti', ['barche', 'mappa', 'vari', 'scadenze', 'batterie', 'preventivi']],
     ['Cantiere', ['operazioni', 'giro', 'scadcantiere', 'magazzino', 'ditte', 'rifiuti']], ['Amministrazione', ['pannello', 'riepiloghi', 'ore', 'notifiche', 'categorie', 'backup']]];
+  // ordine del menù: ogni amministratore può riordinare gruppi e voci con la matita in alto (si salva con i riquadri, in impostazioni/layout_<uid>)
+  function sideGruppi() {
+    var saved = lyCan() && lyCfg().side, def = {}, out = [], seen = {};
+    SIDE_GRUPPI.forEach(function (g) { def[g[0]] = g[1]; });
+    if (Array.isArray(saved)) saved.forEach(function (g) {
+      if (!g || !def[g.g] || seen[g.g]) return; seen[g.g] = 1;
+      var ks = (g.k || []).filter(function (k) { return def[g.g].indexOf(k) >= 0; });
+      def[g.g].forEach(function (k) { if (ks.indexOf(k) < 0) ks.push(k); }); // voci nuove: in fondo al loro gruppo
+      out.push([g.g, ks]);
+    });
+    SIDE_GRUPPI.forEach(function (g) { if (!seen[g[0]]) out.push([g[0], g[1].slice()]); });
+    return out;
+  }
+  function sideMove(gi, ki, d) {
+    var gs = sideGruppi(), arr = ki < 0 ? gs : gs[gi][1], i = ki < 0 ? gi : ki, j = i + d;
+    if (j < 0 || j >= arr.length) return;
+    var x = arr[i]; arr[i] = arr[j]; arr[j] = x;
+    lySave({ side: gs.map(function (g) { return { g: g[0], k: g[1] }; }) });
+  }
   function sideMenu(cur) {
     if (S.status !== 'ready') return '';
-    var rows = altroRows(), by = {}, used = {};
+    var rows = altroRows(), by = {}, used = {}, ed = V.sideEdit && lyCan();
     [['scheda', I.clip, '', 'Scheda lavoro'], ['lavori', I.wrench, '', 'Lavorazioni'], ['calendario', I.cal, '', 'Calendario'], ['barche', I.boat, '', 'Barche']].forEach(function (r) { by[r[0]] = r; });
     rows.forEach(function (r) { by[r[0]] = r; });
     function item(r) {
@@ -7000,13 +7034,28 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       var on = V.tab === r[0] || (r[0] === 'barche' && V.tab === 'barche') || (r[0] === 'magazzino' && V.tab === 'inventario');
       return '<button type="button" class="tab" ' + (fb ? 'data-act="fb" data-k="' + esc(r[0].slice(3)) + '"' : 'data-act="tab" data-tab="' + r[0] + '"') + (on ? ' aria-current="page"' : '') + '>' + r[1] + '<span>' + esc(r.length === 4 ? r[3] : r[0] === 'mappa' ? 'Mappa e porto' : TITOLI[r[0]] || String(r[3]).split(':')[0]) + '</span>' + pill + '</button>';
     }
-    var h = SIDE_GRUPPI.map(function (g) {
-      var its = g[1].filter(function (k) { return by[k]; }).map(function (k) { return item(by[k]); }).join('');
+    function arrows(gi, ki, n, i, what) {
+      return '<div class="side-mv"><button type="button" data-act="side-mv" data-g="' + gi + '" data-k="' + ki + '" data-d="-1"' + (i ? '' : ' disabled') + ' aria-label="Sposta su ' + esc(what) + '">' + I.left + '</button>' +
+        '<button type="button" data-act="side-mv" data-g="' + gi + '" data-k="' + ki + '" data-d="1"' + (i < n - 1 ? '' : ' disabled') + ' aria-label="Sposta giù ' + esc(what) + '">' + I.left + '</button></div>';
+    }
+    var gs = sideGruppi();
+    var h = gs.map(function (g, gi) {
+      var ks = g[1].filter(function (k) { return by[k]; });
+      if (ed) {
+        ks.forEach(function (k) { used[k] = 1; });
+        return '<div class="side-g side-ed"><div class="side-h">' + g[0] + arrows(gi, -1, gs.length, gi, 'il gruppo ' + g[0]) + '</div>' + ks.map(function (k) {
+          var r = by[k], nome = k === 'riepiloghi' ? 'Riepiloghi' : (r.length === 4 ? r[3] : k === 'mappa' ? 'Mappa e porto' : TITOLI[k] || String(r[3]).split(':')[0]);
+          return '<div class="tab side-it">' + r[1] + '<span>' + esc(nome) + '</span>' + arrows(gi, g[1].indexOf(k), g[1].length, g[1].indexOf(k), nome) + '</div>';
+        }).join('') + '</div>';
+      }
+      var its = ks.map(function (k) { return item(by[k]); }).join('');
       return its ? '<div class="side-g"><div class="side-h">' + g[0] + '</div>' + its + '</div>' : '';
     }).join('');
-    var rest = rows.filter(function (r) { return !used[r[0]]; }).map(item).join('');
+    var rest = ed ? '' : rows.filter(function (r) { return !used[r[0]]; }).map(item).join('');
     if (rest) h += '<div class="side-g"><div class="side-h">Altro</div>' + rest + '</div>';
-    return '<div class="side-x">' + h + '</div>';
+    var top = !lyCan() ? '' : ed ? '<div class="side-bar"><b>Riordina il menù</b><span class="cap">Con le frecce sposti i gruppi e le voci.</span><span class="acts"><button type="button" class="link" data-act="side-reset">Come all’inizio</button><button type="button" class="btn" data-act="side-done">Fine</button></span></div>'
+      : '<button type="button" class="side-pen" data-act="side-edit" aria-label="Riordina il menù" title="Riordina il menù">' + I.pencil + '</button>';
+    return '<div class="side-x">' + top + h + '</div>';
   }
   function bindFeat() {
     var feat = $('#feat'); if (!feat) return;
@@ -7135,6 +7184,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     inizio: { t: 'Come è fatta l’app', p: 'Un’unica app per tutto il cantiere: barche, lavori, ore, scadenze, mappa, magazzino. I dati sono condivisi in tempo reale: quello che segna un collega lo vedi subito.', li: [
       'Sul telefono in basso ci sono le sei sezioni principali: Home, Scheda lavoro, Lavorazioni, Calendario, Barche, Altro. Tutte le altre sono dentro Altro.',
       'Su computer e tablet l’app se ne accorge da sola: a sinistra c’è il menù completo, diviso in Officina, Barche e clienti, Cantiere e Amministrazione, con il numero delle cose da guardare accanto a ogni voce.',
+      'A|Con la piccola matita in alto nel menù (accanto a Home) riordini i gruppi e le voci con le frecce; «Come all’inizio» rimette l’ordine di partenza. Ogni amministratore ha il suo ordine.',
       'In alto a destra trovi sempre la mappa del cantiere e il + per aggiungere qualcosa nella sezione in cui sei.',
       'Il tasto ? in alto apre questa guida, già sulla sezione in cui ti trovi.',
       'In Home e in Altro c’è la ricerca unica: scrivi una barca, un cliente, un articolo, un codice o un lavoro e l’app cerca dappertutto.',
@@ -8991,6 +9041,10 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       case 'nt-on': ntAttiva(); break;
       case 'nt-off': ntDisattiva(); break;
       case 'nt-cfg': ntCfgSave(); break;
+      case 'side-edit': V.sideEdit = true; renderTabs(); break;
+      case 'side-done': V.sideEdit = false; renderTabs(); toast('Menù sistemato'); break;
+      case 'side-reset': lySave({ side: null }); break;
+      case 'side-mv': sideMove(+t.getAttribute('data-g'), +t.getAttribute('data-k'), +t.getAttribute('data-d')); break;
       case 'ly-menu': case 'ly-edit': case 'ly-done': case 'ly-add': case 'ly-add-one': case 'ly-del': case 'ly-size': case 'ly-opz': lyAct(act, t); break;
       case 'riep': V.tab = 'riepiloghi'; V.riep = t.getAttribute('data-v'); V.boatId = null; window.scrollTo(0, 0); render(); break;
       case 'b-sort': var bk = t.getAttribute('data-k'); V.bSortDir = V.bSort === bk ? -(V.bSortDir || 1) : 1; V.bSort = bk; renderBoatList(); break;
