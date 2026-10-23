@@ -112,6 +112,10 @@
     '#nmatt{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 76px);right:10px;left:10px;z-index:100001;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}' +
     '#nmatt .it{pointer-events:auto;position:relative;max-width:420px;width:100%;box-sizing:border-box;background:#2b2c33;color:#fff;border-radius:14px;padding:10px 40px 10px 14px;font:14px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3)}#nmatt .x{position:absolute;top:4px;right:4px;width:32px;height:32px;border:0;background:none;color:#c9cbe0;font-size:20px;line-height:1;cursor:pointer}' +
     '#nmatt .it b{display:block}#nmatt .it span{color:#c9cbe0}#nmattv{width:100%;text-align:left}#nmattv .ar{display:block;padding:10px 0;border-top:1px solid #2a2d55}#nmattv .ar:first-child{border-top:0}#nmattv .ar b{display:block}#nmattv .ar div{color:#b7bad8;font-size:.9rem}' +
+    /* modifiche in attesa di rete: piccola icona in alto a destra, sotto la barra (giallo = da inviare, verde = inviate) */
+    '#nmpend{position:fixed;top:calc(env(safe-area-inset-top) + 46px);right:10px;z-index:99990;display:flex;align-items:center;gap:4px;height:25px;padding:0 8px;border:1px solid rgba(255,200,90,.5);background:rgba(40,30,8,.94);color:#ffd27a;border-radius:99px;font:700 12px/1 -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer}' +
+    '#nmpend svg{width:15px;height:15px;flex:none}#nmpend[data-s="ok"]{border-color:rgba(90,220,150,.5);background:rgba(8,40,26,.94);color:#7fe0a0}' +
+    '@media (min-width:1024px) and (min-height:500px){#nmpend{top:10px;right:190px;height:38px;padding:0 14px;gap:7px;font-size:16px}#nmpend svg{width:22px;height:22px}}' +
     '#nmtoast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 90px);transform:translateX(-50%);z-index:100000;background:#2b2c33;color:#fff;padding:10px 16px;border-radius:12px;font:15px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.4)}';
   function ensureCss() { if (!$('#nmfb-css')) { var st = document.createElement('style'); st.id = 'nmfb-css'; st.textContent = CSS; document.head.appendChild(st); } }
   function logoSrc() { var l = document.getElementById('logo-src'); return l ? l.getAttribute('src') : ''; }
@@ -252,6 +256,7 @@
       delete L.map[id]; L.pend[id] = 'del';
     }
     p.then(function () { if (L.pend) delete L.pend[id]; }, function () { if (L.pend) delete L.pend[id]; });
+    pendAdd(p);
     attScrittura(name, kind === 'delete' ? 'cancella' : prev0 ? 'modifica' : 'aggiunge', data || prev0);
     emit(L); save(L);
     return settle(p, L);
@@ -356,7 +361,8 @@
         var fb = fs.batch(), cr = nowISO(), da = ME ? ME.uid : '';
         fb.set(fs.collection('foto').doc(id), { data: url, creato: cr, da: da, _ts: FV.serverTimestamp() });
         fb.set(fs.collection('fotoInfo').doc(id), { kb: Math.ceil(url.length / 1024), creato: cr, da: da, _ts: FV.serverTimestamp() });
-        await settle(fb.commit());
+        var fp = fb.commit(); pendAdd(fp);
+        await settle(fp);
         PH[id] = url; IDB.put('foto', id, url);
         return { id: id, url: url, sizeBytes: b.size, contentType: 'image/jpeg' };
       })();
@@ -528,6 +534,7 @@
       if (ME && !D.map[ME.uid]) write('dipendenti', ME.uid, 'set', { nome: ME.nome || '', modificato: nowISO() }).catch(function () { });
     });
     if (ME && ME.ruolo === 'admin') { setTimeout(purgeCestino, 5000); setTimeout(pulisciSegnaposto, 20000); }
+    pendVecchie();
     attEntra(); attAscolta();
     // aperto dal link per portare i dati dall'app di Claude
     if (IMP_KEY) setTimeout(offerImport, 800);
@@ -1039,6 +1046,56 @@
     var r = ev && ev.reason;
     if (r instanceof Error && /index\.html|nm-fb\.js/.test(String(r.stack || ''))) errScrivi(r); // i rifiuti di Firebase (rete, permessi) li gestisce già l'app
   });
+
+  /* ---------- modifiche in attesa di rete ----------
+     Senza campo le modifiche restano sul telefono e partono da sole: una piccola icona in alto a destra con il numero
+     di quelle che mancano. Con il campo compare solo se l'invio dura più di 3 secondi (campo debole). */
+  var PEND = { n: 0, vecchie: false, t: null, fatto: 0 };
+  var PEND_IC = { // icone: senza rete, da inviare, inviate
+    off: '<path d="M12 20h.01"/><path d="M8.5 16.43a5 5 0 0 1 7 0"/><path d="M5 12.86a10 10 0 0 1 5.17-2.69"/><path d="M19 12.86a10 10 0 0 0-2-1.52"/><path d="M2 8.82a15 15 0 0 1 4.18-2.64"/><path d="M22 8.82a15 15 0 0 0-11.29-3.76"/><path d="m2 2 20 20"/>',
+    su: '<path d="M12 13v8"/><path d="M4 14.9A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.24"/><path d="m8 17 4-4 4 4"/>',
+    ok: '<path d="m17 15-5.5 5.5L9 18"/><path d="M5 17.74A7 7 0 1 1 15.71 10h1.79a4.5 4.5 0 0 1 1.5 8.74"/>'
+  };
+  function pendIc(k) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + PEND_IC[k] + '</svg>'; }
+  function pendAdd(p) {
+    PEND.n++; pendShow();
+    var fine = function () { PEND.n = Math.max(0, PEND.n - 1); if (!PEND.n) PEND.fatto = Date.now(); pendShow(); };
+    p.then(fine, fine);
+  }
+  // modifiche rimaste dall'ultima volta (app chiusa senza campo): Firebase le manda appena può
+  function pendVecchie() {
+    var ok = false;
+    try { fs.waitForPendingWrites().then(function () { ok = true; if (PEND.vecchie) { PEND.vecchie = false; PEND.fatto = Date.now(); pendShow(); } }, function () { }); } catch (e) { return; }
+    setTimeout(function () { if (!ok) { PEND.vecchie = true; pendShow(); } }, 3000);
+  }
+  function pendShow() {
+    clearTimeout(PEND.t);
+    // le modifiche con il campo partono in un attimo: l'icona compare solo se aspettano più di 3 secondi
+    PEND.t = setTimeout(pendDraw, PEND.n || PEND.vecchie ? (navigator.onLine === false ? 300 : 3000) : 0);
+  }
+  function pendDraw() {
+    if (!document.body) return;
+    var el = $('#nmpend'), off = navigator.onLine === false, n = PEND.n;
+    if (!n && !PEND.vecchie) {
+      if (el && el.getAttribute('data-s') !== 'ok' && Date.now() - PEND.fatto < 4000) {
+        el.setAttribute('data-s', 'ok'); el.innerHTML = pendIc('ok'); el.setAttribute('aria-label', 'Modifiche inviate'); el.title = 'Modifiche inviate';
+        setTimeout(function () { var e2 = $('#nmpend'); if (e2 && e2.getAttribute('data-s') === 'ok') e2.remove(); }, 2500);
+      } else if (el && el.getAttribute('data-s') !== 'ok') el.remove();
+      return;
+    }
+    ensureCss();
+    if (!el) {
+      el = document.createElement('button'); el.type = 'button'; el.id = 'nmpend'; document.body.appendChild(el);
+      el.onclick = function () {
+        var k = el.getAttribute('data-s');
+        toast(k === 'ok' ? 'Tutte le modifiche sono state inviate.' : (k === 'off' ? 'Sei senza rete. ' : 'Il campo è debole: le modifiche stanno partendo. ') + 'Restano salvate sul telefono, anche se chiudi l’app, e partono da sole appena torna il campo.');
+      };
+    }
+    var t = (off ? 'Senza rete' : 'Invio in corso') + (n ? ': ' + n + (n === 1 ? ' modifica da inviare' : ' modifiche da inviare') : ': modifiche da inviare');
+    el.setAttribute('data-s', off ? 'off' : 'su'); el.setAttribute('aria-label', t); el.title = t;
+    el.innerHTML = pendIc(off ? 'off' : 'su') + (n ? '<b>' + n + '</b>' : '');
+  }
+  window.addEventListener('online', pendShow); window.addEventListener('offline', pendShow);
 
   /* ---------- segnaposto delle voci cancellate ----------
      Cancellare scrive { _del: true } al posto della voce, così gli altri telefoni lo sanno. Dopo 60 giorni
