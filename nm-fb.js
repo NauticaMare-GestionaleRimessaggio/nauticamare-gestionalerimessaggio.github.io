@@ -112,10 +112,6 @@
     '#nmatt{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 76px);right:10px;left:10px;z-index:100001;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}' +
     '#nmatt .it{pointer-events:auto;position:relative;max-width:420px;width:100%;box-sizing:border-box;background:#2b2c33;color:#fff;border-radius:14px;padding:10px 40px 10px 14px;font:14px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3)}#nmatt .x{position:absolute;top:4px;right:4px;width:32px;height:32px;border:0;background:none;color:#c9cbe0;font-size:20px;line-height:1;cursor:pointer}' +
     '#nmatt .it b{display:block}#nmatt .it span{color:#c9cbe0}#nmattv{width:100%;text-align:left}#nmattv .ar{display:block;padding:10px 0;border-top:1px solid #2a2d55}#nmattv .ar:first-child{border-top:0}#nmattv .ar b{display:block}#nmattv .ar div{color:#b7bad8;font-size:.9rem}' +
-    /* modifiche in attesa di rete: un pallino sotto la barra in alto */
-    '#nmpend{position:fixed;top:calc(env(safe-area-inset-top) + 62px);left:50%;transform:translateX(-50%);z-index:99990;border:1px solid rgba(255,200,90,.45);background:rgba(40,30,8,.92);color:#ffd27a;border-radius:99px;padding:6px 14px;font:600 13px/1.3 -apple-system,BlinkMacSystemFont,sans-serif;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer}' +
-    '#nmpend[data-s="ok"]{border-color:rgba(90,220,150,.45);background:rgba(8,40,26,.92);color:#7fe0a0}' +
-    '@media (min-width:768px) and (min-height:500px){#nmpend{left:calc(50% + 118px)}}' +
     '#nmtoast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 90px);transform:translateX(-50%);z-index:100000;background:#2b2c33;color:#fff;padding:10px 16px;border-radius:12px;font:15px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.4)}';
   function ensureCss() { if (!$('#nmfb-css')) { var st = document.createElement('style'); st.id = 'nmfb-css'; st.textContent = CSS; document.head.appendChild(st); } }
   function logoSrc() { var l = document.getElementById('logo-src'); return l ? l.getAttribute('src') : ''; }
@@ -256,7 +252,6 @@
       delete L.map[id]; L.pend[id] = 'del';
     }
     p.then(function () { if (L.pend) delete L.pend[id]; }, function () { if (L.pend) delete L.pend[id]; });
-    pendAdd(p);
     attScrittura(name, kind === 'delete' ? 'cancella' : prev0 ? 'modifica' : 'aggiunge', data || prev0);
     emit(L); save(L);
     return settle(p, L);
@@ -361,8 +356,7 @@
         var fb = fs.batch(), cr = nowISO(), da = ME ? ME.uid : '';
         fb.set(fs.collection('foto').doc(id), { data: url, creato: cr, da: da, _ts: FV.serverTimestamp() });
         fb.set(fs.collection('fotoInfo').doc(id), { kb: Math.ceil(url.length / 1024), creato: cr, da: da, _ts: FV.serverTimestamp() });
-        var fp = fb.commit(); pendAdd(fp);
-        await settle(fp);
+        await settle(fb.commit());
         PH[id] = url; IDB.put('foto', id, url);
         return { id: id, url: url, sizeBytes: b.size, contentType: 'image/jpeg' };
       })();
@@ -534,7 +528,6 @@
       if (ME && !D.map[ME.uid]) write('dipendenti', ME.uid, 'set', { nome: ME.nome || '', modificato: nowISO() }).catch(function () { });
     });
     if (ME && ME.ruolo === 'admin') setTimeout(purgeCestino, 5000);
-    pendVecchie();
     attEntra(); attAscolta();
     // aperto dal link per portare i dati dall'app di Claude
     if (IMP_KEY) setTimeout(offerImport, 800);
@@ -1047,45 +1040,6 @@
     if (r instanceof Error && /index\.html|nm-fb\.js/.test(String(r.stack || ''))) errScrivi(r); // i rifiuti di Firebase (rete, permessi) li gestisce già l'app
   });
 
-  /* ---------- modifiche in attesa di rete ----------
-     Senza campo le modifiche restano sul telefono e partono da sole: un pallino in alto dice quante ne mancano. */
-  var PEND = { n: 0, vecchie: false, t: null, fatto: 0 };
-  function pendAdd(p) {
-    PEND.n++; pendShow();
-    var fine = function () { PEND.n = Math.max(0, PEND.n - 1); if (!PEND.n) PEND.fatto = Date.now(); pendShow(); };
-    p.then(fine, fine);
-  }
-  // modifiche rimaste dall'ultima volta (app chiusa senza campo): Firebase le manda appena può
-  function pendVecchie() {
-    var ok = false;
-    try { fs.waitForPendingWrites().then(function () { ok = true; if (PEND.vecchie) { PEND.vecchie = false; PEND.fatto = Date.now(); pendShow(); } }, function () { }); } catch (e) { return; }
-    setTimeout(function () { if (!ok) { PEND.vecchie = true; pendShow(); } }, 3000);
-  }
-  function pendShow() {
-    clearTimeout(PEND.t);
-    // le modifiche con il campo partono in un attimo: il pallino compare solo se aspettano più di 3 secondi
-    PEND.t = setTimeout(pendDraw, PEND.n || PEND.vecchie ? (navigator.onLine === false ? 300 : 3000) : 0);
-  }
-  function pendDraw() {
-    if (!document.body) return;
-    var el = $('#nmpend'), off = navigator.onLine === false, n = PEND.n;
-    if (!n && !PEND.vecchie) {
-      if (el && el.getAttribute('data-s') === 'attesa' && Date.now() - PEND.fatto < 4000) {
-        el.setAttribute('data-s', 'ok'); el.textContent = '✓ Modifiche inviate';
-        setTimeout(function () { var e2 = $('#nmpend'); if (e2 && e2.getAttribute('data-s') === 'ok') e2.remove(); }, 2500);
-      } else if (el && el.getAttribute('data-s') !== 'ok') el.remove();
-      return;
-    }
-    ensureCss();
-    if (!el) {
-      el = document.createElement('button'); el.type = 'button'; el.id = 'nmpend'; document.body.appendChild(el);
-      el.onclick = function () { toast('Le modifiche restano salvate sul telefono, anche se chiudi l’app, e partono da sole appena torna il campo.'); };
-    }
-    el.setAttribute('data-s', 'attesa');
-    el.textContent = (off ? 'Senza rete · ' : 'Invio in corso · ') + (n ? n + (n === 1 ? ' modifica da inviare' : ' modifiche da inviare') : 'modifiche da inviare');
-  }
-  window.addEventListener('online', pendShow); window.addEventListener('offline', pendShow);
-
   /* ---------- spazio e foto (solo amministratori, in «Copia dei dati») ----------
      Le foto stanno nel database (raccolta «foto»): il piano gratuito di Firebase ha 1 GB in tutto.
      «fotoInfo» tiene quanto pesa ogni foto. Le foto di prima si contano una volta scaricandole (giroFoto).
@@ -1135,7 +1089,7 @@
   }
   // passa tutte le foto una per volta (a gruppi di 8): scrive quanto pesano e, se serve, le tiene per il file da scaricare
   async function giroFoto(prog, tieni) {
-    var info = await fotoInfoAll(), last = null, n = 0, kb = 0, out = [], ID = firebase.firestore.FieldPath.documentId();
+    var info = await fotoInfoAll(), visti = {}, last = null, n = 0, kb = 0, out = [], ID = firebase.firestore.FieldPath.documentId();
     for (;;) {
       var q = fs.collection('foto').orderBy(ID).limit(8); if (last) q = q.startAfter(last);
       var s = await q.get(); if (!s.size) break;
@@ -1143,7 +1097,7 @@
       s.docs.forEach(function (d) {
         var x = d.data();
         if (x._del || !x.data) { b.delete(d.ref); nb++; return; } // segnaposto di foto già tolte
-        n++; var k = Math.ceil(String(x.data).length / 1024); kb += k;
+        n++; visti[d.id] = true; var k = Math.ceil(String(x.data).length / 1024); kb += k;
         if (!info[d.id]) { b.set(fs.collection('fotoInfo').doc(d.id), { kb: k, creato: x.creato || '', da: x.da || '', _ts: FV.serverTimestamp() }); nb++; }
         if (tieni) out.push({ id: d.id, data: x.data, creato: x.creato || '' });
       });
@@ -1151,6 +1105,9 @@
       last = s.docs[s.docs.length - 1];
       if (prog) prog(n, kb / 1024);
     }
+    // schede di foto che non ci sono più: via, così il conto torna preciso
+    var orfane = Object.keys(info).filter(function (id) { return !visti[id]; });
+    for (var i = 0; i < orfane.length; i += 400) { var bo = fs.batch(); orfane.slice(i, i + 400).forEach(function (id) { bo.delete(fs.collection('fotoInfo').doc(id)); }); await bo.commit(); }
     await write('impostazioni', 'fotoConta', 'set', { il: nowISO(), n: n, mb: Math.round(kb / 102.4) / 10 });
     return out;
   }

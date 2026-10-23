@@ -6877,9 +6877,10 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       '<p class="cap" style="margin:8px 0 0">Il piano gratuito di Firebase ha 1 GB per tutto. Quando è pieno non si salva più niente.</p></div>' +
       '<div class="kv-row"><span class="k">Foto</span><span class="v">' + fmtNum(x.n) + ' · ' + esc(fsMB(x.mb)) + '</span></div>' +
       '<div class="kv-row"><span class="k">Dati (barche, lavori, magazzino…)</span><span class="v">circa ' + esc(fsMB(x.datiMb)) + '</span></div></div>';
-    if (!x.contate) h += '<div class="notice" style="margin-top:10px">Le foto caricate prima di questa versione dell’app non sono ancora contate: lo spazio usato è di più.' +
-      '<div class="acts" style="margin-top:8px"><button type="button" class="btn sec" data-act="fs-conta"' + (FS.busy ? ' disabled' : '') + '>' + (FS.busy === 'conta' ? esc(FS.prog || 'Conto le foto…') : 'Conta le foto') + '</button></div>' +
-      '<p class="cap" style="margin:6px 0 0">Si fa una volta sola. Scarica tutte le foto: meglio dal computer o col Wi-Fi.</p></div>';
+    var ct = x.contate;
+    h += '<div class="notice" style="margin-top:10px">' + (ct ? 'Ultimo conteggio di tutte le foto: ' + esc(fmtWhen(ct.il)) + (ct.n != null ? ', ' + fmtNum(ct.n) + ' foto' : '') + '. Le foto nuove si contano da sole; ricontale quando vuoi essere sicuro.' : 'Le foto caricate prima di questa versione dell’app non sono ancora contate: lo spazio usato è di più.') +
+      '<div class="acts" style="margin-top:8px"><button type="button" class="btn sec" data-act="fs-conta"' + (FS.busy ? ' disabled' : '') + '>' + (FS.busy === 'conta' ? esc(FS.prog || 'Conto le foto…') : ct ? 'Conta di nuovo le foto' : 'Conta le foto') + '</button></div>' +
+      '<p class="cap" style="margin:6px 0 0">Scarica tutte le foto per pesarle: meglio dal computer o col Wi-Fi.</p></div>';
 
     h += secH('Foto non più usate');
     if (FS.busy === 'cerca') h += '<div class="notice">Cerco le foto che non sono in nessuna barca, lavoro o voce del cestino…</div>';
@@ -7497,7 +7498,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'In alto a destra trovi sempre la mappa del cantiere e il + per aggiungere qualcosa nella sezione in cui sei.',
       'Il tasto ? in alto apre questa guida, già sulla sezione in cui ti trovi.',
       'In Home e in Altro c’è la ricerca unica: scrivi una barca, un cliente, un articolo, un codice o un lavoro e l’app cerca dappertutto.',
-      'Senza campo l’app si apre lo stesso con gli ultimi dati: quello che salvi parte appena torna la rete. Finché aspetta, in alto compare un riquadro giallo «Senza rete · 2 modifiche da inviare»; quando sono partite diventa verde «Modifiche inviate». Le modifiche restano sul telefono anche se chiudi l’app.',
+      'Senza campo l’app si apre lo stesso con gli ultimi dati: quello che salvi parte appena torna la rete.',
       'A|Se l’app dà un errore sul telefono di qualcuno, ti arriva insieme agli avvisi su chi entra e cosa fa (e in «Mentre non c’eri»), con la sezione in cui è successo.',
       'Sul telefono conviene aggiungerla alla schermata Home: su iPhone da Safari › Condividi › «Aggiungi alla schermata Home», su Android da Chrome › tre puntini › «Installa app».'] },
     home: { t: 'Home', p: 'La pagina di riepilogo: cosa c’è da fare subito e com’è la giornata.', li: [
@@ -7668,7 +7669,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       '«Scarica» salva il file sul telefono o sul computer: conviene farlo ogni tanto e tenerlo su Drive o iCloud.',
       '«Recupera ciò che manca» rimette dalla copia solo quello che non c’è più, senza toccare il resto.',
       'Le foto non entrano nella copia: per quelle c’è «Tutte le foto in un file».',
-      'A|«Spazio nel database» dice quanto è pieno il piano gratuito di Firebase (1 GB per tutto, foto comprese). La prima volta «Conta le foto» le scarica tutte per pesarle: meglio dal computer o col Wi-Fi.',
+      'A|«Spazio nel database» dice quanto è pieno il piano gratuito di Firebase (1 GB per tutto, foto comprese). «Conta le foto» le scarica tutte per pesarle (meglio dal computer o col Wi-Fi); il tasto resta, così puoi ricontarle quando vuoi.',
       'A|«Cerca le foto non più usate» trova le foto che non sono più in nessuna barca, lavoro o voce del cestino; «Togli per sempre» libera lo spazio. Non si recuperano: prima scarica il file delle foto se vuoi tenerle.',
       'A|«Tutte le foto in un file» prepara un file .zip con le foto divise per barca (oltre 150 MB in più parti): tocca «Salva» su ogni parte.'] },
     inventario: { rif: 'magazzino' },
