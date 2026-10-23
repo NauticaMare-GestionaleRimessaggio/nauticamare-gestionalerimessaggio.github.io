@@ -6876,10 +6876,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       '<div class="progress" style="margin-top:8px"><i style="width:' + Math.max(pct, 1) + '%;background:' + col + '"></i></div>' +
       '<p class="cap" style="margin:8px 0 0">Il piano gratuito di Firebase ha 1 GB per tutto. Quando è pieno non si salva più niente.</p></div>' +
       '<div class="kv-row"><span class="k">Foto</span><span class="v">' + fmtNum(x.n) + ' · ' + esc(fsMB(x.mb)) + '</span></div>' +
-      '<div class="kv-row"><span class="k">Dati (barche, lavori, magazzino…)</span><span class="v">circa ' + esc(fsMB(x.datiMb)) + '</span></div>';
-    var pu = F.pulizia();
-    h += '<div class="kv-row" style="display:block"><span class="k">Pulizia automatica</span><p class="cap" style="margin:4px 0 0">Una volta a settimana l’app toglie del tutto le voci cancellate da più di 60 giorni (quelle che non si possono più recuperare dal cestino).' +
-      (pu && pu.il ? ' Ultima: ' + esc(fmtWhen(pu.il)) + ', ' + (pu.tolte ? fmtNum(pu.tolte) + (pu.tolte === 1 ? ' voce tolta' : ' voci tolte') : 'niente da togliere') + (pu.totale ? ' (' + fmtNum(pu.totale) + ' in tutto)' : '') + '.' : '') + '</p></div></div>';
+      '<div class="kv-row"><span class="k">Dati (barche, lavori, magazzino…)</span><span class="v">circa ' + esc(fsMB(x.datiMb)) + '</span></div></div>';
     if (!x.contate) h += '<div class="notice" style="margin-top:10px">Le foto caricate prima di questa versione dell’app non sono ancora contate: lo spazio usato è di più.' +
       '<div class="acts" style="margin-top:8px"><button type="button" class="btn sec" data-act="fs-conta"' + (FS.busy ? ' disabled' : '') + '>' + (FS.busy === 'conta' ? esc(FS.prog || 'Conto le foto…') : 'Conta le foto') + '</button></div>' +
       '<p class="cap" style="margin:6px 0 0">Si fa una volta sola. Scarica tutte le foto: meglio dal computer o col Wi-Fi.</p></div>';
@@ -7673,8 +7670,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'Le foto non entrano nella copia: per quelle c’è «Tutte le foto in un file».',
       'A|«Spazio nel database» dice quanto è pieno il piano gratuito di Firebase (1 GB per tutto, foto comprese). La prima volta «Conta le foto» le scarica tutte per pesarle: meglio dal computer o col Wi-Fi.',
       'A|«Cerca le foto non più usate» trova le foto che non sono più in nessuna barca, lavoro o voce del cestino; «Togli per sempre» libera lo spazio. Non si recuperano: prima scarica il file delle foto se vuoi tenerle.',
-      'A|«Tutte le foto in un file» prepara un file .zip con le foto divise per barca (oltre 150 MB in più parti): tocca «Salva» su ogni parte.',
-      'A|Una volta a settimana l’app toglie da sola le voci cancellate da più di 60 giorni, che non si possono più recuperare dal cestino: non cambia niente di quello che vedete.'] },
+      'A|«Tutte le foto in un file» prepara un file .zip con le foto divise per barca (oltre 150 MB in più parti): tocca «Salva» su ogni parte.'] },
     inventario: { rif: 'magazzino' },
     account: { t: 'Account e permessi', p: 'Ognuno entra con la sua email e password; nessuno usa account condivisi.', li: [
       '«Il mio account» (in fondo ad Altro) serve per cambiare la password o uscire.',
