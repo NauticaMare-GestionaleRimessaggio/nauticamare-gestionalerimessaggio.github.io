@@ -533,7 +533,7 @@
     D.start.then(function () { return whenReady(D, 15000); }).then(function () {
       if (ME && !D.map[ME.uid]) write('dipendenti', ME.uid, 'set', { nome: ME.nome || '', modificato: nowISO() }).catch(function () { });
     });
-    if (ME && ME.ruolo === 'admin') setTimeout(purgeCestino, 5000);
+    if (ME && ME.ruolo === 'admin') { setTimeout(purgeCestino, 5000); setTimeout(pulisciSegnaposto, 20000); }
     pendVecchie();
     attEntra(); attAscolta();
     // aperto dal link per portare i dati dall'app di Claude
@@ -1086,6 +1086,30 @@
   }
   window.addEventListener('online', pendShow); window.addEventListener('offline', pendShow);
 
+  /* ---------- segnaposto delle voci cancellate ----------
+     Cancellare scrive { _del: true } al posto della voce, così gli altri telefoni lo sanno. Dopo 60 giorni
+     tutti l'hanno saputo (chi resta fuori più a lungo rilegge tutto comunque, vedi FULL_EVERY): si toglie del tutto.
+     Lo fa l'amministratore, una volta a settimana, senza che si veda. */
+  async function pulisciSegnaposto() {
+    try {
+      var K = 'nm-segnaposto', last = 0; try { last = +localStorage.getItem(K) || 0; } catch (e) { }
+      if (Date.now() - last < 7 * 864e5) return;
+      var cut = Date.now() - CEST_DAYS * 864e5, tolte = 0;
+      for (var i = 0; i < COLLS.length + 1; i++) {
+        var c = COLLS[i] || 'foto';
+        var s = await fs.collection(c).where('_del', '==', true).limit(400).get();
+        var vecchi = s.docs.filter(function (d) { var t = d.get('_ts'); return t && t.toMillis && t.toMillis() < cut; });
+        for (var j = 0; j < vecchi.length; j += 400) {
+          var b = fs.batch(); vecchi.slice(j, j + 400).forEach(function (d) { b.delete(d.ref); }); await b.commit();
+        }
+        tolte += vecchi.length;
+      }
+      try { localStorage.setItem(K, String(Date.now())); } catch (e) { }
+      var prima = await fs.collection('impostazioni').doc('pulizia').get();
+      await write('impostazioni', 'pulizia', 'set', { il: nowISO(), tolte: tolte, totale: ((prima.exists && prima.get('totale')) || 0) + tolte });
+    } catch (e) { }
+  }
+
   /* ---------- spazio e foto (solo amministratori, in «Copia dei dati») ----------
      Le foto stanno nel database (raccolta «foto»): il piano gratuito di Firebase ha 1 GB in tutto.
      «fotoInfo» tiene quanto pesa ogni foto. Le foto di prima si contano una volta scaricandole (giroFoto).
@@ -1199,7 +1223,7 @@
     pulisci: function (list, prog) { return ME && ME.ruolo === 'admin' ? fotoPulisci(list, prog) : Promise.reject({ code: 'permission_denied' }); },
     file: function (prog) { return ME && ME.ruolo === 'admin' ? fotoFile(prog) : Promise.reject({ code: 'permission_denied' }); },
     salva: function (p) { return DL.save({ filename: p.nome, data: p.blob }); },
-    pulizia: function () { return null; }
+    pulizia: function () { var L = live('impostazioni'); return L.map.pulizia || null; }
   };
 
   /* ---------- quello che vede l'app ---------- */
