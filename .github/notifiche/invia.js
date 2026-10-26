@@ -52,7 +52,8 @@ function scegli(cfg, oggi, scadenze, scadC, barche, avvisate) {
   return { voci: out, avvisate: nuove };
 }
 
-var NOME = 'Nautica Mare'; // il nome dell'azienda scelto nell'app (impostazioni/aspetto)
+// il nome dell'azienda: quello scelto nell'app (impostazioni/aspetto), altrimenti quello di config.js
+var NOME = (function () { try { var m = require('fs').readFileSync(require('path').join(__dirname, '../../config.js'), 'utf8').match(/NM_ASPETTO\s*=\s*\{[^}]*nome:\s*'([^']+)'/); return m ? m[1] : 'Gestionale cantiere'; } catch (e) { return 'Gestionale cantiere'; } })();
 
 function messaggio(voci) {
   var late = voci.filter(function (v) { return v.late; }).length;

@@ -37,7 +37,7 @@ self.addEventListener('fetch', function (e) {
 self.addEventListener('push', function (e) {
   var p = {}; try { p = e.data ? e.data.json() : {}; } catch (err) { p = { data: { body: e.data ? e.data.text() : '' } }; }
   var d = p.data || {}, n = p.notification || {};
-  var title = d.title || n.title || 'Nautica Mare', body = d.body || n.body || '';
+  var title = d.title || n.title || 'Gestionale cantiere', body = d.body || n.body || '';
   e.waitUntil(self.registration.showNotification(title, { body: body, icon: './icon-192.png', badge: './icon-192.png', tag: d.tag || 'nm-riepilogo', data: { url: d.url || './' } }));
 });
 self.addEventListener('notificationclick', function (e) {

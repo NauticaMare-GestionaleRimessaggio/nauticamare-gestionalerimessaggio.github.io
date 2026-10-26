@@ -115,7 +115,7 @@
     '#nmtoast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 90px);transform:translateX(-50%);z-index:100000;background:#2b2c33;color:#fff;padding:10px 16px;border-radius:12px;font:15px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.4)}';
   function ensureCss() { if (!$('#nmfb-css')) { var st = document.createElement('style'); st.id = 'nmfb-css'; st.textContent = CSS; document.head.appendChild(st); } }
   function logoSrc() { var l = document.getElementById('logo-src'); return l ? l.getAttribute('src') : ''; }
-  function nomeAz() { return window.NM_MARCA ? NM_MARCA.nome() : 'Nautica Mare'; } // nome dell'azienda (Altro › Aspetto)
+  function nomeAz() { return window.NM_MARCA ? NM_MARCA.nome() : 'Gestionale cantiere'; } // nome dell'azienda (Altro › Aspetto)
   function overlay(html) {
     if (!document.body) { document.addEventListener('DOMContentLoaded', function () { overlay(html); }, { once: true }); return null; }
     ensureCss();
@@ -856,7 +856,7 @@
       plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
     } catch (e) { throw { code: 'chiave' }; }
     var data = JSON.parse(new TextDecoder().decode(plain));
-    if (!data || data.app !== 'Nautica Mare' || !data.collezioni) throw { code: 'chiave' };
+    if (!data || (data.app !== 'Gestionale cantiere' && data.app !== 'Nautica Mare') || !data.collezioni) throw { code: 'chiave' }; // le copie fatte prima si chiamavano «Nautica Mare»
     return data;
   }
   async function impMissing(data) {

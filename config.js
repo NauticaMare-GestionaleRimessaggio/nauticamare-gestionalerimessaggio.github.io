@@ -18,6 +18,8 @@ window.NM_VAPID_KEY = 'BCTv5vIm6qaMMgbGdtg4mDd_cFzgt6eOqjMaaCDab8fBBFp707fbjuyF0
    Le azioni di questo account non vengono registrate. Vuoto = nessun avviso. */
 window.NM_AVVISI_A = 'andreatorcini01@gmail.com';
 
-/* Aspetto di partenza per un'altra azienda: nome, i due colori della sfumatura (in alto e in basso) e i file dei loghi
-   messi accanto al sito. Vuoto = quello di Nautica Mare. L'amministratore lo cambia poi dall'app (Altro › Aspetto dell'app).
-   Esempio: window.NM_ASPETTO = { nome: 'Cantiere Rossi', colore1: '#1F4D3A', colore2: '#04140D', logo: 'logo.png', scritta: 'scritta.png' }; */
+/* Aspetto di questo sito: nome dell'azienda, i due colori della sfumatura (in alto e in basso) e i file dei loghi.
+   Senza, l'app parte con un aspetto neutro e chiede all'amministratore di sceglierlo (procedura guidata).
+   L'amministratore lo può poi cambiare dall'app (Altro › Aspetto dell'app). luogo/lat/lon: dove prendere il meteo. */
+window.NM_ASPETTO = { nome: 'Nautica Mare', colore1: '#16304F', colore2: '#06002E', logo: 'marca/logo.webp', scritta: 'marca/scritta.webp',
+  luogo: 'Marina di San Vincenzo', sigla: 'MSV', lat: 43.0961, lon: 10.5357 };
