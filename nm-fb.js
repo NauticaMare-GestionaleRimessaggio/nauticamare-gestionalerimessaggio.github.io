@@ -310,7 +310,7 @@
   /* ---------- persone ---------- */
   var USER = {
     id: function () { return Promise.resolve(ME && ME.uid); },
-    me: function () { return Promise.resolve({ id: ME.uid, name: ME.nome || '', isOwner: ME.ruolo === 'admin' }); },
+    me: function () { var a = String(window.NM_AVVISI_A || '').trim().toLowerCase(); return Promise.resolve({ id: ME.uid, name: ME.nome || '', isOwner: ME.ruolo === 'admin', creatore: !!a && String(ME.email || '').toLowerCase() === a }); },
     isOwner: function () { return !!ME && ME.ruolo === 'admin'; },
     canEdit: function () { return Promise.resolve(!!ME && (ME.ruolo === 'admin' || ME.ruolo === 'editor')); },
     can: function (n) { return Promise.resolve(n === 'data.write' ? true : null); },

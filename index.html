@@ -1340,6 +1340,13 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   }
 
   /* ---------- Viste ---------- */
+  // Spazio quasi pieno: lo misura ogni mattina l'invio delle notifiche (impostazioni/notifiche.spazioLiv), così qui non si legge niente in più
+  function spazioHome() {
+    var c = S.notifCfg || {}, liv = c.spazioLiv || 0;
+    if (!(S.isOwner || S.creatore) || liv < 80) return '';
+    return featCard(liv >= 95 ? 'late' : 'soon', I.photo, 'Spazio ' + (liv >= 95 ? 'quasi finito' : 'quasi pieno') + ': ' + Math.round(c.spazioPct || liv) + '%',
+      Math.round(c.spazioMb || 0) + ' MB di foto su ' + (NT_SPAZIO_GB * 1024) + ' MB del piano gratuito', '', '<button type="button" class="btn" data-act="tab" data-tab="backup">Vedi le foto non più usate</button>');
+  }
   function viewHome() {
     var h = (window.__NM_DEMO ? '<div class="banner"><p><b>Versione di prova.</b> Puoi toccare e modificare tutto: i dati sono di esempio e restano solo su questo dispositivo.</p><div class="acts"><button type="button" class="link" data-act="demo-reset">Ricomincia da capo</button></div></div>' : '') + exampleBanner();
     if (!S.boats.length) {
@@ -1354,6 +1361,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     function primo() { // «In primo piano»: con «Cosa mostrare» si scelgono i tipi di avviso
     var cards = [], no = lyOpz('home', 'primo').no || [], push = function (k, c) { if (c && no.indexOf(k) < 0) cards.push(c); };
     push('crono', crHome()); push('giro', giroHome()); push('fuori', lfHome());
+    push('spazio', spazioHome());
     var pend = myPendingDays();
     if (pend.length) push('conferme', featCard('soon', I.check, pend.length === 1 ? 'Conferma la tua giornata' : 'Hai ' + pend.length + ' giornate da confermare',
       cap(fmtDayLong(pend[0])) + (pend.length > 1 ? ' e altre' : ''), '', '<button type="button" class="btn" data-act="go-scheda" data-d="' + pend[0] + '">Vai alla scheda lavoro</button>'));
@@ -1449,7 +1457,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     return h + lyRender('home', [
       { id: 'cerca', t: 'Cerca', sub: 'barca, cliente, articolo, lavoro', z: ['l'], d: 'l', h: gqBar },
       { id: 'primo', t: 'In primo piano', sub: 'gli avvisi da guardare subito', z: sec, d: 'l', h: primo, opz: [['crono', 'Cronometri in corso o dimenticati'], ['giro', 'Giro di controllo'], ['fuori', 'Barche fuori in ritardo o che rientrano oggi'],
-        ['conferme', 'Giornate da confermare'], ['vari', 'Vari e alaggi di oggi e domani'], ['scad', 'Scadenze delle barche'], ['ferie', 'Ferie e permessi'], ['scadc', 'Scadenze del cantiere'], ['batt', 'Batterie da caricare'], ['mag', 'Ricambi da riordinare']] },
+        ['conferme', 'Giornate da confermare'], ['spazio', 'Spazio quasi pieno (amministratori)'], ['vari', 'Vari e alaggi di oggi e domani'], ['scad', 'Scadenze delle barche'], ['ferie', 'Ferie e permessi'], ['scadc', 'Scadenze del cantiere'], ['batt', 'Batterie da caricare'], ['mag', 'Ricambi da riordinare']] },
       { id: 'meteo', t: 'Meteo', sub: 'vento e mare dei prossimi giorni', z: sec, d: 'l', h: metHome },
       { id: 'prog', t: 'Programma di oggi', z: sec, d: 'l', h: homeProgHtml },
       { id: 'breve', t: 'In breve', sub: 'scadenze, lavorazioni, barche, lavori del mese', z: ['l'], d: 'l', h: breve },
@@ -6548,6 +6556,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
      Il telefono si iscrive (Firebase Cloud Messaging) e salva il suo «indirizzo» in notifiche/{utente}.
      Ogni mattina un controllo automatico su GitHub (.github/workflows/notifiche.yml) legge le scadenze e manda il riepilogo. */
   var NT_DEF = { ora: '07:30', chi: 'tutti', avvisi: 'settimana', preavviso: 30, ripetiScadute: true, sogliaOre: 20, cantiere: true, weekend: false };
+  var NT_SPAZIO_GB = 1; // piano gratuito di Firebase: lo stesso limite di «Copia dei dati»
   function ntCfg() { return Object.assign({}, NT_DEF, S.notifCfg || {}); }
   function ntMine() { return (S.notif || {})[S.myId] || null; }
   function ntDevTok() { try { return localStorage.getItem('nm-push-token') || ''; } catch (e) { return ''; } }
@@ -6563,7 +6572,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   async function ntSave(d) {
     if (!S.myId) return false;
     var cur = ntMine() || {}, r = S.db.collection('notifiche').doc(S.myId);
-    return w(function () { return r.set(Object.assign({ utente: S.myId, tokens: cur.tokens || [], scadenze: cur.scadenze !== false, cronometro: cur.cronometro !== false }, d, { modificato: new Date().toISOString() })); });
+    return w(function () { return r.set(Object.assign({ utente: S.myId, tokens: cur.tokens || [], scadenze: cur.scadenze !== false, cronometro: cur.cronometro !== false, spazio: cur.spazio !== false }, d, { modificato: new Date().toISOString() })); });
   }
   async function ntAttiva() {
     var why = ntSupport(); if (why) { toast(why, true); return; }
@@ -6803,7 +6812,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     var nDev = me ? (me.tokens || []).length : 0;
     if (nDev) h += '<p class="cap" style="margin:8px 4px 0">Attive su ' + nDev + (nDev === 1 ? ' dispositivo' : ' dispositivi') + ' con il tuo account.</p>';
     h += secH('Cosa ricevo') + '<div class="group"><label class="row check" style="padding:12px 14px"><input type="checkbox" data-nt="scadenze"' + (!me || me.scadenze !== false ? ' checked' : '') + (c.chi === 'admin' && !S.isOwner ? ' disabled' : '') + '> Scadenze' + (c.cantiere ? ' delle barche e del cantiere' : ' delle barche') + '</label>' +
-      '<label class="row check" style="padding:12px 14px"><input type="checkbox" data-nt="cronometro"' + (!me || me.cronometro !== false ? ' checked' : '') + '> Il mio cronometro dimenticato acceso (oltre ' + CR_DIMENTICATO + ' ore)</label></div>';
+      '<label class="row check" style="padding:12px 14px"><input type="checkbox" data-nt="cronometro"' + (!me || me.cronometro !== false ? ' checked' : '') + '> Il mio cronometro dimenticato acceso (oltre ' + CR_DIMENTICATO + ' ore)</label>' +
+      (S.isOwner || S.creatore ? '<label class="row check" style="padding:12px 14px"><input type="checkbox" data-nt="spazio"' + (S.creatore || !me || me.spazio !== false ? ' checked' : '') + (S.creatore ? ' disabled' : '') + '> <span>Spazio quasi pieno (foto all’80% e al 95% di ' + NT_SPAZIO_GB + ' GB)' + (S.creatore ? '<br><span class="cap">Per te sempre attivo: controlli i consumi del gestionale</span>' : '') + '</span></label>' : '') + '</div>';
     if (c.chi === 'admin' && !S.isOwner) h += '<p class="cap" style="margin:8px 4px 0">Per ora le scadenze arrivano solo agli amministratori.</p>';
     h += '<p class="cap" style="margin:8px 4px 0">Gli altri avvisi (vari del giorno, programma, magazzino, meteo) arriveranno qui quando li decidete.</p>';
     if (S.isOwner) {
@@ -7753,6 +7763,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     notifiche: { t: 'Notifiche', p: 'Gli avvisi sul telefono per le scadenze e per il cronometro.', li: [
       'Attiva le notifiche su questo telefono: ogni mattina dei giorni lavorativi arriva un solo avviso con le scadenze.',
       'Se lasci il cronometro acceso più di 9 ore, o dal giorno prima, ti arriva un avviso (dalle 7 alle 22:30, una volta sola). Si spegne da «Cosa ricevo».',
+      'Amministratori: quando le foto arrivano all’80% e poi al 95% dello spazio gratuito (1 GB) arriva un avviso al mattino, e in Home compare «Spazio quasi pieno». Si spegne da «Cosa ricevo».',
       'Su iPhone funzionano solo con l’app aggiunta alla schermata Home.',
       'A|Decidi tu l’ora, chi le riceve, quanto prima avvisare, la soglia per le ore motore e se includere le scadenze del cantiere.'] },
     strumenti: { t: 'Strumenti in più', p: 'Gli strumenti facoltativi: l’amministratore li accende o li spegne secondo quello che serve al cantiere.', li: [
@@ -9716,6 +9727,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     if (t.id === 'scad-sel') { V.scadSel = t.value; render(); return; }
     if (t.id === 'bk-file') { var bf = t.files && t.files[0]; t.value = ''; bkPick(bf); return; }
     if (t.getAttribute && t.getAttribute('data-nt') === 'scadenze') { if (await ntSave({ scadenze: !!t.checked })) toast(t.checked ? 'Riceverai le scadenze' : 'Non riceverai più le scadenze'); return; }
+    if (t.getAttribute && t.getAttribute('data-nt') === 'spazio') { if (await ntSave({ spazio: !!t.checked })) toast(t.checked ? 'Ti avviso quando lo spazio è quasi pieno' : 'Niente più avvisi sullo spazio'); return; }
     if (t.getAttribute && t.getAttribute('data-nt') === 'cronometro') { if (await ntSave({ cronometro: !!t.checked })) toast(t.checked ? 'Ti avviso se dimentichi il cronometro acceso' : 'Niente più avvisi del cronometro'); return; }
     if (t.hasAttribute && t.hasAttribute('data-opck')) {
       if (SHEET.op) { var pk = t.getAttribute('data-opck').split(':'), lst = SHEET.op[pk[0]]; if (lst && lst[+pk[1]]) { lst[+pk[1]].ok = !!t.checked; var fo = {}; fo[pk[0]] = lst; saveOp(fo); renderOp(); } }
@@ -9824,7 +9836,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       if (u) {
         S.user = u;
         var me = await u.me();
-        S.me = me || {}; S.myId = (me && me.id) || null; S.isOwner = !!(me && me.isOwner);
+        S.me = me || {}; S.myId = (me && me.id) || null; S.isOwner = !!(me && me.isOwner); S.creatore = !!(me && me.creatore);
         try { S.isEditor = !!(await u.canEdit()); } catch (e) { S.isEditor = S.isOwner; }
         var c = await u.can('data.write');
         if (c === false) S.canWrite = false;
