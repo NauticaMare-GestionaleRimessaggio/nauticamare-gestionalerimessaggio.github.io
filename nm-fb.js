@@ -77,7 +77,7 @@
   })();
 
   /* ---------- schermata di accesso ---------- */
-  var CSS = '#nmfb{position:fixed;inset:0;z-index:99999;background:#06002e;color:#f4f5f7;font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;display:flex;flex-direction:column;align-items:center;overflow-y:auto;padding:calc(env(safe-area-inset-top) + 28px) 18px 32px}' +
+  var CSS = '#nmfb{position:fixed;inset:0;z-index:99999;background:var(--bg,#06002e);color:#f4f5f7;font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;display:flex;flex-direction:column;align-items:center;overflow-y:auto;padding:calc(env(safe-area-inset-top) + 28px) 18px 32px}' +
     '#nmfb .box{width:100%;max-width:400px}#nmfb .logo{display:block;width:78%;max-width:300px;margin:22px auto 26px}#nmfb.load{justify-content:center;padding:24px}#nmfb.load .box{position:relative;max-width:none}#nmfb.load .logo{width:84%;max-width:440px;margin:0 auto}#nmfb.load .spin{position:absolute;left:50%;top:100%;margin:28px 0 0 -17px}' +
     '#nmfb h2{font-size:1.35rem;margin:0 0 6px}#nmfb p{color:#b9bccb;margin:0 0 14px}#nmfb label{display:block;font-size:.9rem;color:#b9bccb;margin:12px 0 6px}' +
     '#nmfb input{width:100%;box-sizing:border-box;font:inherit;font-size:17px;padding:13px 14px;border-radius:12px;border:1px solid #33355a;background:#12114a;color:#fff;outline:none}' +
@@ -115,12 +115,13 @@
     '#nmtoast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 90px);transform:translateX(-50%);z-index:100000;background:#2b2c33;color:#fff;padding:10px 16px;border-radius:12px;font:15px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.4)}';
   function ensureCss() { if (!$('#nmfb-css')) { var st = document.createElement('style'); st.id = 'nmfb-css'; st.textContent = CSS; document.head.appendChild(st); } }
   function logoSrc() { var l = document.getElementById('logo-src'); return l ? l.getAttribute('src') : ''; }
+  function nomeAz() { return window.NM_MARCA ? NM_MARCA.nome() : 'Nautica Mare'; } // nome dell'azienda (Altro › Aspetto)
   function overlay(html) {
     if (!document.body) { document.addEventListener('DOMContentLoaded', function () { overlay(html); }, { once: true }); return null; }
     ensureCss();
     var o = $('#nmfb'); if (!o) { o = document.createElement('div'); o.id = 'nmfb'; document.body.appendChild(o); }
     o.className = html === '<div class="spin"></div>' ? 'load' : ''; // caricamento: logo al centro dello schermo come nella schermata d'avvio, rotellina sotto
-    o.innerHTML = '<div class="box">' + (logoSrc() ? '<img class="logo" alt="Nautica Mare" src="' + logoSrc() + '">' : '<h2>Nautica Mare</h2>') + html + '</div>';
+    o.innerHTML = '<div class="box">' + (logoSrc() ? '<img class="logo" alt="' + esc(nomeAz()) + '" src="' + logoSrc() + '">' : '<h2>' + esc(nomeAz()) + '</h2>') + html + '</div>';
     return o;
   }
   function hideOverlay() { var o = $('#nmfb'); if (o) o.remove(); }
@@ -748,7 +749,7 @@
   }
   function renderCliente() {
     if (!CLIENTE || !ME) return;
-    var h = '<h2>Ciao ' + esc(String(ME.nome || '').split(' ')[0]) + '</h2><p>La tua barca al cantiere Nautica Mare, sempre aggiornata.</p>';
+    var h = '<h2>Ciao ' + esc(String(ME.nome || '').split(' ')[0]) + '</h2><p>La tua barca al cantiere ' + esc(nomeAz()) + ', sempre aggiornata.</p>';
     if (!CL.ids.length) h += '<div class="card"><p style="margin:0">Il cantiere sta collegando la tua barca al tuo account. Appena fatto, la trovi qui.</p></div>';
     CL.ids.forEach(function (id) {
       var d = CL.docs[id];

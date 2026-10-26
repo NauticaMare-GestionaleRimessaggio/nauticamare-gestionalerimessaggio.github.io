@@ -87,10 +87,12 @@ service cloud.firestore {
       function autoreOk(d) { return d.get('creatoDa', request.auth.uid) == request.auth.uid; }
       function autoreUguale() { return cancellato(resource.data) || nuovo().get('creatoDa', '') == resource.data.get('creatoDa', ''); }
       function datiCantiere() { return !(coll in ['utenti', 'config', 'cestino', 'attivita']); }
+      // l'aspetto dell'app (nome dell'azienda, colori, loghi) lo cambia solo l'amministratore
+      function soloAdmin() { return coll == 'impostazioni' && id == 'aspetto'; }
 
       allow read: if staff() && datiCantiere();
-      allow create: if datiCantiere() && (admin() || (staff() && !cancellato(nuovo()) && proprio(nuovo()) && ferieOk(nuovo()) && autoreOk(nuovo())));
-      allow update: if datiCantiere() && (admin() || (staff() && (
+      allow create: if datiCantiere() && (admin() || (!soloAdmin() && staff() && !cancellato(nuovo()) && proprio(nuovo()) && ferieOk(nuovo()) && autoreOk(nuovo())));
+      allow update: if datiCantiere() && (admin() || (!soloAdmin() && staff() && (
         cancellato(nuovo()) ? (cancellato(resource.data) || puoCancellare(resource.data))
           : (proprio(resource.data) && proprio(nuovo()) && ferieOk(nuovo())
             && (cancellato(resource.data) ? autoreOk(nuovo()) : autoreUguale())

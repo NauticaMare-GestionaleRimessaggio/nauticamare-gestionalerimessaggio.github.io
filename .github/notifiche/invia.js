@@ -52,9 +52,11 @@ function scegli(cfg, oggi, scadenze, scadC, barche, avvisate) {
   return { voci: out, avvisate: nuove };
 }
 
+var NOME = 'Nautica Mare'; // il nome dell'azienda scelto nell'app (impostazioni/aspetto)
+
 function messaggio(voci) {
   var late = voci.filter(function (v) { return v.late; }).length;
-  var title = 'Nautica Mare · ' + voci.length + (voci.length === 1 ? ' scadenza' : ' scadenze') + (late ? ' (' + late + (late === 1 ? ' superata)' : ' superate)') : '');
+  var title = NOME + ' · ' + voci.length + (voci.length === 1 ? ' scadenza' : ' scadenze') + (late ? ' (' + late + (late === 1 ? ' superata)' : ' superate)') : '');
   var righe = voci.slice(0, 4).map(function (v) { return v.t; });
   if (voci.length > 4) righe.push('e altre ' + (voci.length - 4) + ' nell’app');
   return { title: title, body: righe.join('\n') };
@@ -67,6 +69,8 @@ async function main() {
   var db = admin.firestore(), prova = process.env.PROVA === '1';
   async function tutti(c) { var s = await db.collection(c).get(), out = []; s.forEach(function (d) { var x = d.data(); if (!x._del) out.push(Object.assign({ id: d.id }, x)); }); return out; }
 
+  var asp = await db.collection('impostazioni').doc('aspetto').get();
+  if (asp.exists && !asp.data()._del && asp.data().nome) NOME = String(asp.data().nome).slice(0, 60);
   var cfgRef = db.collection('impostazioni').doc('notifiche'), cfgDoc = await cfgRef.get(), cfgRaw = cfgDoc.exists && !cfgDoc.data()._del ? cfgDoc.data() : {};
   var cfg = Object.assign({}, DEF, cfgRaw), now = oraRoma(new Date());
   if (!prova) {
@@ -86,7 +90,7 @@ async function main() {
 
   var msg, dest;
   if (prova) {
-    msg = { title: 'Nautica Mare · prova', body: 'Le notifiche funzionano su questo telefono.' };
+    msg = { title: NOME + ' · prova', body: 'Le notifiche funzionano su questo telefono.' };
     dest = iscritti;
   } else {
     var barche = {}; (await tutti('barche')).forEach(function (b) { barche[b.id] = b; });
