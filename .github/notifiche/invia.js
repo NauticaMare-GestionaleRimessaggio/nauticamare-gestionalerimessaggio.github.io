@@ -60,12 +60,35 @@ function messaggio(voci) {
   return { title: title, body: righe.join('\n') };
 }
 
+// Spazio: le foto pesano (fotoInfo.kb) sul GB del piano gratuito di Firebase. Si avvisa salendo all'80% e al 95%, una volta per livello.
+var SPAZIO_MB = 1024;
+function livello(pct) { return pct >= 95 ? 95 : pct >= 80 ? 80 : 0; }
+function creatore() { // l'account di config.js (NM_AVVISI_A) riceve sempre l'avviso sullo spazio
+  try { var m = /NM_AVVISI_A\s*=\s*['"]([^'"]+)['"]/.exec(require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'config.js'), 'utf8')); return m ? m[1].trim().toLowerCase() : ''; } catch (e) { return ''; }
+}
+
 async function main() {
   var admin = require('firebase-admin');
   if (!process.env.FIREBASE_SERVICE_ACCOUNT) { console.log('Manca il segreto FIREBASE_SERVICE_ACCOUNT: notifiche non attive.'); return; }
   admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
   var db = admin.firestore(), prova = process.env.PROVA === '1';
   async function tutti(c) { var s = await db.collection(c).get(), out = []; s.forEach(function (d) { var x = d.data(); if (!x._del) out.push(Object.assign({ id: d.id }, x)); }); return out; }
+  async function manda(dest, msg, tag) {
+    var inviati = 0;
+    for (var i = 0; i < dest.length; i++) {
+      var n = dest[i], tokens = n.tokens.slice();
+      var res = await admin.messaging().sendEachForMulticast({ tokens: tokens, data: { title: msg.title, body: msg.body, url: './', tag: tag }, webpush: { headers: { Urgency: 'high', TTL: '43200' } } });
+      var morti = [];
+      res.responses.forEach(function (x, k) {
+        if (x.success) inviati++;
+        else if (/registration-token-not-registered|invalid-registration-token|invalid-argument/.test((x.error && x.error.code) || '')) morti.push(tokens[k]);
+        else console.log('Errore su un telefono:', x.error && x.error.code);
+      });
+      if (morti.length) await db.collection('notifiche').doc(n.id).update({ tokens: tokens.filter(function (t) { return morti.indexOf(t) < 0; }) });
+    }
+    console.log('Mandate ' + inviati + ' notifiche (' + tag + ') a ' + dest.length + ' persone.');
+  }
+
 
   var cfgRef = db.collection('impostazioni').doc('notifiche'), cfgDoc = await cfgRef.get(), cfgRaw = cfgDoc.exists && !cfgDoc.data()._del ? cfgDoc.data() : {};
   var cfg = Object.assign({}, DEF, cfgRaw), now = oraRoma(new Date());
@@ -89,6 +112,14 @@ async function main() {
     msg = { title: 'Nautica Mare · prova', body: 'Le notifiche funzionano su questo telefono.' };
     dest = iscritti;
   } else {
+    var kb = 0; (await tutti('fotoInfo')).forEach(function (f) { kb += f.kb || 0; });
+    var mb = kb / 1024, pct = mb / SPAZIO_MB * 100, liv = livello(pct), prima = cfgRaw.spazioLiv || 0;
+    await cfgRef.set({ spazioMb: Math.round(mb), spazioPct: Math.round(pct), spazioLiv: liv }, { merge: true });
+    if (liv > prima) {
+      var io = creatore();
+      await manda(iscritti.filter(function (n) { var u = utenti[n.utente || n.id]; return String(u.email || '').toLowerCase() === io || (u.ruolo === 'admin' && n.spazio !== false); }),
+        { title: 'Nautica Mare · spazio ' + (liv >= 95 ? 'quasi finito' : 'quasi pieno') + ' (' + Math.round(pct) + '%)', body: 'Le foto occupano ' + Math.round(mb) + ' MB su ' + SPAZIO_MB + ' MB del piano gratuito. In Altro › Copia dei dati puoi togliere le foto non più usate.' }, 'nm-spazio');
+    }
     var barche = {}; (await tutti('barche')).forEach(function (b) { barche[b.id] = b; });
     var r = scegli(cfg, now.oggi, await tutti('scadenze'), cfg.cantiere ? await tutti('scadCantiere') : [], barche, cfgRaw.avvisate || {});
     await cfgRef.set({ ultimoInvio: now.oggi, avvisate: r.avvisate }, { merge: true });
@@ -97,19 +128,7 @@ async function main() {
     dest = iscritti.filter(function (n) { var u = utenti[n.utente || n.id]; return n.scadenze !== false && (cfg.chi !== 'admin' || u.ruolo === 'admin'); });
   }
 
-  var inviati = 0;
-  for (var i = 0; i < dest.length; i++) {
-    var n = dest[i], tokens = n.tokens.slice();
-    var res = await admin.messaging().sendEachForMulticast({ tokens: tokens, data: { title: msg.title, body: msg.body, url: './', tag: 'nm-riepilogo' }, webpush: { headers: { Urgency: 'high', TTL: '43200' } } });
-    var morti = [];
-    res.responses.forEach(function (x, k) {
-      if (x.success) inviati++;
-      else if (/registration-token-not-registered|invalid-registration-token|invalid-argument/.test((x.error && x.error.code) || '')) morti.push(tokens[k]);
-      else console.log('Errore su un telefono:', x.error && x.error.code);
-    });
-    if (morti.length) await db.collection('notifiche').doc(n.id).update({ tokens: tokens.filter(function (t) { return morti.indexOf(t) < 0; }) });
-  }
-  console.log('Mandate ' + inviati + ' notifiche a ' + dest.length + ' persone.');
+  await manda(dest, msg, 'nm-riepilogo');
 }
 
 module.exports = { scegli: scegli, messaggio: messaggio, oraRoma: oraRoma };
