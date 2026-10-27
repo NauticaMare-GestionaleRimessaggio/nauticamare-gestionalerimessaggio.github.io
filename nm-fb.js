@@ -188,7 +188,9 @@
     if (L.unsub) { L.unsub(); L.unsub = null; }
     var fullDue = !L.full || !L.ts || Date.now() - L.full > FULL_EVERY;
     var q = fs.collection(L.name);
-    if (!fullDue) q = q.where('_ts', '>=', TS.fromMillis(L.ts - 5000));
+    // PIN del tablet: chi non è amministratore né tablet legge solo il suo (vedi firestore.rules), sempre per intero
+    if (L.name === 'pin' && !(ME && (ME.ruolo === 'admin' || ME.tablet))) { fullDue = true; q = q.where('utente', '==', ME ? ME.uid : '-'); }
+    else if (!fullDue) q = q.where('_ts', '>=', TS.fromMillis(L.ts - 5000));
     var first = true;
     L.unsub = q.onSnapshot(function (snap) {
       if (first && fullDue) {
@@ -524,7 +526,7 @@
       if (x.stato === 'attivo') {
         var was = ME; ME = x;
         if (!started) { started = true; hideOverlay(); READY_RES(); afterStart(); }
-        else if (was && was.ruolo !== x.ruolo) location.reload();
+        else if (was && (was.ruolo !== x.ruolo || !!was.tablet !== !!x.tablet)) location.reload();
       } else if (started) location.reload();
       else if (x.stato === 'bloccato') showBlocked();
       else showWait(x);

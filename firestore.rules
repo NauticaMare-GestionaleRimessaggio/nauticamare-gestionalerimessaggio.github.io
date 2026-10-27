@@ -93,7 +93,8 @@ service cloud.firestore {
       function autoreUguale() { return cancellato(resource.data) || nuovo().get('creatoDa', '') == resource.data.get('creatoDa', ''); }
       function datiCantiere() { return !(coll in ['utenti', 'config', 'cestino', 'attivita']); }
 
-      allow read: if staff() && datiCantiere();
+      // i PIN del tablet (impronte di 4 cifre, facili da ricavare): ognuno legge solo il suo; tutti solo amministratori e tablet
+      allow read: if staff() && datiCantiere() && (coll != 'pin' || admin() || tablet() || resource.data.get('utente', '') == request.auth.uid);
       allow create: if datiCantiere() && (admin() || (staff() && !cancellato(nuovo()) && proprio(nuovo()) && ferieOk(nuovo()) && autoreOk(nuovo())));
       allow update: if datiCantiere() && (admin() || (staff() && (
         cancellato(nuovo()) ? (cancellato(resource.data) || puoCancellare(resource.data))
