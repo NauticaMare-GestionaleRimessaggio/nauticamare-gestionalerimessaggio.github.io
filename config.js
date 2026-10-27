@@ -21,4 +21,4 @@ window.NM_AVVISI_A = 'andreatorcini01@gmail.com';
 /* App Check (obbligatorio per l'AI dal 2 novembre 2026): chiave del sito reCAPTCHA registrata in
    Firebase › App Check › App › app web. tipo: 'v3' (reCAPTCHA v3) oppure 'enterprise'.
    Non è segreta. Finché è vuota l'app non manda il gettone e, dal 2/11, l'AI dalla foto non risponde. */
-window.NM_APPCHECK = { tipo: 'enterprise', siteKey: '' };
+window.NM_APPCHECK = { tipo: 'enterprise', siteKey: '6LfVrwIuAAAAALVALQc-MvXxhP6PiO2B4x0ILPx1' };
