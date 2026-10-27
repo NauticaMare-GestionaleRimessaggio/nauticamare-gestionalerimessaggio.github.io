@@ -1108,6 +1108,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   }
   function scadRow(x, showBoat, showOwner) {
     var s = x.s, i = x.i, done = !!s.fatta, lvl = done ? '' : i.level, sub = [];
+    if (s.modello && !(V.tab === 'scadenze' && V.scadBy === 'modello')) sub.push(esc(s.modello));
     if (showBoat) sub.push(esc(boatLabel(i.boat)));
     if (showOwner && i.boat && i.boat.proprietario) sub.push(esc(i.boat.proprietario));
     if (num(s.ricorrenzaMesi) || num(s.ricorrenzaOre)) {
@@ -1489,8 +1490,9 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     ].concat(LY_W));
   }
 
-  // filtro scadenze: per data, per cliente (proprietario della barca) o per articolo (tipo di scadenza)
+  // filtro scadenze: per data, per cliente (proprietario della barca), per articolo (tipo di scadenza) o per modello dell'articolo
   function scadKey(s, by) {
+    if (by === 'modello') { var m = String(s.modello || '').trim(); return m ? [normT(m), m] : ['', 'Modello non segnato']; }
     if (by === 'cliente') { var b = boatById(s.barcaId), o = b && String(b.proprietario || '').trim(); return o ? [normT(o), o] : ['', 'Proprietario non segnato']; }
     var t = String(s.tipo || '').trim(); return t ? [normT(t), t] : ['', 'Senza nome'];
   }
@@ -1503,15 +1505,15 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     if (!S.boats.length) return '<div style="margin-top:14px">' + emptyCard(I.boat, 'Prima aggiungi una barca', 'Ogni scadenza è collegata a una barca.', ['new-boat', 'Aggiungi barca']) + '</div>';
     var by = V.scadBy || 'data', all = openScad(null), open = all, h = '';
     var doneAll = S.scadenze.filter(function (s) { return s.fatta; }).sort(function (a, b) { return String(b.fattaIl || '').localeCompare(String(a.fattaIl || '')); }), done = doneAll;
-    if (all.length || doneAll.length) h += '<div class="chips" role="group" aria-label="Filtra le scadenze">' + [['data', 'Per data'], ['cliente', 'Per cliente'], ['articolo', 'Per articolo']].map(function (o) {
+    if (all.length || doneAll.length) h += '<div class="chips" role="group" aria-label="Filtra le scadenze">' + [['data', 'Per data'], ['cliente', 'Per cliente'], ['articolo', 'Per articolo'], ['modello', 'Per modello']].map(function (o) {
       return '<button type="button" data-act="scad-by" data-v="' + o[0] + '" aria-pressed="' + (by === o[0]) + '">' + o[1] + '</button>';
     }).join('') + '</div>';
-    var owner = by === 'articolo';
+    var owner = by === 'articolo' || by === 'modello';
     function row(x) { return scadRow(x, true, owner); }
     if (by !== 'data' && (all.length || doneAll.length)) {
       var gs = scadGroups(all.concat(doneAll.map(function (s) { return { s: s, i: scadInfo(s) }; })), by), sel = V.scadSel || '';
       if (sel && !gs.some(function (g) { return (g.k || '-') === sel; })) sel = V.scadSel = '';
-      h += '<div style="margin-top:12px">' + field(lab('scad-sel', by === 'cliente' ? 'Cliente' : 'Articolo'), '<select id="scad-sel">' + opts([['', by === 'cliente' ? 'Tutti i clienti' : 'Tutti gli articoli']].concat(gs.map(function (g) {
+      h += '<div style="margin-top:12px">' + field(lab('scad-sel', by === 'cliente' ? 'Cliente' : by === 'modello' ? 'Modello' : 'Articolo'), '<select id="scad-sel">' + opts([['', by === 'cliente' ? 'Tutti i clienti' : by === 'modello' ? 'Tutti i modelli' : 'Tutti gli articoli']].concat(gs.map(function (g) {
         var n = g.items.filter(function (x) { return !x.s.fatta; }).length; return [g.k || '-', g.label + ' (' + n + (n === 1 ? ' aperta' : ' aperte') + ')'];
       })), sel) + '</select>') + '</div>';
       if (!sel) {
@@ -1527,7 +1529,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       var key = sel === '-' ? '' : sel;
       open = all.filter(function (x) { return scadKey(x.s, by)[0] === key; });
       done = doneAll.filter(function (s) { return scadKey(s, by)[0] === key; });
-      if (!open.length) h += '<div class="notice" style="margin-top:14px">Nessuna scadenza aperta per ' + (by === 'cliente' ? 'questo cliente' : 'questo articolo') + '.</div>';
+      if (!open.length) h += '<div class="notice" style="margin-top:14px">Nessuna scadenza aperta per ' + (by === 'cliente' ? 'questo cliente' : by === 'modello' ? 'questo modello' : 'questo articolo') + '.</div>';
     }
     var late = open.filter(function (x) { return x.i.level === 'late'; });
     var soon = open.filter(function (x) { return x.i.level === 'soon'; });
@@ -3732,75 +3734,119 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     draw(); mapCard();
   }
 
-  /* ---------- Porto: posti barca alla Marina di San Vincenzo (pianta e 3D disegnati su canvas, senza librerie) ---------- */
+  /* ---------- Porto: posti barca alla Marina di San Vincenzo (pianta disegnata su canvas, senza librerie; il 3D si rifarà preciso) ---------- */
   var Porto = (function () {
     'use strict';
     function pad2(n) { return String(n).padStart(2, '0'); }
     var pad = pad2;
 
-  /* Pianta del porto in metri: x verso est (la banchina è a x = 118), z verso sud */
-  var QUAY = 118, PON_END = QUAY - 5, FIRST = QUAY - 6;
+  /* Pianta del porto in metri, ricavata dalla foto dall’alto: x verso est, z verso sud.
+     Le coordinate sono in pixel della foto (0,109 m per pixel): mx e mz le portano in metri */
+  var MPX = 0.109;
+  function mx(p) { return (p - 500) * MPX; }
+  function mz(p) { return (p - 1850) * MPX; }
+  function M2(a) { var o = []; for (var i = 0; i < a.length; i += 2) o.push([mx(a[i]), mz(a[i + 1])]); return o; }
+  // Posti barca (397, contati sulla foto con Torcio il 27/10/2026): per ogni zona, in ordine da ovest a est o da nord a sud
+  var PTS = {
+    BC: [1380,2130,1420,2130,1460,2130,1500,2130,1540,2130,1580,2130,1620,2130,1652,2126,1675,2130,1715,2130,1735,2130,1780,2130,1812,2130,1850,2130,1890,2130],
+    MU: [1130,2180,1120,2210,1100,2245,1080,2275,1060,2300,1050,2325,1040,2350,1020,2385,977,2413,950,2430,960,2475,930,2520,920,2555,910,2585,893,2607,880,2640,852,2654,841,2688,833,2741,825,2780,810,2815,800,2840,790,2865,777,2899],
+    PM: [750,2960,809,2990,758,3013,745,3060,802,3053,737,3113,785,3120,733,3169,782,3190,721,3227,771,3249,712,3281,710,3310,755,3325,695,3370,740,3380,685,3455,735,3440,720,3510,660,3580,710,3580],
+    A: [1395,2345,1460,2345,1500,2345,1550,2345,1593,2345,1650,2345,1682,2345,1720,2345,1740,2345,1755,2338,1801,2338,1847,2338,1893,2338],
+    B: [1345,2430,1373,2430,1397,2430,1420,2430,1442,2430,1462,2430,1484,2430,1505,2430,1525,2430,1545,2430,1562,2430,1580,2430,1602,2430,1628,2430,1652,2430,1675,2430,1695,2430,1715,2430,1732,2430,1750,2430,1770,2430,1790,2430,1810,2430,1830,2430,1853,2430,1872,2430,1892,2430],
+    C: [1150,2555,1177,2555,1203,2555,1228,2555,1250,2555,1270,2555,1298,2555,1323,2555,1350,2555,1372,2555,1395,2555,1420,2555,1445,2555,1470,2555,1492,2555,1515,2555,1538,2555,1560,2555,1585,2555,1605,2555,1630,2555,1655,2555,1675,2555,1700,2555,1721,2541,1742,2555,1770,2555,1795,2555,1818,2555,1845,2555,1872,2555,1895,2555],
+    D: [1120,2650,1155,2650,1185,2650,1223,2650,1250,2650,1282,2650,1312,2650,1350,2650,1371,2660,1395,2650,1435,2650,1468,2650,1500,2650,1530,2650,1568,2650,1598,2650,1625,2650,1655,2650,1690,2650,1722,2650,1755,2650,1788,2650,1820,2650,1855,2650,1890,2650],
+    E: [985,2864,1030,2870,1072,2870,1115,2870,1162,2870,1200,2870,1240,2870,1277,2870,1315,2870,1353,2870,1393,2867,1415,2870,1470,2870,1508,2870,1548,2870,1590,2870,1625,2870,1662,2870,1702,2870,1740,2870,1782,2870,1819,2853,1855,2840],
+    F: [936,2968,984,2996,1030,3005,1080,3005,1130,3005,1170,3005,1215,3005,1255,3005,1300,3005,1355,3005,1390,3005,1435,3005,1472,3005,1518,3005,1560,3005,1608,3005,1650,3005,1695,3005,1740,3005,1780,3005,1818,3005],
+    G: [942,3268,985,3280,1033,3280,1078,3280,1125,3280,1168,3280,1215,3280,1260,3280,1300,3280,1348,3280,1392,3280,1435,3280,1477,3280,1520,3280,1562,3280,1610,3280,1652,3280,1695,3280,1738,3280,1780,3280,1820,3280],
+    H: [930,3360,990,3425,1033,3425,1085,3425,1125,3425,1170,3425,1215,3425,1260,3425,1300,3425,1345,3425,1390,3425,1435,3425,1477,3425,1525,3425,1570,3425,1615,3425,1655,3425,1700,3425,1740,3425,1780,3425,1820,3425],
+    I: [921,3738,960,3720,1012,3720,1065,3720,1115,3720,1162,3720,1215,3720,1268,3720,1320,3720,1370,3720,1420,3720,1475,3720,1522,3720,1578,3720,1625,3720,1675,3720,1725,3720,1775,3720,1819,3726],
+    L: [918,3863,960,3885,1012,3868,1065,3885,1120,3885,1168,3885,1218,3885,1270,3885,1320,3885,1370,3885,1420,3885,1475,3885,1522,3885,1578,3885,1625,3885,1675,3885,1725,3885,1775,3885,1820,3868],
+    M: [870,4260,950,4260,1010,4260,1060,4260,1120,4260,1175,4260,1230,4260,1280,4260,1340,4260,1388,4260,1440,4260,1490,4260,1550,4260,1605,4260,1665,4260,1715,4260,1775,4260,1825,4260],
+    N: [875,4440,955,4440,1012,4440,1065,4440,1125,4440,1175,4440,1235,4440,1280,4440,1340,4440,1392,4440,1450,4440,1500,4440,1560,4440,1605,4440,1660,4440,1715,4440,1780,4440,1830,4440],
+    O: [886,4836,955,4820,1015,4820,1065,4820,1125,4820,1172,4820,1230,4820,1282,4820,1335,4820,1390,4820,1452,4820,1500,4820,1560,4820,1610,4820,1668,4820,1720,4820,1780,4820,1830,4820],
+    P: [880,5000,958,5000,1018,5000,1085,5000,1135,5000,1190,5000,1235,5000,1285,5000,1338,5000,1390,5000,1435,5000,1480,5000,1530,5000,1585,5000,1635,5000,1690,5000,1735,5000,1790,5000,1835,5000],
+    Q: [1215,5310,1272,5310,1325,5310,1372,5310,1422,5310,1472,5310,1530,5310,1575,5310,1632,5310,1680,5310,1730,5310,1782,5310,1827,5317,1450,5445,1710,5445],
+    DA: [1330,5650,1330,5685,1330,5735,1330,5805,1330,5875,1330,5925,1330,5985,1330,6040,1330,6095,1330,6155,1330,6215,1740,5515,1740,5570,1740,5635,1740,5695,1740,5750,1740,5810,1740,5875,1740,5935,1740,5995,1740,6050,1740,6100,1740,6140,1740,6180,1740,6220],
+    AE: [1000,5638,1000,5699,980,6220]
+  };
+  // Bordo della diga verso il porto (banchina del muro, poi sotto la diga) e verso il mare, da nord a sud
+  var DIGA_IN = M2([1180, 1850, 1110, 2150, 1060, 2230, 1000, 2300, 935, 2400, 880, 2500, 835, 2600, 800, 2700, 770, 2800, 755, 2900, 740, 2930, 725, 3050, 705, 3150, 680, 3250, 655, 3350, 640, 3450, 620, 3550, 605, 3650, 595, 3800, 588, 4500, 585, 6340]);
+  var DIGA_OUT = M2([780, 1850, 720, 2100, 640, 2300, 580, 2500, 545, 2700, 520, 2900, 505, 3100, 498, 3400, 495, 6340]);
+  // Pontili: fila a nord e fila a sud, estremi in pixel [ovest, est, nord, sud]
   var PONTILI = [
-    { id: 'A', z: 18, x0: 75, w: 3, L: 9, ws: [3, 2], Ls: [9, 6] }, { id: 'B', z: 50, x0: 58, w: 3.5, L: 10 }, { id: 'C', z: 84, x0: 40, w: 4, L: 11 },
-    { id: 'D', z: 120, x0: 37, w: 4, L: 11 }, { id: 'E', z: 156, x0: 37, w: 4, L: 11 }, { id: 'F', z: 194, x0: 30, w: 4.5, L: 12.5 },
-    { id: 'G', z: 248, x0: 37, w: 4.5, L: 12.5 }, { id: 'H', z: 288, x0: 62, w: 5, L: 13.5 }
+    { f: ['A', 'B'], r: [1347, 1905, 2362, 2383] }, { f: ['C', 'D'], r: [1120, 1905, 2592, 2608] }, { f: ['E', 'F'], r: [940, 1850, 2924, 2950] },
+    { f: ['G', 'H'], r: [925, 1850, 3337, 3356] }, { f: ['I', 'L'], r: [920, 1850, 3800, 3815] }, { f: ['M', 'N'], r: [845, 1850, 4336, 4350] },
+    { f: ['O', 'P'], r: [860, 1850, 4908, 4921] }, { f: ['Q'], r: [1197, 1850, 5395, 5432], fisso: true }
   ];
-  // Bordo interno della diga (dalla radice a nord fino alla testata col Marinaio): ricavato dalla distanza tra diga e testate dei pontili
-  var DIGA = [[78, -95], [66, -60], [56, -44], [52, -20], [48, 18], [35, 50], [17, 84], [6, 118], [3, 140], [2, 200], [2, 260], [2, 320], [4, 372], [10, 398]];
-  var DCUM = [0]; for (var dq = 1; dq < DIGA.length; dq++) DCUM.push(DCUM[dq - 1] + Math.hypot(DIGA[dq][0] - DIGA[dq - 1][0], DIGA[dq][1] - DIGA[dq - 1][1]));
-  function digaAt(sv) { // punto sul bordo interno a sv metri dalla radice, con la normale verso il porto
-    for (var q = 0; q < DIGA.length - 1; q++) if (sv <= DCUM[q + 1] || q === DIGA.length - 2) {
-      var u = (sv - DCUM[q]) / (DCUM[q + 1] - DCUM[q]), dx = DIGA[q + 1][0] - DIGA[q][0], dz = DIGA[q + 1][1] - DIGA[q][1], l = Math.hypot(dx, dz);
-      return { x: DIGA[q][0] + dx * u, z: DIGA[q][1] + dz * u, nx: dz / l, nz: -dx / l };
-    }
+  var PMURO = M2([785, 2920, 690, 3630]), PMW = 3; // pontile stretto lungo il muro: barche di fianco sui due lati
+  var MOLO_DA = [1055, 1220, 5620, 6300]; // molo della darsena
+  // Zone: tipo di ormeggio, bordo a cui si legano, lunghezza del posto stimata (m) e colore della lettera sulla mappa
+  var ZONE = {
+    BC: { n: 'Banchina cantiere', t: 'row', e: 2075, s: 1, L: 12, c: '#FFE119' },
+    MU: { n: 'Muro', t: 'edge', lines: [DIGA_IN], L: 11, c: '#F58231' },
+    PM: { n: 'Pontile muro', t: 'along', L: 6.5, c: '#B03A3A' },
+    A: { n: 'Fila A · pescatori e residenti', t: 'row', e: 2362, s: -1, L: 6, c: '#E6194B' },
+    B: { n: 'Fila B · pescatori e residenti', t: 'row', e: 2383, s: 1, L: 7, c: '#FABED4' },
+    C: { n: 'Fila C · 7 m', t: 'row', e: 2592, s: -1, L: 7, c: '#3CB44B' },
+    D: { n: 'Fila D · 9 m', t: 'row', e: 2608, s: 1, L: 9, c: '#AAFFC3' },
+    E: { n: 'Fila E · 11 m', t: 'row', e: 2924, s: -1, L: 11, c: '#0082C8', fg: 1 },
+    F: { n: 'Fila F · 13 m', t: 'row', e: 2950, s: 1, L: 13, c: '#46F0F0', fg: 1 },
+    G: { n: 'Fila G · 13 m', t: 'row', e: 3337, s: -1, L: 13, c: '#AA6E28', fg: 1 },
+    H: { n: 'Fila H · 13 m', t: 'row', e: 3356, s: 1, L: 13, c: '#FFFAC8', fg: 1 },
+    I: { n: 'Fila I · 15 m', t: 'row', e: 3800, s: -1, L: 15, c: '#3F51D8', fg: 1 },
+    L: { n: 'Fila L · 15 m', t: 'row', e: 3815, s: 1, L: 15, c: '#D2F53C', fg: 1 },
+    M: { n: 'Fila M · 18 m', t: 'row', e: 4336, s: -1, L: 18, c: '#F032E6', fg: 1 },
+    N: { n: 'Fila N · 18 m', t: 'row', e: 4350, s: 1, L: 18, c: '#808000', fg: 1 },
+    O: { n: 'Fila O · 18 m', t: 'row', e: 4908, s: -1, L: 18, c: '#1A1A1A', fg: 1 },
+    P: { n: 'Fila P · 15 m', t: 'row', e: 4921, s: 1, L: 15, c: '#FFFFFF', fg: 1 },
+    Q: { n: 'Fila Q · 15 m', t: 'row', e: 5395, s: -1, L: 15, c: '#FFD7B4', sud: 5432 },
+    DA: { n: 'Darsena', t: 'edge', lines: [M2([1220, 5600, 1220, 6300]), M2([1850, 5450, 1850, 6300])], L: 22, c: '#9A9A9A' },
+    AE: { n: 'Accosti esterni', t: 'edge', lines: [M2([1055, 5550, 1055, 6300])], L: 12, c: '#9B30C8' }
+  };
+  function nearOn(lines, x, z) { // punto più vicino sui bordi, con la direzione del bordo
+    var best = null;
+    lines.forEach(function (ln) {
+      for (var i = 0; i < ln.length - 1; i++) {
+        var a = ln[i], b = ln[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / l2));
+        var qx = a[0] + dx * t, qz = a[1] + dz * t, d = Math.hypot(x - qx, z - qz), l = Math.sqrt(l2);
+        if (!best || d < best.d) best = { x: qx, z: qz, d: d, tx: dx / l, tz: dz / l };
+      }
+    });
+    var nx = -best.tz, nz = best.tx; if ((x - best.x) * nx + (z - best.z) * nz < 0) { nx = -nx; nz = -nz; }
+    best.nx = nx; best.nz = nz; return best;
   }
-  function digaS(zq) { for (var q = 0; q < DIGA.length - 1; q++) if (zq <= DIGA[q + 1][1]) return DCUM[q] + (DCUM[q + 1] - DCUM[q]) * (zq - DIGA[q][1]) / (DIGA[q + 1][1] - DIGA[q][1]); return DCUM[DIGA.length - 1]; }
-  function sideW(p, s) { return p.ws ? p.ws[s < 0 ? 0 : 1] : p.w; }
-  function sideL(p, s) { return p.Ls ? p.Ls[s < 0 ? 0 : 1] : p.L; }
-  var NQ = { z: -38, x0: 83, x1: 116, w: 3, L: 9 }; // banchina nord
-  var MSV = { xB: 70, xS: 75, xP: 77, yS: -20, yP: -12 }; // piazzale e alaggio del cantiere MSV: blocco a ovest, vasca dell'alaggio, molo stretto del travel lift
-  var PP = { a: [25, 88], b: [11, 145], w: 2 }; // pontile stretto lungo la diga
+  function gapW(pts, i, along) { // larghezza del posto: distanza dai vicini nella stessa fila
+    var g = Infinity;
+    [i - 1, i + 1].forEach(function (j) { if (j >= 0 && j < pts.length && (!along || pts[j].side === pts[i].side)) g = Math.min(g, Math.hypot(pts[j].x - pts[i].x, pts[j].z - pts[i].z)); });
+    return Math.max(2.4, Math.min(7, g === Infinity ? 4 : g));
+  }
 
   var BERTHS = [];
   var BY = {};
   function addBerth(o) { o.i = BERTHS.length; BERTHS.push(o); BY[o.id] = o; }
-  PONTILI.forEach(function (p) {
-    var k = 0;
-    [-1, 1].forEach(function (s) {
-      var w = sideW(p, s), L = sideL(p, s), n = Math.floor((PON_END - 1 - p.x0 - 1) / w);
-      for (var i = 0; i < n; i++) {
-        var cx = FIRST - w * (i + 0.5), z0 = p.z + s * 1.25;
-        addBerth({ id: p.id + '-' + pad(++k), pon: p.id, zona: 'Pontile ' + p.id, cx: cx, cz: z0 + s * L / 2, hx: 0, hz: s, len: L, wid: w, base: [cx, z0] });
+  Object.keys(PTS).forEach(function (k) {
+    var Zc = ZONE[k], raw = PTS[k], pts = [];
+    for (var i = 0; i < raw.length; i += 2) pts.push({ x: mx(raw[i]), z: mz(raw[i + 1]), pz: raw[i + 1] });
+    if (Zc.t === 'along') pts.forEach(function (p) { var q = nearOn([PMURO], p.x, p.z); p.side = q.nx > 0 ? 1 : -1; });
+    pts.forEach(function (p, i) {
+      var id = k + (i + 1), o = { id: id, pon: k, zona: Zc.n };
+      if (Zc.t === 'row' && Zc.sud && p.pz > Zc.sud) { // fila Q: le due barche di fianco sul lato sud del pontile fisso
+        var w = 4.5, bz = mz(Zc.sud);
+        o.hx = 1; o.hz = 0; o.len = Zc.L; o.wid = w; o.base = [p.x, bz]; o.cx = p.x; o.cz = bz + w / 2; o.along = -1;
+      } else if (Zc.t === 'row') {
+        var e = mz(Zc.e);
+        o.hx = 0; o.hz = Zc.s; o.len = Zc.L; o.wid = gapW(pts, i); o.base = [p.x, e]; o.cx = p.x; o.cz = e + Zc.s * Zc.L / 2;
+      } else if (Zc.t === 'edge') {
+        var q = nearOn(Zc.lines, p.x, p.z);
+        o.hx = q.nx; o.hz = q.nz; o.len = Zc.L; o.wid = gapW(pts, i); o.base = [q.x, q.z]; o.cx = q.x + q.nx * Zc.L / 2; o.cz = q.z + q.nz * Zc.L / 2;
+      } else { // all'inglese lungo il pontile del muro
+        var r = nearOn([PMURO], p.x, p.z), w2 = 3.2, bx = r.x + r.nx * PMW / 2, bz2 = r.z + r.nz * PMW / 2;
+        o.hx = r.tx; o.hz = r.tz; o.len = Zc.L; o.wid = w2; o.base = [bx, bz2]; o.cx = bx + r.nx * w2 / 2; o.cz = bz2 + r.nz * w2 / 2;
+        o.along = (r.nx * -r.tz + r.nz * r.tx) > 0 ? 1 : -1;
       }
+      addBerth(o);
     });
   });
-  // Banchina nord: barche di prua o di poppa alla banchina
-  (function () { var n = Math.floor((NQ.x1 - NQ.x0) / NQ.w); for (var i = 0; i < n; i++) { var cx = NQ.x1 - NQ.w * (i + 0.5); addBerth({ id: 'N-' + pad(i + 1), pon: 'N', zona: 'Banchina nord', cx: cx, cz: NQ.z + NQ.L / 2, hx: 0, hz: 1, len: NQ.L, wid: NQ.w, base: [cx, NQ.z] }); } })();
-  // Darsena sud: barche grandi di poppa alla banchina e al molo
-  for (var i = 0; i < 7; i++) { var z = 321 + i * 6.3 + 3.15; addBerth({ id: 'Z-' + pad(i + 1), pon: 'Z', zona: 'Darsena, banchina', cx: QUAY - 9, cz: z, hx: -1, hz: 0, len: 18, wid: 6.3, base: [QUAY, z] }); }
-  for (var j = 0; j < 8; j++) { var z2 = 318 + j * 5.8 + 2.9; addBerth({ id: 'Z-' + pad(j + 8), pon: 'Z', zona: 'Darsena, molo', cx: 57 + 8, cz: z2, hx: 1, hz: 0, len: 16, wid: 5.8, base: [57, z2] }); }
-  // Molo di sopraflutto: di poppa alla diga, barche grandi verso la radice, poi medie e piccole
-  (function () {
-    var k = 0, sv = digaS(MSV.yS) + 2;
-    function grp(n, w, L) {
-      for (var t = 0; t < n; t++) {
-        var a = digaAt(sv + w / 2); sv += w;
-        addBerth({ id: 'M-' + pad(++k), pon: 'M', zona: 'Molo di sopraflutto', cx: a.x + a.nx * (0.6 + L / 2), cz: a.z + a.nz * (0.6 + L / 2), hx: a.nx, hz: a.nz, len: L, wid: w, base: [a.x + a.nx * 0.6, a.z + a.nz * 0.6] });
-      }
-    }
-    grp(7, 5.3, 15); sv = Math.max(sv, digaS(16)); grp(8, 4.2, 11); sv = digaS(65); grp(4, 3.4, 8.5);
-  })();
-  // Pontile stretto lungo la diga, davanti ai pontili C e D: barche all'inglese sui due lati
-  (function () {
-    var dx = PP.b[0] - PP.a[0], dz = PP.b[1] - PP.a[1], l = Math.hypot(dx, dz), ux = dx / l, uz = dz / l, px = -uz, pz = ux, n = 6, slot = (l - 1.5) / n, k = 0;
-    PP.len = l; PP.u = [ux, uz];
-    [-1, 1].forEach(function (q) { // -1 lato verso i pontili, 1 lato verso la diga
-      for (var i = 0; i < n; i++) {
-        var t = 1 + slot * (i + 0.5), mx = PP.a[0] + ux * t, mz = PP.a[1] + uz * t, off = PP.w / 2 + 1.8;
-        addBerth({ id: 'P-' + pad(++k), pon: 'P', zona: 'Pontile lungo la diga', cx: mx + px * q * off, cz: mz + pz * q * off, hx: ux, hz: uz, len: slot, wid: 3.6, base: [mx + px * q * PP.w / 2, mz + pz * q * PP.w / 2], along: q });
-      }
-    });
-  })();
 
   var LIGHT = norm([-0.45, 0.82, 0.38]);
   function norm(v) { var l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; }
@@ -3889,182 +3935,66 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     face([[x0, y1, z1], [x0, y1, z0], [x0, y0, z0], [x0, y0, z1]], colSide, { n: [-1, 0, 0] });
     face([[x1, y1, z0], [x1, y1, z1], [x1, y0, z1], [x1, y0, z0]], colSide, { n: [1, 0, 0] });
   }
+  function rgbS(c) { return 'rgb(' + c.join(',') + ')'; }
+  function flat(a, fill) { GROUND.push({ p: a.map(function (q) { return [q[0], 0, q[1]]; }), fill: fill }); }
+  function rectPx(x0, x1, z0, z1) { return [[mx(x0), mz(z0)], [mx(x1), mz(z0)], [mx(x1), mz(z1)], [mx(x0), mz(z1)]]; }
+  function band(a, b, w) { var dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz), px = -dz / l * w / 2, pz = dx / l * w / 2; return [[a[0] + px, a[1] + pz], [b[0] + px, b[1] + pz], [b[0] - px, b[1] - pz], [a[0] - px, a[1] - pz]]; }
+  function offLine(ln, d) { // bordo spostato di d metri verso il mare (a ovest)
+    return ln.map(function (q, i) {
+      var a = ln[Math.max(0, i - 1)], c = ln[Math.min(ln.length - 1, i + 1)], dx = c[0] - a[0], dz = c[1] - a[1], l = Math.hypot(dx, dz);
+      return [q[0] - dz / l * d, q[1] + dx / l * d];
+    });
+  }
   function buildScene() {
-    // Mare e terra (a quota 0, disegnati per primi)
-    GROUND.push({ p: [[-3000, 0, -3000], [3000, 0, -3000], [3000, 0, 3000], [-3000, 0, 3000]], fill: 'rgb(' + C.seaFar.join(',') + ')' });
-    GROUND.push({ p: [[-60, 0, -120], [QUAY, 0, -120], [QUAY, 0, 420], [-60, 0, 420]], fill: 'rgb(' + C.sea.join(',') + ')' });
-    GROUND.push({ p: [[QUAY, 0, -400], [900, 0, -400], [900, 0, 900], [QUAY, 0, 900]], fill: 'rgb(' + C.land.join(',') + ')' });
-
-    // Banchina est (Piazza F.lli Serini), moli della darsena, bitte
-    box(QUAY, 138, -40, 384, -0.6, 1.3, C.quay, C.quaySide);
-    box(50, QUAY, 366, 380, -0.6, 1.5, C.quay, C.quaySide);
-    box(50, 57, 316, 380, -0.6, 1.5, C.quay, C.quaySide);
-    // Cantiere MSV: piazzale tra la diga e il capannone, barche a terra, vasca dell'alaggio con il travel lift
-    var PIAZ = hex('#6F7178'), dN = digaAt(digaS(NQ.z - 10)), dB = digaAt(digaS(NQ.z)), dS = digaAt(digaS(MSV.yS));
-    GROUND.push({ p: [[dN.x, 0, NQ.z - 10], [66, 0, -60], [78, 0, -95], [84, 0, -140], [QUAY, 0, -140], [QUAY, 0, NQ.z - 10]], fill: 'rgb(' + C.land.join(',') + ')' });
-    GROUND.push({ p: [[dN.x, 1.3, NQ.z - 10], [66, 1.3, -60], [78, 1.3, -95], [92, 1.3, -95], [92, 1.3, NQ.z - 10]], fill: 'rgb(' + PIAZ.join(',') + ')' });
-    strip(dN.x, QUAY, NQ.z - 10, NQ.z, -0.6, 1.3, C.quay, C.quaySide, 12);
-    prism(fixWinding([[dB.x, NQ.z], [MSV.xB, NQ.z], [MSV.xB, MSV.yS], [dS.x, MSV.yS]]), -0.6, 1.3, PIAZ, C.quaySide);
-    box(MSV.xS, MSV.xP, NQ.z, MSV.yP, -0.6, 1.3, C.quay, C.quaySide);
-    box(93, 117, -90, NQ.z - 11, 0, 9, C.yardRoof, C.yard); // capannone sulla banchina nord
-    var gY = addGroup(76, -50, 46, 110);
-    CURG = gY;
-    var landBoat = function (cx, cz, ux, uz, L, B, y0) { // barca a terra sull'invaso
-      var px = -uz, pz = ux, top = y0 + 1.1 + L * 0.05;
-      var P = function (u, v) { return [cx + ux * u + px * v, cz + uz * u + pz * v]; };
-      obox(cx, cz, ux, uz, L * 0.28, B * 0.32, y0, y0 + 0.9, C.bitta, C.bitta);
-      prism(fixWinding([[-L / 2, -B / 2], [0.12 * L, -B / 2], [0.34 * L, -0.38 * B], [L / 2, 0], [0.34 * L, 0.38 * B], [0.12 * L, B / 2], [-L / 2, B / 2]].map(function (q) { return P(q[0], q[1]); })), y0 + 0.9, top, C.hull, C.hullSide);
-      prism(fixWinding([P(-0.3 * L, -0.3 * B), P(0.06 * L, -0.27 * B), P(0.06 * L, 0.27 * B), P(-0.3 * L, 0.3 * B)]), top, top + 0.9, C.cabin, C.glass);
-    };
-    [[-88, 5, 11], [-78, 5, 12], [-68, 5, 10.5], [-84, 11.5, 10], [-74, 11.5, 11]].forEach(function (q) { // in fila lungo la diga
-      var d = digaAt(digaS(q[0])), ux = -d.nz, uz = d.nx; landBoat(d.x + d.nx * q[1], d.z + d.nz * q[1], ux, uz, q[2], 3.6, 1.3);
+    // Mare, terra a est (lungomare e piazza) e a nord (cantiere)
+    GROUND.push({ p: [[-3000, 0, -3000], [3000, 0, -3000], [3000, 0, 3000], [-3000, 0, 3000]], fill: rgbS(C.seaFar) });
+    flat(M2([590, 1850, 1900, 1850, 1900, 6340, 590, 6340]), rgbS(C.sea));
+    flat(rectPx(1900, 2600, 1300, 6800), rgbS(C.land));
+    flat(rectPx(1900, 1960, 1850, 6340), rgbS(C.quay));
+    flat(M2([1000, 1300, 1900, 1300, 1900, 2075, 1360, 2075, 1360, 2060, 1215, 2060, 1215, 2195, 1150, 2200, 1110, 2150, 1180, 1850]), 'rgb(111,113,120)');
+    flat(rectPx(1360, 1900, 2040, 2075), rgbS(C.quay)); // banchina del cantiere
+    flat(rectPx(1560, 1900, 1700, 2040), rgbS(C.yardRoof)); // capannone
+    flat(band([mx(1350), mz(2060)], [mx(1270), mz(2235)], 3), rgbS(C.quay)); // molo stretto accanto all'alaggio
+    // Diga: scogliera verso il mare e camminamento con il muro verso il porto
+    flat(DIGA_OUT.concat(DIGA_IN.slice().reverse()), rgbS(C.rock));
+    var walk = offLine(DIGA_IN, 8);
+    flat(DIGA_IN.concat(walk.slice().reverse()), rgbS(C.walk));
+    for (var i = 0; i < walk.length - 1; i++) flat(band(walk[i], walk[i + 1], 1.2), rgbS(C.wallW));
+    // Pontili galleggianti e fisso, passerella di collegamento sul lato est
+    flat(rectPx(1850, 1875, 2800, 6250), rgbS(C.pont));
+    PONTILI.forEach(function (p) { flat(rectPx(p.r[0], p.r[1], p.r[2], p.r[3]), rgbS(p.fisso ? C.quay : C.pont)); });
+    flat(band(PMURO[0], PMURO[1], PMW), rgbS(C.pont));
+    // Finger tra un posto e l'altro sulle file da E a P
+    Object.keys(ZONE).forEach(function (k) {
+      var Zc = ZONE[k]; if (!Zc.fg) return;
+      var bs = BERTHS.filter(function (b) { return b.pon === k; }).sort(function (a, b) { return a.cx - b.cx; });
+      for (var j = 0; j <= bs.length; j++) {
+        var x = j === 0 ? bs[0].cx - bs[0].wid / 2 : j === bs.length ? bs[j - 1].cx + bs[j - 1].wid / 2 : (bs[j - 1].cx + bs[j].cx) / 2, e = mz(Zc.e), e2 = e + Zc.s * Zc.L * 0.6;
+        flat([[x - 0.3, Math.min(e, e2)], [x + 0.3, Math.min(e, e2)], [x + 0.3, Math.max(e, e2)], [x - 0.3, Math.max(e, e2)]], rgbS(C.finger));
+      }
     });
-    [[89, -80], [89, -67], [84, -58]].forEach(function (q) { landBoat(q[0], q[1], 0, 1, 10, 3.4, 1.3); }); // davanti al capannone
-    [57.5, 61.5, 65.5].forEach(function (x) { landBoat(x, (NQ.z + MSV.yS) / 2, 0, 1, 11, 3.4, 1.3); }); // sul blocco accanto alla vasca
-    var TL = hex('#2F5FA8'), tz0 = NQ.z + 2, tz1 = NQ.z + 9, tx0 = MSV.xB - 0.4, tx1 = MSV.xS + 0.4; // travel lift a cavallo della vasca
-    [[tx0, tz0], [tx1, tz0], [tx0, tz1], [tx1, tz1]].forEach(function (q) { box(q[0] - 0.3, q[0] + 0.3, q[1] - 0.3, q[1] + 0.3, 1.3, 9, TL, TL); });
-    box(tx0 - 0.3, tx0 + 0.3, tz0 - 0.3, tz1 + 0.3, 8.2, 9, TL, TL); box(tx1 - 0.3, tx1 + 0.3, tz0 - 0.3, tz1 + 0.3, 8.2, 9, TL, TL);
-    box(tx0 - 0.3, tx1 + 0.3, tz0 - 0.3, tz0 + 0.3, 8.2, 9, TL, TL);
-    [tz0 + 2, tz1 - 2].forEach(function (z) { LINES.push({ a: [tx0, 8.2, z], b: [(tx0 + tx1) / 2, 1.2, z], col: '#C9CDD3', w: 0.8, bi: -1, g: gY }); LINES.push({ a: [tx1, 8.2, z], b: [(tx0 + tx1) / 2, 1.2, z], col: '#C9CDD3', w: 0.8, bi: -1, g: gY }); });
-    CURG = -1;
-    LABELS.push({ t: 'Cantiere MSV', x: 78, y: 4, z: -70, big: false });
-    LABELS.push({ t: 'Alaggio', x: (MSV.xB + MSV.xS) / 2, y: 2.5, z: MSV.yP + 2, big: false });
-    gN = addGroup((NQ.x0 + NQ.x1) / 2, NQ.z + 4, 22, 150);
-    CURG = gN; for (var nb = NQ.x1; nb >= NQ.x0 - 0.1; nb -= NQ.w) box(nb - 0.3, nb + 0.3, NQ.z - 0.6, NQ.z - 0.1, 1.3, 1.8, C.bitta, C.bitta); CURG = -1;
-    LABELS.push({ t: 'N', x: NQ.x0 - 2.5, y: 1.6, z: NQ.z + 11, big: true });
-    // Fanale verde in testa al molo sud
-    prism(ngon(52, 373, 1, 8), 1.5, 6.5, hex('#2F8F57'), hex('#E8E8E4'));
-    // Scogliera sul lato mare del molo sud
-    CURG = addGroup(85, 386, 45, 150);
-    for (var sx0 = 52; sx0 < 136; sx0 += 3.6) rock(sx0 + R2(), 383.5 + R2() * 1.5, 1.6 + R2() * 0.5, -0.3, 1.5 + R2() * 0.6, 0.85 + R2() * 0.3);
-    CURG = -1;
-    face([[50, 1.2, 380], [136, 1.2, 380], [136, 0, 388], [50, 0, 388]], C.rock, { n: norm([0, 0.8, 0.6]) });
-
-    // ---------- Diga foranea: camminamento della Passeggiata del Marinaio, muro paraonde, scogliera lato mare ----------
-    var inn = DIGA, N = [];
-    for (var i = 0; i < inn.length; i++) {
-      var a = inn[Math.max(0, i - 1)], c = inn[Math.min(inn.length - 1, i + 1)], dx = c[0] - a[0], dz = c[1] - a[1], l = Math.hypot(dx, dz);
-      N.push([-dz / l, dx / l]); // verso il mare aperto
-    }
-    function off(i, d) { return [inn[i][0] + N[i][0] * d, inn[i][1] + N[i][1] * d]; }
-    var Y_WALK = 3.4, Y_WALL = 4.9;
-    function slopeY(o) { return o <= 8.6 ? 4.4 : Math.max(0, 4.4 * (24 - o) / (24 - 8.6)); }
-    function lerpP(s, t, d) { var nx = N[s][0] * (1 - t) + N[s + 1][0] * t, nz = N[s][1] * (1 - t) + N[s + 1][1] * t, nl = Math.hypot(nx, nz); return [inn[s][0] + (inn[s + 1][0] - inn[s][0]) * t + nx / nl * d, inn[s][1] + (inn[s + 1][1] - inn[s][1]) * t + nz / nl * d]; }
-    for (var s = 0; s < inn.length - 1; s++) {
-      var i0 = inn[s], i1 = inn[s + 1];
-      var tone = 0.92 + ((s * 37) % 7) / 45;
-      var ndx = i1[0] - i0[0], ndz = i1[1] - i0[1], nl = Math.hypot(ndx, ndz), pieces = Math.max(1, Math.ceil(nl / 12));
-      for (var pc = 0; pc < pieces; pc++) {
-        var ta = pc / pieces, tb = (pc + 1) / pieces;
-        var a0 = lerpP(s, ta, 0), a1 = lerpP(s, tb, 0), w0 = lerpP(s, ta, 7), w1 = lerpP(s, tb, 7), m0 = lerpP(s, ta, 8.6), m1 = lerpP(s, tb, 8.6), k0 = lerpP(s, ta, 17), k1 = lerpP(s, tb, 17), b0 = lerpP(s, ta, 24), b1 = lerpP(s, tb, 24);
-        // parete interna verso il porto e camminamento
-        face([[a0[0], Y_WALK, a0[1]], [a0[0], 0, a0[1]], [a1[0], 0, a1[1]], [a1[0], Y_WALK, a1[1]]], C.quaySide, { n: [ndz / nl, 0, -ndx / nl] });
-        face([[a0[0], Y_WALK, a0[1]], [a1[0], Y_WALK, a1[1]], [w1[0], Y_WALK, w1[1]], [w0[0], Y_WALK, w0[1]]], C.walk, { n: [0, 1, 0] });
-        // muro paraonde
-        face([[w0[0], Y_WALL, w0[1]], [w0[0], Y_WALK, w0[1]], [w1[0], Y_WALK, w1[1]], [w1[0], Y_WALL, w1[1]]], C.wallW, { n: [ndz / nl, 0, -ndx / nl] });
-        face([[w0[0], Y_WALL, w0[1]], [w1[0], Y_WALL, w1[1]], [m1[0], Y_WALL, m1[1]], [m0[0], Y_WALL, m0[1]]], C.wallTop, { n: [0, 1, 0] });
-        // scarpata di massi: parte alta asciutta e parte bassa bagnata (sempre sotto ai massi)
-        var up = norm(cross(sub([m1[0], 4.4, m1[1]], [m0[0], 4.4, m0[1]]), sub([k0[0], slopeY(17), k0[1]], [m0[0], 4.4, m0[1]]))); if (up[1] < 0) up = [-up[0], -up[1], -up[2]];
-        face([[m0[0], 4.4, m0[1]], [m1[0], 4.4, m1[1]], [k1[0], slopeY(17), k1[1]], [k0[0], slopeY(17), k0[1]]], C.rock.map(function (v) { return v * tone; }), { n: up, bias: 25 });
-        face([[k0[0], slopeY(17), k0[1]], [k1[0], slopeY(17), k1[1]], [b1[0], 0, b1[1]], [b0[0], 0, b0[1]]], C.rockWet.map(function (v) { return v * tone; }), { n: up, bias: 25 });
+    // Darsena: molo con la testata, banchina sud
+    flat(rectPx(MOLO_DA[0], MOLO_DA[1], MOLO_DA[2], MOLO_DA[3]), rgbS(C.quay));
+    flat(rectPx(965, 1055, 5725, 5785), rgbS(C.quay));
+    flat(rectPx(1000, 1960, 6250, 6340), rgbS(C.quay));
+    flat(rectPx(840, 1960, 6340, 6420), rgbS(C.rock));
+    // Nomi delle zone e lettere delle file, nei colori della mappa dei posti
+    LABELS.push({ t: 'Cantiere', x: mx(1500), y: 1, z: mz(1950), big: false });
+    LABELS.push({ t: 'Diga', x: mx(560), y: 1, z: mz(4600), big: false, dim: true });
+    Object.keys(ZONE).forEach(function (k) {
+      var Zc = ZONE[k], bs = BERTHS.filter(function (b) { return b.pon === k; }), x, z;
+      var dy = 0;
+      if (k === 'BC') { x = mx(1330); z = mz(2075) + 6; }
+      else if (Zc.t === 'row') { // lettera in testa al pontile: fila nord sopra, fila sud sotto (spostate sullo schermo, così non si coprono)
+        var pon = PONTILI.filter(function (p) { return p.f.indexOf(k) >= 0; })[0], w0 = bs.reduce(function (m, b) { return b.cx < m.cx ? b : m; }, bs[0]);
+        x = Math.min(mx(pon.r[0]), w0.cx - w0.wid / 2) - 4; z = (mz(pon.r[2]) + mz(pon.r[3])) / 2; dy = pon.f.length > 1 ? Zc.s * 13 : 0;
       }
-      // massi, a pezzi di circa 25 m: si vedono da vicino
-      var len = Math.hypot(i1[0] - i0[0], i1[1] - i0[1]), parts = Math.max(1, Math.round(len / 25));
-      for (var pp = 0; pp < parts; pp++) {
-        var t0 = pp / parts, t1 = (pp + 1) / parts, mx = i0[0] + (i1[0] - i0[0]) * (t0 + t1) / 2 + N[s][0] * 15, mz = i0[1] + (i1[1] - i0[1]) * (t0 + t1) / 2 + N[s][1] * 15;
-        CURG = addGroup(mx, mz, len / parts / 2 + 10, 90);
-        [11, 15, 19.5, 23].forEach(function (o, row) {
-          var stepL = 3.3 + row * 0.3, count = Math.max(1, Math.floor(len / parts / stepL));
-          for (var q = 0; q < count; q++) {
-            var t = t0 + (t1 - t0) * (q + 0.5 + (row % 2) * 0.5) / (count + 0.5);
-            var nx = N[s][0] * (1 - t) + N[s + 1][0] * t, nz = N[s][1] * (1 - t) + N[s + 1][1] * t;
-            var ox = o + (R2() - 0.5) * 1.4, px = i0[0] + (i1[0] - i0[0]) * t + nx * ox, pz = i0[1] + (i1[1] - i0[1]) * t + nz * ox;
-            rock(px, pz, 1.5 + R2() * 0.7, slopeY(ox) - 0.55, 1.3 + R2() * 0.6, 0.82 + R2() * 0.36);
-          }
-        });
-        CURG = -1;
-      }
-    }
-    // Testata della diga: piazzola tonda, il Marinaio, il fanale rosso
-    var le = inn.length - 1, dirx = inn[le][0] - inn[le - 1][0], dirz = inn[le][1] - inn[le - 1][1], dl = Math.hypot(dirx, dirz); dirx /= dl; dirz /= dl;
-    var pcx = inn[le][0] + N[le][0] * 4.5 + dirx * 4, pcz = inn[le][1] + N[le][1] * 4.5 + dirz * 4;
-    prism(ngon(pcx, pcz, 9.5, 14), -0.3, Y_WALK, C.walk, C.quaySide);
-    CURG = addGroup(pcx, pcz, 22, 90);
-    for (var ra = 0; ra < 22; ra++) {
-      var ang = Math.atan2(N[le][1], N[le][0]) - 1.7 + ra / 21 * 3.6, rr = 12.5 + (ra % 2) * 3.2;
-      rock(pcx + Math.cos(ang) * rr, pcz + Math.sin(ang) * rr, 1.8 + R2() * 0.6, rr > 14 ? -0.3 : 1.2, 1.6 + R2() * 0.6, 0.82 + R2() * 0.36);
-    }
-    CURG = -1;
-    // Il Marinaio: bronzo alto circa 7 m, guarda il mare aperto verso l'Arcipelago (ovest), braccia incrociate
-    var fx = N[le][0], fz = N[le][1], sx_ = pcx + fx * 2.2, sz_ = pcz + fz * 2.2, pxs = -fz, pzs = fx;
-    obox(sx_, sz_, fx, fz, 1.3, 1.3, Y_WALK, Y_WALK + 1.3, C.stoneT, C.stone);
-    var y = Y_WALK + 1.3;
-    obox(sx_ + pxs * 0.3, sz_ + pzs * 0.3, fx, fz, 0.26, 0.2, y, y + 3.0, C.bronzeT, C.bronze);
-    obox(sx_ - pxs * 0.3, sz_ - pzs * 0.3, fx, fz, 0.26, 0.2, y, y + 3.0, C.bronzeT, C.bronze);
-    obox(sx_, sz_, fx, fz, 0.42, 0.62, y + 3.0, y + 5.5, C.bronzeT, C.bronze);
-    obox(sx_ + fx * 0.32, sz_ + fz * 0.32, fx, fz, 0.18, 0.66, y + 4.15, y + 4.75, C.bronzeT, C.bronze);
-    obox(sx_, sz_, fx, fz, 0.22, 0.2, y + 5.5, y + 5.75, C.bronzeT, C.bronze);
-    obox(sx_, sz_, fx, fz, 0.3, 0.27, y + 5.75, y + 6.45, C.bronzeT, C.bronze);
-    obox(sx_, sz_, fx, fz, 0.36, 0.33, y + 6.45, y + 6.62, C.bronzeT, C.bronze);
-    LABELS.push({ t: 'Il Marinaio', x: sx_, y: y + 9, z: sz_, pill: true, look: { tx: sx_, tz: sz_, yaw: Math.atan2(fx, fz), dist: 34, pitch: 0.28 } });
-    var fxl = pcx + dirx * 6 - N[le][0] * 1.5, fzl = pcz + dirz * 6 - N[le][1] * 1.5;
-    prism(ngon(fxl, fzl, 1.15, 8), Y_WALK, Y_WALK + 6.5, C.white, C.white);
-    prism(ngon(fxl, fzl, 1.2, 8), Y_WALK + 6.5, Y_WALK + 8, hex('#C83A2F'), hex('#C83A2F'));
-    // Pontile stretto lungo la diga, con passerella dal camminamento
-    gP = addGroup((PP.a[0] + PP.b[0]) / 2, (PP.a[1] + PP.b[1]) / 2, PP.len / 2 + 8, 150);
-    var npc = Math.ceil(PP.len / 12);
-    for (var ip = 0; ip < npc; ip++) { var tm = (ip + 0.5) / npc; obox(PP.a[0] + (PP.b[0] - PP.a[0]) * tm, PP.a[1] + (PP.b[1] - PP.a[1]) * tm, PP.u[0], PP.u[1], PP.len / npc / 2, PP.w / 2, -0.2, 0.55, C.pont, C.fender); }
-    var dA = digaAt(digaS(PP.a[1] + 0.9)), gx1 = PP.a[0] - 0.9, gz = PP.a[1] + 0.9;
-    face([[dA.x, Y_WALK, gz - 0.8], [gx1, 0.55, gz - 0.8], [gx1, 0.55, gz + 0.8], [dA.x, Y_WALK, gz + 0.8]], C.gang, { n: norm([Y_WALK - 0.55, gx1 - dA.x, 0]), two: true });
-    LABELS.push({ t: 'P', x: PP.b[0] + PP.u[0] * 5, y: 0.8, z: PP.b[1] + PP.u[1] * 5, big: true });
-    var mL = digaAt(digaS(30)); LABELS.push({ t: 'M', x: mL.x - mL.nx * 3, y: Y_WALK + 1.2, z: mL.z - mL.nz * 3, big: true });
-    // Lampioni lungo la passeggiata (da vicino)
-    for (var lp = 1; lp < inn.length - 1; lp += 1) {
-      var lx = inn[lp][0] + N[lp][0] * 1.2, lz = inn[lp][1] + N[lp][1] * 1.2;
-      LINES.push({ a: [lx, Y_WALK, lz], b: [lx, Y_WALK + 4.5, lz], col: '#9AA0A8', w: 1, bi: -1, g: addGroup(lx, lz, 6, 60) });
-    }
-
-    // ---------- Pontili galleggianti: passerella dalla banchina, finger, colonnine acqua e luce ----------
-    PONTILI.forEach(function (p) {
-      var g = addGroup((p.x0 + PON_END) / 2, p.z, (PON_END - p.x0) / 2 + Math.max(sideL(p, -1), sideL(p, 1)), 150);
-      strip(p.x0, PON_END, p.z - 1.25, p.z + 1.25, -0.2, 0.55, C.pont, C.fender, 12);
-      face([[PON_END, 0.55, p.z - 0.9], [QUAY, 1.3, p.z - 0.9], [QUAY, 1.3, p.z + 0.9], [PON_END, 0.55, p.z + 0.9]], C.gang, { n: norm([0.15, 1, 0]) });
-      LINES.push({ a: [PON_END, 1.5, p.z - 0.9], b: [QUAY, 2.25, p.z - 0.9], col: '#C9CDD3', w: 0.8, bi: -1, g: g });
-      LINES.push({ a: [PON_END, 1.5, p.z + 0.9], b: [QUAY, 2.25, p.z + 0.9], col: '#C9CDD3', w: 0.8, bi: -1, g: g });
-      LABELS.push({ t: p.id, x: p.x0 - 4.5, y: 0.8, z: p.z, big: true });
-      [-1, 1].forEach(function (sg) {
-        var ww = sideW(p, sg), n = Math.floor((PON_END - 1 - p.x0 - 1) / ww);
-        for (var i = 0; i <= n; i++) {
-          var x = FIRST - ww * i, z0 = p.z + sg * 1.25, z1 = z0 + sg * sideL(p, sg) * 0.65, za = Math.min(z0, z1), zb = Math.max(z0, z1);
-          face([[x - 0.3, 0.42, za], [x + 0.3, 0.42, za], [x + 0.3, 0.42, zb], [x - 0.3, 0.42, zb]], C.finger, { n: [0, 1, 0] });
-          CURG = g;
-          face([[x - 0.3, 0.42, za], [x - 0.3, 0.42, zb], [x - 0.3, 0.05, zb], [x - 0.3, 0.05, za]], C.fender, { n: [-1, 0, 0] });
-          face([[x + 0.3, 0.42, zb], [x + 0.3, 0.42, za], [x + 0.3, 0.05, za], [x + 0.3, 0.05, zb]], C.fender, { n: [1, 0, 0] });
-          if (i % 2 === 0) { var za2 = p.z + sg * 0.4, zb2 = p.z + sg * 0.95; box(x - 0.25, x + 0.25, Math.min(za2, zb2), Math.max(za2, zb2), 0.55, 1.35, C.pedTop, C.ped); }
-          CURG = -1;
-        }
-      });
-      for (var lx2 = PON_END - 4; lx2 > p.x0 + 2; lx2 -= 24) {
-        LINES.push({ a: [lx2, 0.55, p.z], b: [lx2, 4.2, p.z], col: '#9AA0A8', w: 1, bi: -1, g: g });
-      }
-      p.g = g;
+      else if (k === 'MU') { x = mx(1020); z = mz(2180); }
+      else if (k === 'PM') { x = mx(640); z = mz(3150); }
+      else if (k === 'DA') { x = mx(1535); z = mz(5560); }
+      else { x = mx(905); z = mz(5660); }
+      LABELS.push({ t: k, x: x, y: 0.8, z: z, big: true, col: Zc.c, dy: dy });
     });
-    LABELS.push({ t: 'Darsena', x: 88, y: 1, z: 342, big: false });
-    gD = addGroup(88, 343, 40, 150);
-    for (var bz = 322; bz < 366; bz += 6.3) { CURG = gD; box(QUAY - 0.7, QUAY - 0.1, bz - 0.3, bz + 0.3, 1.3, 1.8, C.bitta, C.bitta); box(57.1, 57.7, bz - 0.3, bz + 0.3, 1.5, 2, C.bitta, C.bitta); CURG = -1; }
-
-    // Città: due file di case sul lungomare e la Torre
-    var rows = [146, 170], ss = 7;
-    for (var bx = 0; bx < rows.length; bx++) {
-      for (var zz = -60; zz < 420; zz += 27) {
-        ss = (ss * 31 + 11) % 97;
-        if (bx === 0 && zz > 40 && zz < 90) continue;
-        if (ss % 9 === 0) continue;
-        box(rows[bx], rows[bx] + 19 + (ss % 4), zz, zz + 20 + (ss % 5), 1.3, 1.3 + 7 + (ss % 6) * 1.6, ss % 3 ? C.roof : C.roof2, C.wall);
-      }
-    }
-    prism(ngon(150, 64, 5.5, 8), 1.3, 22, hex('#9C9483'), C.tower);
-    LABELS.push({ t: 'Torre', x: 150, y: 25, z: 64, big: false, dim: true });
 
     BERTHS.forEach(function (b) {
       var hx = b.hx, hz = b.hz, px = -hz, pz = hx, L2 = b.len / 2 - 0.15, W2 = b.wid / 2 - 0.2;
@@ -4073,7 +4003,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   }
   function boatGeom(b) {
       var hx = b.hx, hz = b.hz, px = -hz, pz = hx;
-      var bt = b.barca, L = bt.L, B = Math.min(bt.B, b.wid - 0.5), gB = b.pon === 'Z' ? gD : b.pon === 'M' ? -1 : b.pon === 'N' ? gN : b.pon === 'P' ? gP : PONTILI.filter(function (q) { return q.id === b.pon; })[0].g;
+      var bt = b.barca, L = bt.L, B = Math.min(bt.B, b.wid - 0.5), gB = -1;
       var cx = b.along ? b.cx : b.base[0] + hx * (0.7 + L / 2), cz = b.along ? b.cz : b.base[1] + hz * (0.7 + L / 2);
       function Wp(u, v, y) { return [cx + hx * u + px * v, y, cz + hz * u + pz * v]; }
       var loc = [[-L / 2, -B / 2], [0.12 * L, -B / 2], [0.34 * L, -0.38 * B], [L / 2, 0], [0.34 * L, 0.38 * B], [0.12 * L, B / 2], [-L / 2, B / 2]];
@@ -4119,7 +4049,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   }
 
     // ---------- Barche ormeggiate: dalle Barche dell'app, con le loro misure ----------
-    var FS = FACES, LS = LINES, FB = [], BL = [], gD = -1, gN = -1, gP = -1;
+    var FS = FACES, LS = LINES, FB = [], BL = [];
     function postoDoc(id) { return (S.posti && S.posti[id]) || null; }
     function berthBoat(b) { var d = postoDoc(b.id); return d && d.barcaId ? boatById(d.barcaId) : null; }
     function statoOf(b) {
@@ -4152,8 +4082,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     }
 
     // ---------- Camera e disegno ----------
-    var P = { mounted: false, built: false, mode: '3d', sel: null, filter: null, fit: null, moving: false, movT: null, queued: false, anim: null, ro: null, hintT: null };
-    var CAM = { tx: 62, tz: 175, yaw: -0.62, pitch: 0.62, dist: 330, fov: 0.85 };
+    var P = { mounted: false, built: false, mode: '2d', sel: null, filter: null, fit: null, moving: false, movT: null, queued: false, anim: null, ro: null, hintT: null };
+    var CAM = { tx: 82, tz: 245, yaw: 0, pitch: 1.5533, dist: 330, fov: 0.85 };
     var cv = null, ctx = null, stage = null, W = 1, H = 1, DPR = 1, F = 1, E, Rv, Uv, Fv, GV = null, NEAR = 1.5;
     function basis() {
       var cp = Math.cos(CAM.pitch), sp = Math.sin(CAM.pitch), sy = Math.sin(CAM.yaw), cy = Math.cos(CAM.yaw);
@@ -4254,17 +4184,21 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
           ctx.fillStyle = 'rgba(14,14,16,.88)'; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, tw, 22, 11); else ctx.rect(x, y, tw, 22); ctx.fill();
           ctx.strokeStyle = 'rgba(201,160,110,.7)'; ctx.lineWidth = 1; ctx.stroke(); ctx.fillStyle = '#F4F5F7'; ctx.fillText(l.t, s[0], s[1] + 0.5);
         } else if (l.big) {
-          ctx.fillStyle = 'rgba(14,14,16,.88)'; ctx.beginPath(); ctx.arc(s[0], s[1], 11, 0, Math.PI * 2); ctx.fill();
-          ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.stroke();
-          ctx.fillStyle = '#F4F5F7'; ctx.font = '600 12px "IBM Plex Mono", ui-monospace, monospace'; ctx.fillText(l.t, s[0], s[1] + 0.5);
+          if (l.dy) s = [s[0], s[1] + l.dy];
+          var lc = l.col ? hex(l.col) : null, dark = !lc || lc[0] * 0.3 + lc[1] * 0.59 + lc[2] * 0.11 < 140;
+          ctx.font = '700 12px "IBM Plex Mono", ui-monospace, monospace';
+          var bw = Math.max(22, ctx.measureText(l.t).width + 10);
+          ctx.fillStyle = l.col || 'rgba(14,14,16,.88)'; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(s[0] - bw / 2, s[1] - 11, bw, 22, 6); else ctx.rect(s[0] - bw / 2, s[1] - 11, bw, 22); ctx.fill();
+          ctx.strokeStyle = dark ? 'rgba(255,255,255,.6)' : 'rgba(0,0,0,.55)'; ctx.lineWidth = 1; ctx.stroke();
+          ctx.fillStyle = dark ? '#F4F5F7' : '#0E0E10'; ctx.fillText(l.t, s[0], s[1] + 0.5);
         } else { ctx.font = '600 11px -apple-system, "Segoe UI", Roboto, sans-serif'; ctx.fillStyle = l.dim ? 'rgba(244,245,247,.55)' : 'rgba(244,245,247,.8)'; ctx.fillText(l.t, s[0], s[1]); }
       });
       BERTHS.forEach(function (b) {
         if (!b.sm) return;
         var sz = Math.hypot(b.sm.s[1][0] - b.sm.s[2][0], b.sm.s[1][1] - b.sm.s[2][1]);
-        if (sz > 21 && (visible(b) || b.id === P.sel)) {
+        if (sz > 15 && (visible(b) || b.id === P.sel)) {
           var c = toCam(b.along ? [b.cx, 0.1, b.cz] : [b.base[0] + b.hx * (b.len - 1.6), 0.1, b.base[1] + b.hz * (b.len - 1.6)]);
-          if (c[2] >= NEAR) { var s = proj(c); ctx.font = '600 ' + Math.min(12, 7 + sz / 8) + 'px "IBM Plex Mono", ui-monospace, monospace'; ctx.fillStyle = 'rgba(244,245,247,.85)'; ctx.fillText(b.id.split('-')[1], s[0], s[1]); }
+          if (c[2] >= NEAR) { var s = proj(c); ctx.font = '600 ' + Math.min(12, 6 + sz / 7) + 'px "IBM Plex Mono", ui-monospace, monospace'; ctx.fillStyle = 'rgba(244,245,247,.85)'; ctx.fillText(b.id, s[0], s[1]); }
         }
         var d = postoDoc(b.id), due = d && d.fino && daysUntil(d.fino) != null && daysUntil(d.fino) <= 30, sale = inVendita(berthBoat(b));
         if ((sale || due) && (visible(b) || b.id === P.sel)) {
@@ -4293,17 +4227,17 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
         if (t < 1 && P.mounted) P.anim.raf = requestAnimationFrame(step); else P.anim = null;
       })(st);
     }
-    function fitDist() { var a = W / H, half = 236, halfW = 100; return Math.max(half / Math.tan(CAM.fov / 2), halfW / (Math.tan(CAM.fov / 2) * a)) * (P.mode === '2d' ? 1.02 : 0.95); }
-    function fitAll() { animateTo(P.mode === '2d' ? { tx: 60, tz: 180, yaw: 0, pitch: 1.5533, dist: fitDist() } : { tx: 62, tz: 175, yaw: -0.62, pitch: 0.62, dist: fitDist() * 0.8 }); }
+    function fitDist() { var a = W / H, half = 252, halfW = 92; return Math.max(half / Math.tan(CAM.fov / 2), halfW / (Math.tan(CAM.fov / 2) * a)) * (P.mode === '2d' ? 1.02 : 0.95); }
+    function fitAll() { animateTo(P.mode === '2d' ? { tx: 82, tz: 245, yaw: 0, pitch: 1.5533, dist: fitDist() } : { tx: 82, tz: 245, yaw: -0.62, pitch: 0.62, dist: fitDist() * 0.8 }); }
     function aboveCard(x, z, dist, yaw, pitch) { var off = 0.42 * dist * Math.tan(CAM.fov / 2) / Math.max(0.5, Math.sin(pitch)); return { tx: x + Math.sin(yaw) * off, tz: z + Math.cos(yaw) * off }; }
     function flyTo(b) {
-      var d = P.mode === '2d' ? Math.max(70, b.len * 5.5) : Math.max(48, b.len * 4.4), pitch = P.mode === '2d' ? 1.5533 : Math.max(0.5, Math.min(0.9, CAM.pitch)), yaw = P.mode === '2d' ? 0 : CAM.yaw;
+      var d = P.mode === '2d' ? Math.max(48, b.len * 5) : Math.max(48, b.len * 4.4), pitch = P.mode === '2d' ? 1.5533 : Math.max(0.5, Math.min(0.9, CAM.pitch)), yaw = P.mode === '2d' ? 0 : CAM.yaw;
       animateTo(Object.assign({ dist: d, pitch: pitch, yaw: yaw }, aboveCard(b.cx, b.cz, d, yaw, pitch)));
     }
     function pan(dx, dy) {
       var mpp = CAM.dist * Math.tan(CAM.fov / 2) / (H / 2), sy = Math.sin(CAM.yaw), cy = Math.cos(CAM.yaw), k = 1 / Math.max(0.35, Math.sin(CAM.pitch));
       CAM.tx -= cy * dx * mpp; CAM.tz -= -sy * dx * mpp; CAM.tx -= sy * dy * mpp * k; CAM.tz -= cy * dy * mpp * k;
-      CAM.tx = Math.max(-120, Math.min(260, CAM.tx)); CAM.tz = Math.max(-120, Math.min(460, CAM.tz));
+      CAM.tx = Math.max(-40, Math.min(210, CAM.tx)); CAM.tz = Math.max(-40, Math.min(540, CAM.tz));
     }
     function zoom(f) { CAM.dist = Math.max(28, Math.min(900, CAM.dist * f)); }
     function inPoly(x, y, s) { var c = false; for (var i = 0, j = s.length - 1; i < s.length; j = i++) if (((s[i][1] > y) !== (s[j][1] > y)) && (x < (s[j][0] - s[i][0]) * (y - s[i][1]) / (s[j][1] - s[i][1]) + s[i][0])) c = !c; return c; }
@@ -4383,15 +4317,15 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     }
     function view() {
       var due = dueList().length, ven = vendite().length;
-      return '<div class="map-ctrl"><div class="seg2" role="group" aria-label="Vista del porto"><button type="button" data-act="pt-mode" data-m="2d" aria-pressed="' + (P.mode === '2d') + '">Pianta</button><button type="button" data-act="pt-mode" data-m="3d" aria-pressed="' + (P.mode === '3d') + '">3D</button></div>' +
+      return '<div class="map-ctrl">' +
         '<button type="button" class="chip-b" data-act="pt-find">Trova posto</button><button type="button" class="chip-b" data-act="pt-broker">Brokeraggio <b id="pt-nven">' + ven + '</b></button>' +
         '<button type="button" class="chip-b" data-act="pt-contracts">Contratti <b id="pt-ndue" style="color:var(--soon)">' + (due || '') + '</b></button><button type="button" class="chip-b" data-act="pt-search">Cerca</button></div>' +
         '<div class="pt-chips" id="pt-chips">' + chipsHtml() + '</div>' + mlStrip('Cerca posto, barca o cliente', listHtml()) +
         '<div class="map-box" id="porto-root" style="background:#070B14"><canvas id="pt-cv" style="display:block;width:100%;height:100%" aria-label="Porto: tocca un posto barca per aprirne la scheda"></canvas>' +
         '<div class="m3-hint" id="pt-hint" style="transition:opacity .4s"></div>' +
-        '<div class="map-tools"><button type="button" data-act="pt-zin" aria-label="Avvicina">+</button><button type="button" data-act="pt-zout" aria-label="Allontana">−</button><button type="button" data-act="pt-fit" aria-label="Tutto il porto">' + I.fit + '</button><button type="button" data-act="pt-north" aria-label="Nord in alto" style="color:var(--late);font-size:.8rem"><span id="pt-needle" style="display:inline-block">N</span></button></div>' +
+        '<div class="map-tools"><button type="button" data-act="pt-zin" aria-label="Avvicina">+</button><button type="button" data-act="pt-zout" aria-label="Allontana">−</button><button type="button" data-act="pt-fit" aria-label="Tutto il porto">' + I.fit + '</button></div>' +
         '<div class="map-card" id="pt-card" hidden></div></div>' +
-        '<p class="cap" style="margin:10px 2px 0">Porto disegnato dalla foto dall’alto: pontili, posti e misure sono stimati. Ogni posto parte come “della Marina”: toccalo per segnarlo come vostro, assegnare barca e cliente, contratto e scadenza.</p>';
+        '<p class="cap" style="margin:10px 2px 0">Porto disegnato dalla foto dall’alto: 397 posti, con le lettere delle file (A7, F14…); le misure dei posti sono stimate. Ogni posto parte come “della Marina”: toccalo per segnarlo come vostro, assegnare barca e cliente, contratto e scadenza.</p>';
     }
     function listHtml() {
       var list = BERTHS.filter(function (b) { var d = postoDoc(b.id), st = statoOf(b); return st !== 'marina' || (d && d.barcaId); });
@@ -4440,7 +4374,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       bindStage();
       if (window.ResizeObserver) { if (P.ro) P.ro.disconnect(); P.ro = new ResizeObserver(resize); P.ro.observe(stage); }
       resize();
-      if (!P.camSet) { CAM.dist = fitDist() * (P.mode === '2d' ? 1 : 0.8); if (P.mode === '2d') { CAM.yaw = 0; CAM.pitch = 1.5533; CAM.tx = 60; CAM.tz = 180; } P.camSet = true; }
+      if (!P.camSet) { CAM.dist = fitDist() * (P.mode === '2d' ? 1 : 0.8); if (P.mode === '2d') { CAM.yaw = 0; CAM.pitch = 1.5533; CAM.tx = 82; CAM.tz = 245; } P.camSet = true; }
       setMode(P.mode, true); card(); draw();
       if (P.flyOnMount && P.sel && BY[P.sel]) { P.flyOnMount = false; flyTo(BY[P.sel]); }
     }
@@ -4578,7 +4512,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     var sheetFind = false;
     function searchSheet() {
       openSheet({
-        title: 'Cerca nel porto', menu: true, body: field(lab('f-sq', 'Cliente, barca o posto'), '<input id="f-sq" type="search" placeholder="es. Melani, Lulù, C-12" autocomplete="off">') + '<div id="f-sres"></div>',
+        title: 'Cerca nel porto', menu: true, body: field(lab('f-sq', 'Cliente, barca o posto'), '<input id="f-sq" type="search" placeholder="es. Melani, Lulù, C12" autocomplete="off">') + '<div id="f-sres"></div>',
         onOpen: function (f) {
           var q = f.querySelector('#f-sq');
           function upd() {
@@ -4651,6 +4585,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   function panRange(per) {
     var t = todayISO();
     if (per === 'mese') return { a: t.slice(0, 8) + '01', b: t, l: 'questo mese' };
+    if (per === 'anno') return { a: t.slice(0, 4) + '-01-01', b: t, l: 'quest’anno' };
+    if (per === 'annoPrima') { var y = +t.slice(0, 4) - 1; return { a: y + '-01-01', b: y + '-12-31', l: 'l’anno scorso (' + y + ')' }; }
     if (per === 'scorso') { var d = new Date(isoToUTC(t.slice(0, 8) + '01') - 86400000), e = utcToISO(d.getTime()); return { a: e.slice(0, 8) + '01', b: e, l: 'il mese scorso' }; }
     return { a: utcToISO(mondayOf(t)), b: t, l: 'questa settimana' };
   }
@@ -4688,7 +4624,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     ];
     // Ore
     var r = panRange(V.panPer), E = panEntries(r), tot = E.reduce(function (a, l) { return a + num(l.oreLavoro); }, 0), cant = E.filter(function (l) { return !l.barcaId; }).reduce(function (a, l) { return a + num(l.oreLavoro); }, 0);
-    var o = secH('Ore lavorate') + '<div class="chips" role="group" aria-label="Periodo" style="margin-top:0">' + [['sett', 'Settimana'], ['mese', 'Mese'], ['scorso', 'Mese scorso']].map(function (o) { return '<button type="button" data-act="pan-per" data-p="' + o[0] + '" aria-pressed="' + (V.panPer === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>';
+    var o = secH('Ore lavorate') + '<div class="chips" role="group" aria-label="Periodo" style="margin-top:0;flex-wrap:wrap">' + [['sett', 'Settimana'], ['mese', 'Mese'], ['scorso', 'Mese scorso'], ['anno', 'Quest’anno'], ['annoPrima', 'Anno scorso']].map(function (o) { return '<button type="button" data-act="pan-per" data-p="' + o[0] + '" aria-pressed="' + (V.panPer === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>';
     o += '<div class="chips" role="group" aria-label="Dividi per" style="margin-top:8px">' + [['persona', 'Persona'], ['barca', 'Barca'], ['cliente', 'Cliente'], ['categoria', 'Categoria']].map(function (o) { return '<button type="button" data-act="pan-by" data-b="' + o[0] + '" aria-pressed="' + (V.panBy === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>';
     o += '<p class="cap" style="margin:10px 2px 6px">Totale ' + esc(r.l) + ': <b style="color:var(--ink)">' + esc(fmtNum(tot, 1)) + ' h</b>' + (cant ? ' · di cui ' + esc(fmtNum(cant, 1)) + ' h per il cantiere' : '') + '</p>';
     var keyFn = V.panBy === 'barca' ? function (l) { var b = l.barcaId && boatById(l.barcaId); return l.barcaId ? (b ? b.nome || 'Barca' : 'Barca eliminata') : 'Cantiere'; }
@@ -4888,12 +4824,12 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       title: 'Varo fatto · ' + (b.nome || 'Barca'), submitLabel: 'Conferma',
       body: '<p class="context">' + esc(b.nome || 'La barca') + ' ora è in acqua. Dove la mettiamo al porto?</p>' +
         field(lab('f-vp', 'Posto al porto'), '<select id="f-vp">' + opt + '</select>', sg.own ? 'Ha già un posto: confermalo o scegline un altro.' : sg.free.length ? 'Ti propongo i vostri posti liberi dove entra, dal più piccolo.' : 'Non ci sono posti vostri liberi adatti: scrivi il codice del posto.') +
-        '<div id="f-vpaW"' + (!sg.own && !sg.free.length ? '' : ' hidden') + '>' + field(lab('f-vpa', 'Codice del posto'), inp('f-vpa', '', 'type="text" autocapitalize="characters" placeholder="es. M-12, C-03"')) + '</div>' +
+        '<div id="f-vpaW"' + (!sg.own && !sg.free.length ? '' : ' hidden') + '>' + field(lab('f-vpa', 'Codice del posto'), inp('f-vpa', '', 'type="text" autocapitalize="characters" placeholder="es. C12, F3, MU5"')) + '</div>' +
         (onMap ? '<label class="check"><input type="checkbox" id="f-vmap" checked> Toglila dalla mappa del cantiere (e dal carrello)</label>' : ''),
       onOpen: function (f) { var s1 = f.querySelector('#f-vp'); s1.addEventListener('change', function () { f.querySelector('#f-vpaW').hidden = s1.value !== '__altro'; }); },
       onSubmit: async function (f) {
-        var v = val(f, 'f-vp'), id = v === '__altro' ? val(f, 'f-vpa').toUpperCase().replace(/\s+/g, '').replace(/^([A-Z])(\d)/, '$1-$2') : v;
-        if (v === '__altro') { var mm = id.match(/^([A-Z])-(\d+)$/); if (mm) id = mm[1] + '-' + String(+mm[2]).padStart(2, '0'); if (!Porto.exists(id)) { formErr('Non trovo il posto “' + val(f, 'f-vpa') + '”: scrivilo come sulla mappa, per esempio C-03.'); return false; } }
+        var v = val(f, 'f-vp'), id = v === '__altro' ? val(f, 'f-vpa').toUpperCase().replace(/[\s\-·.]+/g, '').replace(/^([A-Z]+)0+(\d)/, '$1$2') : v;
+        if (v === '__altro' && !Porto.exists(id)) { formErr('Non trovo il posto “' + val(f, 'f-vpa') + '”: scrivilo come sulla mappa, per esempio C12.'); return false; }
         var mc = f.querySelector('#f-vmap'), now = new Date().toISOString();
         if (mc && mc.checked) {
           var rb = S.db.collection('barche').doc(b.id); await w(function () { return rb.update({ mappa: null, modificato: now }); });
@@ -7249,6 +7185,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     var h = '<div class="cal-nav"><button type="button" class="icon-btn blue" data-act="ore-prev" aria-label="Mese precedente">' + I.left + '</button><h2>' + monthLabel(key) + '</h2><button type="button" class="icon-btn blue" data-act="ore-next" aria-label="Mese successivo">' + I.right + '</button></div>';
     if (!order.length) return h + '<div class="notice" style="margin-top:12px">Nessuna ora segnata in questo mese. Le ore arrivano dalla Scheda lavoro.</div>' + assOreHtml(key);
     h += '<div class="day-sum"><div><span class="big">' + fmtNum(all, 2) + ' <small>h</small></span><span class="cap">Totale squadra · ' + order.length + (order.length === 1 ? ' persona' : ' persone') + '</span></div></div>';
+    if (S.isOwner) h += '<button type="button" class="btn" data-act="ore-xlsx" style="width:100%;margin:12px 0 4px">' + I.dl + ' Scarica Excel delle schede lavoro</button><p class="cap" style="margin:0 2px 8px">Una pagina da stampare per ogni dipendente: giorno per giorno lavorazioni, cliente, barca e ore, con il totale del mese.</p>' +
+      '<button type="button" class="btn sec" data-act="ore-comm" style="width:100%;margin:4px 0 4px">' + I.dl + ' Scarica Excel per il commercialista</button><p class="cap" style="margin:0 2px 8px">Solo le ore: una riga per dipendente e una colonna per giorno, con totali' + (COMM_ASS ? ', ferie, malattia e permessi' : '') + '.</p>';
     h += secH('Dipendenti') + '<div class="group">';
     order.forEach(function (uid) {
       var p = per[uid], days = Object.keys(p.days).sort(), pend = days.filter(function (d) { return !isConfirmed(uid, d) && d <= todayISO(); }).length, open = V.oreOpen === uid;
@@ -7261,6 +7199,206 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       });
     });
     return h + '</div>' + assOreHtml(key);
+  }
+  /* ---------- Excel delle schede lavoro: una pagina da stampare per ogni dipendente ----------
+     Il file .xlsx si scrive qui (zip senza compressione + fogli XML): niente librerie da scaricare. */
+  var GG3 = ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab'];
+  function xEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, ''); }
+  var CRC_T = null;
+  function crc32(u) {
+    if (!CRC_T) { CRC_T = []; for (var n = 0; n < 256; n++) { var c = n; for (var k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; CRC_T[n] = c >>> 0; } }
+    var x = 0xFFFFFFFF; for (var i = 0; i < u.length; i++) x = CRC_T[(x ^ u[i]) & 255] ^ (x >>> 8); return (x ^ 0xFFFFFFFF) >>> 0;
+  }
+  function zipStore(files) { // files: [[nome, testo]] -> Uint8Array (zip senza compressione)
+    var enc = new TextEncoder(), parts = [], cen = [], off = 0;
+    function le(n, b) { var a = []; for (var i = 0; i < b; i++) a.push((n >>> (8 * i)) & 255); return a; }
+    files.forEach(function (f) {
+      var name = enc.encode(f[0]), data = enc.encode(f[1]), crc = crc32(data);
+      var head = [].concat(le(0x04034b50, 4), le(20, 2), le(0x0800, 2), le(0, 2), le(0, 2), le(0x21, 2), le(crc, 4), le(data.length, 4), le(data.length, 4), le(name.length, 2), le(0, 2));
+      parts.push(new Uint8Array(head), name, data);
+      cen.push(new Uint8Array([].concat(le(0x02014b50, 4), le(20, 2), le(20, 2), le(0x0800, 2), le(0, 2), le(0, 2), le(0x21, 2), le(crc, 4), le(data.length, 4), le(data.length, 4), le(name.length, 2), le(0, 2), le(0, 2), le(0, 2), le(0, 2), le(0, 4), le(off, 4))), name);
+      off += head.length + name.length + data.length;
+    });
+    var cl = cen.reduce(function (a, p) { return a + p.length; }, 0);
+    var end = new Uint8Array([].concat(le(0x06054b50, 4), le(0, 2), le(0, 2), le(files.length, 2), le(files.length, 2), le(cl, 4), le(off, 4), le(0, 2)));
+    var all = parts.concat(cen, [end]), tot = all.reduce(function (a, p) { return a + p.length; }, 0), out = new Uint8Array(tot), p = 0;
+    all.forEach(function (x) { out.set(x, p); p += x.length; });
+    return out;
+  }
+  // righe: [[stile, valori...]] con stili: t=intestazione piccola, n=nome, h=titoli colonne, r/d=riga (d = primo del giorno), b=riga a fascia, s=totale, f=firma, v=vuota
+  function xlsxSheet(rows, breaks, cols) {
+    var X = { t: [1], n: [2], h: [3, 3, 3, 3, 4], r: [5, 5, 5, 5, 7], d: [6, 5, 5, 5, 7], b: [11, 11, 11, 11, 13], e: [12, 11, 11, 11, 13], s: [8, 8, 8, 8, 9], f: [10] };
+    var L = 'ABCDE', xml = '', merge = [];
+    rows.forEach(function (r, i) {
+      var st = X[r[0]] || [0], cells = '';
+      for (var c = 0; c < (r[0] === 'v' ? 0 : r[0] === 't' || r[0] === 'n' || r[0] === 'f' ? 1 : 5); c++) {
+        var v = r[c + 1], s = st[c] != null ? st[c] : st[st.length - 1], ref = L[c] + (i + 1);
+        if (typeof v === 'number') cells += '<c r="' + ref + '" s="' + s + '"><v>' + v + '</v></c>';
+        else if (v != null && v !== '') cells += '<c r="' + ref + '" s="' + s + '" t="inlineStr"><is><t xml:space="preserve">' + xEsc(v) + '</t></is></c>';
+        else cells += '<c r="' + ref + '" s="' + s + '"/>';
+      }
+      if (r[0] === 's') merge.push('A' + (i + 1) + ':D' + (i + 1));
+      xml += '<row r="' + (i + 1) + '"' + (r[0] === 'n' ? ' ht="24" customHeight="1"' : '') + '>' + cells + '</row>';
+    });
+    return xlsxWrap(xml, cols, merge, breaks, false);
+  }
+  function xlsxWrap(xml, cols, merge, breaks, landscape) {
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>' +
+      '<sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>' +
+      cols.map(function (w, i) { return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>'; }).join('') + '</cols><sheetData>' + xml + '</sheetData>' +
+      (merge.length ? '<mergeCells count="' + merge.length + '">' + merge.map(function (m) { return '<mergeCell ref="' + m + '"/>'; }).join('') + '</mergeCells>' : '') +
+      '<pageMargins left="0.4" right="0.4" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="' + (landscape ? 'landscape' : 'portrait') + '" fitToWidth="1" fitToHeight="0"/>' +
+      (breaks.length ? '<rowBreaks count="' + breaks.length + '" manualBreakCount="' + breaks.length + '">' + breaks.map(function (b) { return '<brk id="' + b + '" max="16383" man="1"/>'; }).join('') + '</rowBreaks>' : '') + '</worksheet>';
+  }
+  function xlsxFile(title, sheetXml) {
+    var styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      '<numFmts count="1"><numFmt numFmtId="164" formatCode="0.0#"/></numFmts>' +
+      '<fonts count="8"><font><sz val="11"/><name val="Calibri"/></font><font><sz val="10"/><color rgb="FF667085"/><name val="Calibri"/></font><font><b/><sz val="16"/><color rgb="FF0B1640"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FF1B6F86"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFB42318"/><name val="Calibri"/></font><font><sz val="8"/><name val="Calibri"/></font></fonts>' +
+      '<fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0B1640"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1B8F86"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF2F5F9"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE4E8EF"/></patternFill></fill></fills>' +
+      '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFC9D2DE"/></left><right style="thin"><color rgb="FFC9D2DE"/></right><top style="thin"><color rgb="FFC9D2DE"/></top><bottom style="thin"><color rgb="FFC9D2DE"/></bottom><diagonal/></border></borders>' +
+      '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="22">' +
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +                                   // 0
+      '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +                     // 1 intestazione piccola
+      '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +                     // 2 nome
+      '<xf numFmtId="0" fontId="3" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>' + // 3 titoli
+      '<xf numFmtId="0" fontId="3" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>' + // 4
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>' + // 5 riga
+      '<xf numFmtId="0" fontId="4" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment vertical="top"/></xf>' + // 6 giorno
+      '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>' + // 7 ore
+      '<xf numFmtId="0" fontId="3" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>' + // 8 totale
+      '<xf numFmtId="164" fontId="3" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>' + // 9
+      '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +                     // 10 firma
+      '<xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>' + // 11 fascia
+      '<xf numFmtId="0" fontId="4" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top"/></xf>' + // 12
+      '<xf numFmtId="164" fontId="0" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>' + // 13
+      '<xf numFmtId="0" fontId="3" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' + // 14 titoli a due righe
+      '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>' + // 15 ore del giorno
+      '<xf numFmtId="164" fontId="0" fillId="5" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>' + // 16 sabato e domenica
+      '<xf numFmtId="0" fontId="5" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>' + // 17 F
+      '<xf numFmtId="0" fontId="6" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>' + // 18 M
+      '<xf numFmtId="0" fontId="7" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>' + // 19 ore + permesso
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>' + // 20 giorni (numero intero)
+      '<xf numFmtId="0" fontId="3" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>' + // 21 totale in giorni
+      '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+    var R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    return zipStore([
+      ['[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+      ['_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + R + '/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+      ['xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="' + R + '"><sheets><sheet name="' + xEsc(title) + '" sheetId="1" r:id="rId1"/></sheets></workbook>'],
+      ['xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + R + '/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="' + R + '/styles" Target="styles.xml"/></Relationships>'],
+      ['xl/styles.xml', styles],
+      ['xl/worksheets/sheet1.xml', sheetXml]
+    ]);
+  }
+  function schedeRows(key) {
+    var per = {};
+    S.lavori.forEach(function (l) {
+      if (l.fonte !== 'scheda' || !l.utente || !l.data || String(l.data).slice(0, 7) !== key) return;
+      (per[l.utente] = per[l.utente] || []).push(l);
+    });
+    var rows = [], breaks = [], ids = Object.keys(per).sort(function (a, b) { return nameOf(a).localeCompare(nameOf(b), 'it'); });
+    ids.forEach(function (uid, n) {
+      var list = per[uid].map(function (l) {
+        var b = l.barcaId ? boatById(l.barcaId) : null, altre = (l.altreBarche || []).map(boatById).filter(Boolean);
+        return { d: l.data, t: l.titolo || 'Lavoro', c: l.barcaId ? (b && b.proprietario) || '' : 'Lavori del cantiere', b: l.barcaId ? [b ? b.nome || 'Barca' : 'Barca eliminata'].concat(altre.map(function (x) { return x.nome || 'Barca'; })).join(', ') : '—', o: num(l.oreLavoro) || 0 };
+      }).sort(function (a, b) { return a.d.localeCompare(b.d) || a.t.localeCompare(b.t, 'it') || a.c.localeCompare(b.c, 'it'); });
+      rows.push(['t', 'Nautica Mare' + ' · Schede lavoro · ' + cap(monthLabel(key))], ['n', nameOf(uid)], ['v'], ['h', 'Data', 'Lavorazione', 'Cliente', 'Barca', 'Ore']);
+      var last = '', band = true, tot = 0;
+      list.forEach(function (x) {
+        var first = x.d !== last; if (first) band = !band;
+        var dt = new Date(x.d + 'T12:00:00');
+        rows.push([band ? (first ? 'e' : 'b') : (first ? 'd' : 'r'), first ? GG3[dt.getDay()] + ' ' + x.d.slice(8, 10) + '/' + x.d.slice(5, 7) : '', x.t, x.c, x.b, Math.round(x.o * 100) / 100]);
+        last = x.d; tot += x.o;
+      });
+      rows.push(['s', 'Totale ' + nameOf(uid), '', '', '', Math.round(tot * 100) / 100], ['v'], ['f', 'Firma ______________________________']);
+      if (n < ids.length - 1) { breaks.push(rows.length); rows.push(['v']); }
+    });
+    return { rows: rows, breaks: breaks, n: ids.length };
+  }
+  /* Excel per il commercialista: solo le ore, una riga per dipendente e una colonna per giorno,
+     con ferie (F), malattia (M) e permessi (P) approvati. Ferie e malattia contano i giorni dal lunedì al venerdì. */
+  var COMM_ASS = true;
+  function xCol(n) { var s = ''; n++; while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+  function assOrePerm(a) { var o = num(a.ore); if (o != null) return o; var m = /^(\d+):(\d+)$/, x = m.exec(a.dalle || ''), y = m.exec(a.alle || ''); return x && y ? Math.max(0, (+y[1] * 60 + +y[2] - +x[1] * 60 - +x[2]) / 60) : 0; }
+  function commSheet(key) {
+    var y = +key.slice(0, 4), mo = +key.slice(5, 7), nd = new Date(y, mo, 0).getDate(), per = {};
+    function P(uid) { return per[uid] = per[uid] || { ore: {}, ass: {}, perm: {} }; }
+    S.lavori.forEach(function (l) {
+      if (l.fonte !== 'scheda' || !l.utente || !l.data || String(l.data).slice(0, 7) !== key) return;
+      var p = P(l.utente), d = +l.data.slice(8, 10); p.ore[d] = (p.ore[d] || 0) + (num(l.oreLavoro) || 0);
+    });
+    if (COMM_ASS) (S.assenze || []).forEach(function (a) {
+      if (a.stato !== 'approvata' || !a.utente) return;
+      assDays(a).forEach(function (day) {
+        if (!day || day.slice(0, 7) !== key) return; var p = P(a.utente), d = +day.slice(8, 10);
+        if (a.tipo === 'permesso') p.perm[d] = (p.perm[d] || 0) + assOrePerm(a); else p.ass[d] = a.tipo === 'malattia' ? 'M' : 'F';
+      });
+    });
+    var ids = Object.keys(per).sort(function (a, b) { return nameOf(a).localeCompare(nameOf(b), 'it'); });
+    if (!ids.length) return null;
+    function r2(n) { return Math.round(n * 100) / 100; }
+    function c(col, row, st, v) {
+      var ref = xCol(col) + row;
+      if (typeof v === 'number') return '<c r="' + ref + '" s="' + st + '"><v>' + v + '</v></c>';
+      if (v != null && v !== '') return '<c r="' + ref + '" s="' + st + '" t="inlineStr"><is><t xml:space="preserve">' + xEsc(v) + '</t></is></c>';
+      return '<c r="' + ref + '" s="' + st + '"/>';
+    }
+    var wk = [], GG1 = ['D', 'L', 'M', 'M', 'G', 'V', 'S'];
+    for (var d = 1; d <= nd; d++) wk[d] = new Date(y, mo - 1, d).getDay();
+    var tail = COMM_ASS ? ['Totale ore', 'Giorni lavorati', 'Ferie (gg)', 'Malattia (gg)', 'Permessi (ore)'] : ['Totale ore', 'Giorni lavorati'];
+    var xml = '<row r="1">' + c(0, 1, 2, 'Nautica Mare' + ' · Ore lavorate · ' + cap(monthLabel(key))) + '</row>' +
+      '<row r="2">' + c(0, 2, 1, 'Ore dalla scheda lavoro di ogni dipendente' + (COMM_ASS ? '. F = ferie, M = malattia, P = ore di permesso. Ferie e malattia in giorni dal lunedì al venerdì.' : '.')) + '</row><row r="3"/>';
+    var h = c(0, 4, 14, 'Dipendente');
+    for (d = 1; d <= nd; d++) h += c(d, 4, 14, d + '\n' + GG1[wk[d]]);
+    tail.forEach(function (t, j) { h += c(nd + 1 + j, 4, 14, t); });
+    xml += '<row r="4" ht="30" customHeight="1">' + h + '</row>';
+    var row = 4, T = [0, 0, 0, 0, 0];
+    ids.forEach(function (uid) {
+      var p = per[uid], cells = '', tot = 0, gl = 0, fe = 0, ma = 0, pe = 0; row++;
+      cells += c(0, row, 6, nameOf(uid));
+      for (d = 1; d <= nd; d++) {
+        var o = p.ore[d] || 0, a = p.ass[d], pm = p.perm[d] || 0, we = wk[d] === 0 || wk[d] === 6;
+        if (o) { tot += o; gl++; }
+        if (pm) pe += pm;
+        if (a && !we) { if (a === 'M') ma++; else fe++; }
+        if (pm) cells += c(d, row, 19, (o ? fmtNum(r2(o), 2) + ' ' : '') + '(P' + fmtNum(r2(pm), 2) + ')');
+        else if (o) cells += c(d, row, we ? 16 : 15, r2(o));
+        else if (a && !we) cells += c(d, row, a === 'M' ? 18 : 17, a);
+        else cells += c(d, row, we ? 16 : 15, '');
+      }
+      var vals = [r2(tot), gl, fe, ma, r2(pe)];
+      tail.forEach(function (t, j) { T[j] += vals[j]; cells += c(nd + 1 + j, row, j === 0 ? 7 : j === 4 ? 15 : 20, vals[j] || ''); });
+      xml += '<row r="' + row + '">' + cells + '</row>';
+    });
+    row++;
+    var tr = c(0, row, 8, 'Totale');
+    for (d = 1; d <= nd; d++) tr += c(d, row, 8, '');
+    tail.forEach(function (t, j) { tr += c(nd + 1 + j, row, j === 0 || j === 4 ? 9 : 21, r2(T[j]) || ''); });
+    xml += '<row r="' + row + '">' + tr + '</row>';
+    var cols = [20]; for (d = 1; d <= nd; d++) cols.push(5.2); tail.forEach(function () { cols.push(9.5); });
+    return xlsxWrap(xml, cols, [], [], true);
+  }
+  async function oreCommXlsx() {
+    if (!S.isOwner) return;
+    if (S.dl === undefined) { try { S.dl = (await CLD().use('downloads')) || null; } catch (e) { S.dl = null; } }
+    if (!S.dl) { toast('Da qui non si possono scaricare file.', true); return; }
+    var key = V.oreMonth, sheet = commSheet(key);
+    if (!sheet) { toast('Nessuna ora segnata in questo mese.', true); return; }
+    var blob = new Blob([xlsxFile('Ore ' + monthLabel(key), sheet)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    try { var res = await S.dl.save({ filename: 'Ore-per-il-commercialista-' + key + '.xlsx', data: blob }); if (res && res.status === 'saved') toast('Excel per il commercialista pronto'); }
+    catch (e) { bkDlErr(e && e.code); }
+  }
+  async function oreXlsx() {
+    if (!S.isOwner) return;
+    if (S.dl === undefined) { try { S.dl = (await CLD().use('downloads')) || null; } catch (e) { S.dl = null; } }
+    if (!S.dl) { toast('Da qui non si possono scaricare file.', true); return; }
+    var key = V.oreMonth, x = schedeRows(key);
+    if (!x.n) { toast('Nessuna ora segnata in questo mese.', true); return; }
+    var data = xlsxFile('Schede lavoro', xlsxSheet(x.rows, x.breaks, [12, 34, 22, 16, 8]));
+    var blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    try { var res = await S.dl.save({ filename: 'Schede-lavoro-' + key + '.xlsx', data: blob }); if (res && res.status === 'saved') toast('Excel pronto: una pagina per ogni dipendente'); }
+    catch (e) { bkDlErr(e && e.code); }
   }
 
   function viewChecklist() {
@@ -7834,7 +7972,10 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'L’elenco «Da posizionare» mostra le barche non ancora messe sulla mappa.',
       'Il righello in alto corregge le misure del cantiere.',
       'Sul computer, sopra la mappa, c’è l’elenco delle barche già sistemate con una casella per cercarle: tocchi un nome e la mappa ci va. La scheda della barca si apre a destra.'] },
-    porto: { t: 'Porto', p: 'I pontili della Marina con i posti barca.', li: [
+    porto: { t: 'Porto', p: 'La pianta del porto di San Vincenzo con i 397 posti barca.', li: [
+      'Ogni fila ha una lettera colorata: A e B pescatori e residenti, C 7 m, D 9 m, E 11 m, F G H 13 m, I L 15 m, M N O 18 m, P Q 15 m. Il posto si chiama con lettera e numero nella fila, contando da ovest: per esempio A7, F14, L17.',
+      'Le zone senza lettera: BC banchina cantiere, MU muro, PM pontile muro, DA darsena, AE accosti esterni (per esempio MU5).',
+      'Trascina per spostarti, due dita o la rotellina per ingrandire: da vicino si leggono i nomi dei posti.',
       'Tocca un posto per segnarlo come vostro o della Marina e assegnare barca, cliente, contratto e scadenza.',
       '«Contratti» elenca i posti in ordine di scadenza, con quelli vicini in alto.',
       '«Trova posto»: scrivi le misure di una barca e si accendono i vostri posti liberi in cui entra.',
@@ -7854,6 +7995,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'Quando segni una cosa fatta, ricordati di mettere le ore nella Scheda lavoro.'] },
     pannello: { t: 'Pannello', p: 'Una pagina unica di controllo, aggiornata in tempo reale.', li: [
       'Ore della settimana, programma di oggi, giornate da confermare, lavori e servizi aperti.',
+      '«Ore lavorate» divide le ore per persona, barca, cliente o tipo di lavoro (categoria): per settimana, mese, mese scorso, quest’anno o l’anno scorso.',
       'Contratti del porto in scadenza, posti liberi e occupati, barche in vendita.',
       'Servizi degli ultimi 30 giorni: nei tempi, più lunghi o più veloci del previsto.',
       'Magazzino da riordinare e batterie da caricare.',
@@ -8688,13 +8830,20 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     });
   }
 
+  // i modelli già scritti nelle scadenze, suggeriti mentre si scrive (così restano scritti uguali)
+  function scadModelli() {
+    var m = {}; S.scadenze.forEach(function (s) { var t = String(s.modello || '').trim(); if (t && !m[normT(t)]) m[normT(t)] = t; });
+    return Object.keys(m).map(function (k) { return m[k]; }).sort(function (a, b) { return a.localeCompare(b, 'it', { sensitivity: 'base' }); });
+  }
   function scadSheet(s, presetBoat, presetDate) {
     var isNew = !s; s = s || { barcaId: presetBoat || '', data: presetDate || '' };
     var body =
       '<datalist id="tipi-scad">' + TIPI_SCADENZA.map(function (t) { return '<option value="' + esc(t) + '">'; }).join('') + '</datalist>' +
+      '<datalist id="mod-scad">' + scadModelli().map(function (t) { return '<option value="' + esc(t) + '">'; }).join('') + '</datalist>' +
       aiFillBtn('scad', 'Leggi dalla foto (etichetta o documento)') +
       field(lab('f-barca', 'Barca'), boatSelect(s.barcaId)) +
       field(lab('f-tipoS', 'Scadenza'), inp('f-tipoS', s.tipo, 'type="text" list="tipi-scad" required placeholder="es. Tagliando motore"')) +
+      field(lab('f-modS', 'Modello dell’articolo'), inp('f-modS', s.modello, 'type="text" list="mod-scad" maxlength="80" placeholder="es. Yamaha F150, zattera Eurovinil 6 posti"'), 'Il modello di quello che va revisionato: motore, zattera, estintore… Serve per raggruppare le scadenze per modello.') +
       '<div class="grid2">' + field(lab('f-dataS', 'Entro il'), inp('f-dataS', s.data, 'type="date"')) + field(lab('f-oreS', 'Oppure a ore motore'), inp('f-oreS', s.oreScadenza, 'type="text" inputmode="numeric" placeholder="es. 500"')) + '</div>' +
       '<span class="hint" id="hint-ore" style="margin-top:-8px"></span>' +
       '<div class="grid2">' + field(lab('f-ricM', 'Si ripete ogni (mesi)'), inp('f-ricM', s.ricorrenzaMesi, 'type="text" inputmode="numeric" placeholder="es. 12"')) + field(lab('f-ricO', 'Si ripete ogni (ore)'), inp('f-ricO', s.ricorrenzaOre, 'type="text" inputmode="numeric" placeholder="es. 100"')) + '</div>' +
@@ -8711,7 +8860,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       },
       onSubmit: async function (f) {
         var data = {
-          barcaId: val(f, 'f-barca'), tipo: val(f, 'f-tipoS'), data: val(f, 'f-dataS') || null, oreScadenza: parseIntS(val(f, 'f-oreS')),
+          barcaId: val(f, 'f-barca'), tipo: val(f, 'f-tipoS'), modello: val(f, 'f-modS'), data: val(f, 'f-dataS') || null, oreScadenza: parseIntS(val(f, 'f-oreS')),
           ricorrenzaMesi: parseIntS(val(f, 'f-ricM')), ricorrenzaOre: parseIntS(val(f, 'f-ricO')), note: val(f, 'f-noteS'), preavviso: parseIntS(val(f, 'f-preS')), modificato: new Date().toISOString()
         };
         if (!data.barcaId) { formErr('Scegli la barca.'); return false; }
@@ -9264,7 +9413,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   function aiPrompt(k) {
     if (k === 'scad' || k === 'scadC') return 'Nella foto c’è un’etichetta, un cartellino, un certificato o un documento con una scadenza (estintore, razzi, zattera, giubbotti, cassetta di pronto soccorso, assicurazione, revisione, tagliando, verifica periodica). Oggi è il ' + todayISO() + '. ' +
       'Rispondi SOLO con un JSON: {"tipo": cosa scade, breve in italiano (es. "Revisione estintore"), "data": data di scadenza come AAAA-MM-GG (se c’è solo mese e anno usa l’ultimo giorno del mese; se c’è solo l’ultima revisione e la periodicità è scritta, calcola la prossima), ' +
-      '"ricorrenzaMesi": ogni quanti mesi si ripete, solo se scritto, "dettagli": marca, matricola o altri dati utili in poche parole}. Non inventare: se non leggi la data metti "".';
+      '"ricorrenzaMesi": ogni quanti mesi si ripete, solo se scritto, "modello": marca e modello dell’articolo se scritti (es. "Yamaha F150", "Eurovinil Ocean 6 posti"), "dettagli": matricola o altri dati utili in poche parole}. Non inventare: se non leggi la data metti "".';
     if (k === 'batt') return 'Nella foto c’è l’etichetta di una o più batterie di una barca. Rispondi SOLO con un JSON: {"marca": "", "modello": "", "volt": numero, "ah": capacità in Ah (numero), "spunto": corrente di spunto in A (CCA o EN, numero), ' +
       '"tipo": uno tra "AGM","gel","piombo","litio" o "", "data": data di produzione se leggibile, "quante": numero di batterie visibili}. Non inventare: se non leggi un dato metti "" o null.';
     return 'Nella foto c’è un rifiuto prodotto in un cantiere nautico. Scegli il tipo giusto tra questi (usa l’id prima dei due punti):\n' +
@@ -9282,7 +9431,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       if (k === 'scad' || k === 'scadC') {
         var d = /^\d{4}-\d{2}-\d{2}$/.test(aiStr(r.data)) ? aiStr(r.data) : '', ric = num(r.ricorrenzaMesi) > 0 ? String(Math.round(num(r.ricorrenzaMesi))) : '';
         set(k === 'scad' ? 'f-tipoS' : 'f-sct', aiStr(r.tipo), true); set(k === 'scad' ? 'f-dataS' : 'f-scd', d, true); set(k === 'scad' ? 'f-ricM' : 'f-scm', ric);
-        addNote(k === 'scad' ? 'f-noteS' : 'f-scn', aiStr(r.dettagli));
+        if (k === 'scad') set('f-modS', aiStr(r.modello));
+        addNote(k === 'scad' ? 'f-noteS' : 'f-scn', k === 'scad' ? aiStr(r.dettagli) : [aiStr(r.modello), aiStr(r.dettagli)].filter(Boolean).join(' · '));
         if (!d) msg = 'Non ho letto la data di scadenza: scrivila tu.';
       } else if (k === 'batt') {
         var t = [[aiStr(r.marca), aiStr(r.modello)].filter(Boolean).join(' '), num(r.volt) ? fmtNum(num(r.volt), 1) + ' V' : '', num(r.ah) ? fmtNum(num(r.ah), 0) + ' Ah' : '', num(r.spunto) ? fmtNum(num(r.spunto), 0) + ' A spunto' : '', aiStr(r.tipo), r.data ? 'prodotta ' + aiStr(r.data) : ''].filter(Boolean).join(' ');
@@ -9679,6 +9829,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
         var op = V.oreMonth.split('-'), om = +op[1] - 1 + (act === 'ore-next' ? 1 : -1), oy = +op[0];
         if (om < 0) { om = 11; oy--; } if (om > 11) { om = 0; oy++; }
         V.oreMonth = oy + '-' + pad(om + 1); V.oreOpen = null; render(); break;
+      case 'ore-xlsx': oreXlsx(); break;
+      case 'ore-comm': oreCommXlsx(); break;
       case 'ore-open': V.oreOpen = V.oreOpen === t.getAttribute('data-u') ? null : t.getAttribute('data-u'); render(); break;
       case 'new-modello': modelloSheet(null); break;
       case 'edit-modello': x = S.modelli.find(function (m) { return m.id === id; }); if (x && S.canWrite) modelloSheet(x); break;
