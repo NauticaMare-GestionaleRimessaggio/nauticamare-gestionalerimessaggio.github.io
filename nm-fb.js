@@ -147,6 +147,28 @@
 
   /* ---------- Firebase ---------- */
   firebase.initializeApp(CFG);
+  /* App Check: dimostra a Google che le richieste all'AI arrivano dal nostro sito (obbligatorio per AI Logic dal 2/11/2026).
+     Sta su un'app Firebase a parte ('ai'), usata solo per il gettone dell'AI: così accesso e dati non lo aspettano mai,
+     anche se reCAPTCHA non si carica (senza campo, blocco pubblicità…). Si accende solo la prima volta che serve, a pagina caricata.
+     Per le prove fuori dal sito: localStorage 'nm_appcheck_debug' = gettone di debug registrato nella console. */
+  var ACK = window.NM_APPCHECK || {}, AC_P = null;
+  function appCheckToken() {
+    if (!ACK.siteKey || !firebase.appCheck) return Promise.resolve('');
+    if (!AC_P) AC_P = new Promise(function (res) {
+      if (document.body) res(); else document.addEventListener('DOMContentLoaded', function () { res(); });
+    }).then(function () {
+      var dbg = null; try { dbg = localStorage.getItem('nm_appcheck_debug'); } catch (e) { }
+      if (dbg) self.FIREBASE_APPCHECK_DEBUG_TOKEN = dbg === 'true' ? true : dbg;
+      var ac = firebase.appCheck(firebase.initializeApp(CFG, 'ai'));
+      ac.activate(ACK.tipo === 'enterprise' ? new firebase.appCheck.ReCaptchaEnterpriseProvider(ACK.siteKey) : new firebase.appCheck.ReCaptchaV3Provider(ACK.siteKey), false); // niente rinnovo automatico: il gettone si chiede solo quando si usa l’AI (meno verifiche, restano nella quota gratis)
+      return ac;
+    }).catch(function (e) { console.warn('App Check', e); return null; });
+    return AC_P.then(function (ac) {
+      if (!ac) { AC_P = null; return ''; }
+      var t = ac.getToken(false).then(function (r) { return r && r.token || ''; }, function (e) { console.warn('App Check', e); return ''; });
+      return Promise.race([t, new Promise(function (r) { setTimeout(function () { r(''); }, 15000); })]); // mai bloccare l’AI più di 15 secondi
+    });
+  }
   var auth = firebase.auth(); auth.languageCode = 'it';
   var fs = firebase.firestore();
   try { fs.settings({ cacheSizeBytes: 100 * 1024 * 1024, ignoreUndefinedProperties: true, merge: true }); } catch (e) { }
@@ -1275,6 +1297,7 @@
     },
     photoSrc: function (id) { if (PH[id]) return PH[id]; if (started) loadPhoto(id); else READY.then(function () { loadPhoto(id); }); return GIF0; },
     altroRows: altroRows,
+    appCheckToken: appCheckToken,
     open: open,
     vista: attVista,
     clientiBarca: clientiBarca,
