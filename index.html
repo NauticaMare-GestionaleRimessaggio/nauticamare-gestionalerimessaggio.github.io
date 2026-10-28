@@ -1803,9 +1803,9 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     h += bops.length ? '<div class="group">' + bops.slice(0, 6).map(function (o) { return opRow(o, false); }).join('') + '</div>' : '<div class="notice">Nessun servizio per questa barca.</div>';
 
     h += secH('Trasporto: passa?') + passaHtml(b);
-    var pvs = prevOfBoat(b.id);
-    h += secH('Preventivi', S.canWrite ? 'prev-new' : '', '+ Nuovo', ' data-boat="' + esc(b.id) + '"');
-    h += pvs.length ? '<div class="group">' + pvs.slice(0, 5).map(function (p) { return prevRow(p, false); }).join('') + '</div>' : '<div class="notice">Nessun preventivo per questa barca.</div>';
+    var pvs = prevOn() ? prevOfBoat(b.id) : null;
+    if (pvs) h += secH('Preventivi', S.canWrite ? 'prev-new' : '', '+ Nuovo', ' data-boat="' + esc(b.id) + '"');
+    if (pvs) h += pvs.length ? '<div class="group">' + pvs.slice(0, 5).map(function (p) { return prevRow(p, false); }).join('') + '</div>' : '<div class="notice">Nessun preventivo per questa barca.</div>';
 
     var lv = sortLavori(S.lavori.filter(function (l) { return l.barcaId === b.id || (l.altreBarche || []).indexOf(b.id) >= 0; }));
     var tot = lv.reduce(function (a, l) { return a + (l.barcaId === b.id && l.stato === 'fatto' && num(l.importo) != null ? Number(l.importo) : 0); }, 0);
@@ -4657,8 +4657,9 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     return h + lyRender('pannello', B.concat(LY_W));
   }
   /* ---------- Riepiloghi: scadenze, magazzino, porto e rifiuti in numeri e tabelle ---------- */
-  function strOn(k) { var c = S.strCfg; if (c && !c._del && c[k] != null) return !!c[k]; return k === 'clienti'; } // strumenti che si accendono e spengono (impostazioni/strumenti)
+  function strOn(k) { var c = S.strCfg; if (c && !c._del && c[k] != null) return !!c[k]; return k === 'clienti' || k === 'preventivi'; } // strumenti che si accendono e spengono (impostazioni/strumenti)
   function PORTO_ON() { return true; }
+  function prevOn() { return strOn('preventivi'); } // spenti: spariscono da menù, scheda barca, storia e ricerca; i dati restano
   function riepList() { return RIEP.filter(function (r) { return r[0] !== 'clienti' || (S.isOwner && strOn('clienti')); }); }
   var RIEP = [['scad', 'Scadenze in arrivo', I.alarm], ['mag', 'Magazzino e consumi', I.box], ['porto', 'Porto e posti', I.map], ['rif', 'Rifiuti e ritiri', I.trash], ['clienti', 'Clienti da sentire', I.tel]];
   // ogni pezzo di un riepilogo è un riquadro da sistemare: numeri piccoli, grafici medi, tabelle grandi
@@ -5381,6 +5382,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   }
   function prevOfBoat(bid) { return (S.prev || []).filter(function (p) { return p.barcaId === bid; }).sort(function (a, c) { return String(c.data || '').localeCompare(String(a.data || '')); }); }
   function viewPreventivi() {
+    if (!prevOn()) return '<div class="notice" style="margin-top:12px">I preventivi sono spenti. Li accende l’amministratore in Altro › Strumenti in più: quelli già salvati ricompaiono.</div>';
     var f = V.prevFilter || 'aperti', all = (S.prev || []).slice().sort(function (a, c) { return String(c.data || '').localeCompare(String(a.data || '')); });
     var list = all.filter(function (p) { return f === 'tutti' ? true : f === 'aperti' ? (p.stato === 'bozza' || p.stato === 'inviato') : p.stato === f; });
     var h = '<div class="chips" role="group" aria-label="Filtro preventivi">' + [['aperti', 'Da inviare e inviati'], ['accettato', 'Accettati'], ['rifiutato', 'Rifiutati'], ['tutti', 'Tutti']].map(function (o) {
@@ -6826,13 +6828,15 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     ];
     if (!S.isOwner) rows = rows.filter(function (r) { return r[0] !== 'strumenti'; });
     if (!ctrlOn()) rows = rows.filter(function (r) { return r[0] !== 'controllo'; });
+    if (!prevOn()) rows = rows.filter(function (r) { return r[0] !== 'preventivi'; });
     var fbRows = window.__NM_FB && window.__NM_FB.altroRows ? window.__NM_FB.altroRows() : [];
     fbRows.forEach(function (r) { rows.push(['fb:' + r[0], I[r[1]] || I.list, r[2] || '', r[3], r[4], r[5] || '']); });
     return rows;
   }
 
   /* Strumenti in più: l'amministratore accende o spegne gli strumenti facoltativi (impostazioni/strumenti) */
-  var STRUMENTI = [['clienti', 'Clienti da sentire', 'In Riepiloghi: barche ferme da 12 mesi, contratti del posto scaduti, scadenze passate da più di 30 giorni. Lo vede solo l’amministratore.'],
+  var STRUMENTI = [['preventivi', 'Preventivi', 'I preventivi in ore e ricambi, anche dalla foto di quello dell’ufficio. Spenti spariscono dal menù, dalla scheda della barca e dalla ricerca; quelli già salvati restano e tornano quando li riaccendi.'],
+    ['clienti', 'Clienti da sentire', 'In Riepiloghi: barche ferme da 12 mesi, contratti del posto scaduti, scadenze passate da più di 30 giorni. Lo vede solo l’amministratore.'],
     ['ctrlmezzi', 'Controllo dei mezzi prima dell’uso', 'Su ogni mezzo scegli se va controllato. Il primo della giornata risponde alle voci (gomme, freni, perdite…); se una non va il mezzo resta fermo e lo vedete in Home finché l’amministratore non lo rimette in uso.'],
     ['tablet', 'Tablet condiviso con PIN', 'Un tablet in officina per tutti: ognuno tocca il suo nome e scrive il suo PIN di 4 cifre. Dopo 5 minuti senza tocchi si richiude. In Utenti e permessi scegli quale account è il tablet; il PIN si mette da Il mio account.']];
   function viewStrumenti() {
@@ -7489,7 +7493,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     (S.cariche || []).forEach(function (c) { if (c.barcaId === b.id) add('batt', c.data, 'Batterie caricate', c.utente ? 'da ' + nameOf(c.utente) : '', '', '', I.batt); });
     S.scadenze.forEach(function (x) { if (x.barcaId === b.id && x.fatta) add('altro', x.fattaIl, 'Scadenza fatta: ' + (x.tipo || ''), x.note || '', '', '', I.alarm); });
     S.ops.forEach(function (o) { if (o.barcaId === b.id && opDone(o)) add('altro', o.completataIl || o.data, 'Servizio: ' + opTitle(o), num(opHours(o)) ? fmtDur(opHours(o)) : '', 'open-op', o.id, I.list); });
-    prevOfBoat(b.id).forEach(function (p) { add('altro', p.data, 'Preventivo' + (p.titolo ? ': ' + p.titolo : ''), prevStato(p.stato) + (p.numero ? ' · n. ' + p.numero : ''), 'prev-edit', p.id, I.doc); });
+    if (prevOn()) prevOfBoat(b.id).forEach(function (p) { add('altro', p.data, 'Preventivo' + (p.titolo ? ': ' + p.titolo : ''), prevStato(p.stato) + (p.numero ? ' · n. ' + p.numero : ''), 'prev-edit', p.id, I.doc); });
     (S.giri || []).forEach(function (g) {
       var v = giroVoce(g, b.id); if (!v) return;
       add('altro', v.il || g.data, v.esito === 'problema' ? 'Giro dopo il vento: ' + ((v.cosa || []).join(', ').toLowerCase() || 'problema') : 'Giro dopo il vento: tutto a posto',
@@ -7857,7 +7861,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     grp('Scadenze del cantiere', (S.scadC || []).map(function (s) {
       return { s: gqScore(words, s.tipo, [s.rif, scGruppo(s.gruppo), s.note]), o: isoToUTC(s.data) || 0, h: gqRow('scc', s.id, (s.tipo || 'Scadenza') + (s.rif ? ' · ' + s.rif : ''), scGruppo(s.gruppo) + (s.data ? ' · ' + fmtDate(s.data) : ''), '') };
     }));
-    grp('Preventivi', (S.prev || []).map(function (p) {
+    grp('Preventivi', (prevOn() ? S.prev || [] : []).map(function (p) {
       var b = boatById(p.barcaId);
       return { s: gqScore(words, p.titolo, [p.numero, b && b.nome, b && b.proprietario, (p.voci || []).map(function (v) { return v.titolo; }).join(' ')]), o: -(isoToUTC(p.data) || 0),
         h: gqRow('prev', p.id, p.titolo || 'Preventivo', [b ? b.nome : '', p.numero ? 'n. ' + p.numero : '', fmtDate(p.data)].filter(Boolean).join(' · '), p.stato || '') };
@@ -8032,7 +8036,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     preventivi: { t: 'Preventivi', p: 'I preventivi in ore e ricambi, anche dalla foto di quello dell’ufficio.', li: [
       'Puoi fotografare il preventivo (anche scritto a mano) e l’app compila le righe, oppure prepararlo qui.',
       'Lo stato va da bozza a inviato ad accettato.',
-      'Quando diventa «Accettato», i lavori previsti diventano lavorazioni da fare con le ore stimate. Dopo si confrontano ore previste e vere.'] },
+      'Quando diventa «Accettato», i lavori previsti diventano lavorazioni da fare con le ore stimate. Dopo si confrontano ore previste e vere.',
+      'A|Se al cantiere non servono, l’amministratore li spegne da Altro › Strumenti in più (niente viene cancellato).'] },
     rifiuti: { t: 'Rifiuti', p: 'Il registro dei rifiuti del cantiere, con codice CER e contenitore.', li: [
       'Segna un rifiuto a pezzi, litri o sacchetti (l’app stima i kg) oppure in kg, anche legato alla barca.',
       'La fotocamera può suggerire che tipo di rifiuto è.',
@@ -8079,6 +8084,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'A|Solo l’amministratore lo rimette in uso con «Rimetti in uso», quando il problema è sistemato.',
       'A|Quali mezzi controllare lo scegli aprendo il mezzo (Mappa › Mezzi): spunta «Controllo prima dell’uso» e, se vuoi, scrivi le tue voci.'] },
     strumenti: { t: 'Strumenti in più', p: 'Gli strumenti facoltativi: l’amministratore li accende o li spegne secondo quello che serve al cantiere.', li: [
+      'A|«Preventivi» è acceso di base: se lo spegni sparisce dal menù, dalla scheda della barca, dalla storia e dalla ricerca. I preventivi già fatti restano salvati e ricompaiono quando lo riaccendi.',
       'A|«Clienti da sentire» aggiunge in Riepiloghi l’elenco dei clienti da chiamare: barche senza lavori né vari da 12 mesi, contratti del posto scaduti, scadenze passate da più di 30 giorni.',
       'A|«Tablet condiviso con PIN»: in Utenti e permessi tocchi «Usa come tablet condiviso» sull’account del tablet. Su quel tablet si apre «Chi lavora adesso?»: ognuno tocca il suo nome e scrive il suo PIN, poi lavora a nome suo (scheda, cronometro, lavori) con i permessi da dipendente.',
       'Il PIN per il tablet (4 cifre) si mette da Altro › Il mio account; l’amministratore lo può mettere o cambiare in Utenti e permessi. «Ho finito», o 5 minuti senza tocchi, richiudono il tablet.',
