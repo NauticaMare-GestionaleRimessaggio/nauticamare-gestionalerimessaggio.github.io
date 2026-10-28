@@ -3802,15 +3802,15 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     C: { n: 'Fila C · 7 m', t: 'row', e: 2592, s: -1, L: 7, c: '#3CB44B' },
     D: { n: 'Fila D · 9 m', t: 'row', e: 2608, s: 1, L: 9, c: '#AAFFC3' },
     E: { n: 'Fila E · 11 m', t: 'row', e: 2924, s: -1, L: 11, c: '#0082C8', fg: 1 },
-    F: { n: 'Fila F · 13 m', t: 'row', e: 2950, s: 1, L: 13, c: '#46F0F0', fg: 1 },
-    G: { n: 'Fila G · 13 m', t: 'row', e: 3337, s: -1, L: 13, c: '#AA6E28', fg: 1 },
-    H: { n: 'Fila H · 13 m', t: 'row', e: 3356, s: 1, L: 13, c: '#FFFAC8', fg: 1 },
-    I: { n: 'Fila I · 15 m', t: 'row', e: 3800, s: -1, L: 15, c: '#3F51D8', fg: 1 },
-    L: { n: 'Fila L · 15 m', t: 'row', e: 3815, s: 1, L: 15, c: '#D2F53C', fg: 1 },
-    M: { n: 'Fila M · 18 m', t: 'row', e: 4336, s: -1, L: 18, c: '#F032E6', fg: 1 },
-    N: { n: 'Fila N · 18 m', t: 'row', e: 4350, s: 1, L: 18, c: '#808000', fg: 1 },
-    O: { n: 'Fila O · 18 m', t: 'row', e: 4908, s: -1, L: 18, c: '#1A1A1A', fg: 1 },
-    P: { n: 'Fila P · 15 m', t: 'row', e: 4921, s: 1, L: 15, c: '#FFFFFF', fg: 1 },
+    F: { n: 'Fila F · 13 m', t: 'row', e: 2950, s: 1, L: 13, c: '#46F0F0', fg: 1, testa: 1 },
+    G: { n: 'Fila G · 13 m', t: 'row', e: 3337, s: -1, L: 13, c: '#AA6E28', fg: 1, testa: 1 },
+    H: { n: 'Fila H · 13 m', t: 'row', e: 3356, s: 1, L: 13, c: '#FFFAC8', fg: 1, testa: 1 },
+    I: { n: 'Fila I · 15 m', t: 'row', e: 3800, s: -1, L: 15, c: '#3F51D8', fg: 1, testa: 1 },
+    L: { n: 'Fila L · 15 m', t: 'row', e: 3815, s: 1, L: 15, c: '#D2F53C', fg: 1, testa: 1 },
+    M: { n: 'Fila M · 18 m', t: 'row', e: 4336, s: -1, L: 18, c: '#F032E6', fg: 1, testa: 1 },
+    N: { n: 'Fila N · 18 m', t: 'row', e: 4350, s: 1, L: 18, c: '#808000', fg: 1, testa: 1 },
+    O: { n: 'Fila O · 18 m', t: 'row', e: 4908, s: -1, L: 18, c: '#1A1A1A', fg: 1, testa: 1 },
+    P: { n: 'Fila P · 15 m', t: 'row', e: 4921, s: 1, L: 15, c: '#FFFFFF', fg: 1, testa: 1 },
     Q: { n: 'Fila Q · 15 m', t: 'row', e: 5395, s: -1, L: 15, c: '#FFD7B4', sud: 5432 },
     DA: { n: 'Darsena', t: 'edge', lines: [M2([1220, 5600, 1220, 6300]), M2([1850, 5450, 1850, 6300])], L: 22, c: '#9A9A9A' },
     AE: { n: 'Accosti esterni', t: 'edge', lines: [M2([1055, 5550, 1055, 6300])], L: 12, c: '#9B30C8' }
@@ -3980,7 +3980,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     Object.keys(ZONE).forEach(function (k) {
       var Zc = ZONE[k]; if (!Zc.fg) return;
       var bs = BERTHS.filter(function (b) { return b.pon === k; }).sort(function (a, b) { return a.cx - b.cx; });
-      for (var j = 0; j <= bs.length; j++) {
+      for (var j = Zc.testa ? 1 : 0; j <= bs.length; j++) { // testa: l'ultimo posto verso ovest è testa di pontile, senza finger esterno
         var x = j === 0 ? bs[0].cx - bs[0].wid / 2 : j === bs.length ? bs[j - 1].cx + bs[j - 1].wid / 2 : (bs[j - 1].cx + bs[j].cx) / 2, e = mz(Zc.e), e2 = e + Zc.s * Zc.L * 0.6;
         flat([[x - 0.3, Math.min(e, e2)], [x + 0.3, Math.min(e, e2)], [x + 0.3, Math.max(e, e2)], [x - 0.3, Math.max(e, e2)]], rgbS(C.finger));
       }
