@@ -4598,17 +4598,13 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       if (boatById(boatId)) await postoBarca(boatId, berthId);
       return true;
     }
-    async function release(boatId, keep) { // alaggio: «keep» = il posto resta suo (la barca a terra non si disegna); altrimenti si libera
-      var b = berthOfBoat(boatId); if (!b || keep) return true;
+    async function release(boatId) { // la barca esce dal porto (alaggio, o altro posto scritto nella scheda): il posto si libera senza barca, cliente e contratto (Torcio, 28/10/2026)
+      var b = berthOfBoat(boatId); if (!b) return true;
       var d = postoDoc(b.id) || {}, ref = S.db.collection('posti').doc(b.id), now = new Date().toISOString(), ok;
       if (d.gestione === 'nostro') ok = await w(function () { return ref.set({ gestione: 'nostro', barcaId: '', cliente: '', telefono: '', contratto: '', fino: '', note: '', modificato: now }); });
       else ok = await delSeq([ref]);
       if (ok) await postoBarca(boatId, '', b.id);
       return ok;
-    }
-    async function leave(boatId) { // dalla scheda barca: la barca non è più in quel posto; cliente e contratto restano sul posto
-      var b = berthOfBoat(boatId); if (!b) return true;
-      var ref = S.db.collection('posti').doc(b.id); return w(function () { return ref.update({ barcaId: '', modificato: new Date().toISOString() }); });
     }
     // Posti scritti a mano nelle schede, da collegare alla mappa (una volta, dall'amministratore)
     function daCollegare() {
@@ -4654,7 +4650,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     }
     function gotoBerth(id) { if (BY[id]) { P.sel = id; P.flyOnMount = true; } }
     function dueCount() { return dueList().length; }
-    return { vecchioNuovo: vecchioNuovo, view: view, mount: mount, unmount: unmount, refresh: refresh, click: click, resize: resize, isMounted: function () { return P.mounted && !!$('#porto-root'); }, berthLabel: berthLabel, suggest: suggest, assign: assign, release: release, leave: leave, exists: exists, codice: codice, info: info, aTerra: aTerra, ids: function () { return BERTHS.map(function (b) { return b.id; }); }, stats: function () { var c = counts(); c.due = dueList().length; c.richieste = (S.richieste || []).length; return c; }, postoOf: function (id) { return postoDoc(id); }, gotoBerth: gotoBerth, dueCount: dueCount, zone: function () { var z = {}, o = []; BERTHS.forEach(function (b) { var st = statoOf(b); if (st !== 'libero' && st !== 'occupato') return; if (!z[b.zona]) { z[b.zona] = { zona: b.zona, nostri: 0, occupati: 0 }; o.push(z[b.zona]); } z[b.zona].nostri++; if (st === 'occupato') z[b.zona].occupati++; }); return o; },
+    return { vecchioNuovo: vecchioNuovo, view: view, mount: mount, unmount: unmount, refresh: refresh, click: click, resize: resize, isMounted: function () { return P.mounted && !!$('#porto-root'); }, berthLabel: berthLabel, suggest: suggest, assign: assign, release: release, exists: exists, codice: codice, info: info, aTerra: aTerra, ids: function () { return BERTHS.map(function (b) { return b.id; }); }, stats: function () { var c = counts(); c.due = dueList().length; c.richieste = (S.richieste || []).length; return c; }, postoOf: function (id) { return postoDoc(id); }, gotoBerth: gotoBerth, dueCount: dueCount, zone: function () { var z = {}, o = []; BERTHS.forEach(function (b) { var st = statoOf(b); if (st !== 'libero' && st !== 'occupato') return; if (!z[b.zona]) { z[b.zona] = { zona: b.zona, nostri: 0, occupati: 0 }; o.push(z[b.zona]); } z[b.zona].nostri++; if (st === 'occupato') z[b.zona].occupati++; }); return o; },
       contratti: function (gg) { return BERTHS.filter(function (b) { var d = postoDoc(b.id), n = d && d.fino ? daysUntil(d.fino) : null; return n != null && n <= gg && statoOf(b) !== 'marina' && statoOf(b) !== 'libero'; }).map(function (b) { return { id: b.id, d: postoDoc(b.id), boat: berthBoat(b) }; }).sort(function (a, c) { return String(a.d.fino).localeCompare(String(c.d.fino)); }); }, dueList: function () { return dueList().map(function (b) { return { id: b.id, d: postoDoc(b.id), boat: berthBoat(b) }; }); } };
   })();
 
@@ -4926,16 +4922,16 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     });
   }
   function alaggioSheet(b) {
-    var bl = Porto.berthLabel(b.id), d = bl ? Porto.postoOf(bl) || {} : null, keepDef = true; // il posto resta suo (Torcio, 28/10/2026)
+    var bl = Porto.berthLabel(b.id);
     openSheet({
       title: 'Alaggio fatto · ' + (b.nome || 'Barca'), submitLabel: 'Conferma',
       body: '<p class="context">' + esc(b.nome || 'La barca') + ' ora è a terra.</p>' +
-        (bl ? field(lab('f-ap', 'Il posto ' + bl + ' al porto'), '<select id="f-ap"><option value="keep"' + (keepDef ? ' selected' : '') + '>Resta suo, vuoto finché torna in acqua</option><option value="free"' + (keepDef ? '' : ' selected') + '>Si libera</option></select>', d.fino ? 'Contratto fino al ' + fmtDate(d.fino) + '.' : '') : '') +
+        (bl ? '<p class="cap" style="margin:0 2px 12px">Il posto ' + esc(bl) + ' al porto si libera: tolgo barca, cliente e contratto.</p>' : '') +
         '<label class="check"><input type="checkbox" id="f-apos" checked> Dopo, posizionala sulla mappa del cantiere</label>',
       onSubmit: async function (f) {
-        if (bl && !(await Porto.release(b.id, val(f, 'f-ap') === 'keep'))) return false;
+        if (bl && !(await Porto.release(b.id))) return false;
         var go = f.querySelector('#f-apos').checked;
-        toast(bl ? 'Posto ' + bl + (val(f, 'f-ap') === 'keep' ? ' tenuto' : ' libero') : 'Alaggio registrato');
+        toast(bl ? 'Posto ' + bl + ' libero' : 'Alaggio registrato');
         if (go) setTimeout(function () {
           M.prevTab = V.tab; M.prevBoat = null; V.tab = 'mappa'; V.boatId = null; M.area = 'cantiere'; if (M.mode !== '2d') { dispose3D(); M.mode = '2d'; } M.mounted = null; window.scrollTo(0, 0); render();
           setTimeout(function () { var x = boatById(b.id); if (!x) return; if (boatPos(x)) { M.sel = x.id; mapDraw(); } else if (boatDims(x)) placeBoat(x.id); else dimsSheet(x); }, 350);
@@ -8079,7 +8075,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'A|Ognuno dei riepiloghi ha i suoi riquadri da sistemare come in Home: tieni premuto (o «⋯» sul computer) per grandezza, posizione o per toglierli.'] },
     barca: { t: 'Scheda della barca', p: 'Qui c’è tutta la storia della barca.', li: [
       'La matita in alto modifica i dati: modello, misure, motori, stato, ore motore, proprietario con telefono ed email.',
-      '«Posto al porto» è il posto della barca nel porto di San Vincenzo (es. C12): salvando, la barca va in quel posto anche sulla mappa del porto, e se la sposti dalla mappa la scheda si aggiorna. Se la barca sta altrove scrivi dove (es. capannone): resta come testo.',
+      '«Posto al porto» è il posto della barca nel porto di San Vincenzo (es. C12): salvando, la barca va in quel posto anche sulla mappa del porto, e se la sposti dalla mappa la scheda si aggiorna. Se la barca sta altrove scrivi dove (es. capannone): resta come testo e il posto al porto si libera.',
       'Nella matita ogni motore è una riga con marca e modello, matricola, cv e ore: «Aggiungi riga» per un altro motore (copia marca e cv del primo), × per toglierlo. Il numero dei motori si conta da solo.',
       'Toccando «Ore motore» si aggiornano le ore di ogni motore; per scadenze e tagliandi conta il motore con più ore.',
       'Sotto trovi attrezzatura di bordo, ricambi montati, batterie, vari, scadenze, servizi, preventivi e lavori: ognuno ha il suo + per aggiungere da qui.',
@@ -8101,7 +8097,6 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'Le zone senza lettera: BC banchina cantiere (da est), MU muro e PM pontile muro (da nord), DA darsena e AE accosti esterni (da sud). Per esempio MU5.',
       'Trascina per spostarti, due dita o la rotellina per ingrandire: da vicino si leggono i nomi dei posti.',
       'Tocca un posto per segnarlo come vostro o della Marina e assegnare barca, cliente, contratto e scadenza.',
-      'Quando la barca è a terra (in rimessaggio o in lavorazione) il posto resta suo: sulla mappa è vuoto e la scheda del posto dice «Barca a terra · posto tenuto».',
       '«Contratti» elenca i posti in ordine di scadenza, con quelli vicini in alto.',
       '«Trova posto»: scrivi le misure di una barca e si accendono i vostri posti liberi in cui entra.',
       '«Brokeraggio»: barche in vendita e persone che cercano una barca, con quelle adatte già abbinate.',
@@ -8147,7 +8142,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     vari: { t: 'Vari e alaggi', p: 'Le uscite e i rientri in acqua delle barche, con data e ora.', li: [
       'Con il + programmi un varo o un alaggio.',
       'Quando lo segni fatto lo stato della barca si aggiorna da solo: «In acqua» o «In rimessaggio».',
-      'Al varo l’app chiede in quale posto del porto va e propone i vostri posti liberi adatti (o il suo posto, se ce l’ha); all’alaggio il posto al porto resta suo e l’app ricorda di metterla sulla mappa del cantiere.'] },
+      'Al varo l’app chiede in quale posto del porto va e propone i vostri posti liberi adatti (o il suo posto, se ce l’ha); all’alaggio il posto al porto si libera (senza barca, cliente e contratto) e l’app ricorda di metterla sulla mappa del cantiere.'] },
     magazzino: { t: 'Magazzino', p: 'Ricambi, prodotti e materiali con quantità, posizione e scorta minima.', li: [
       'Le quantità si scalano da sole quando qualcuno segna un ricambio in una mansione.',
       '«Da riordinare» e «Lista della spesa» raccolgono gli articoli sotto scorta, divisi per fornitore.',
@@ -8733,7 +8728,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
         var r2 = S.db.collection('barche').doc(b.id);
         var ok2 = await w(function () { return r2.update(data); }), cur = Porto.berthLabel(b.id);
         if (ok2 && pId && pId !== cur) ok2 = await Porto.assign(pId, b.id);
-        else if (ok2 && !pId && cur) ok2 = await Porto.leave(b.id);
+        else if (ok2 && !pId && cur) ok2 = await Porto.release(b.id);
         if (ok2) toast(pId && pId !== cur ? 'Scheda salvata · posto ' + pId + ' sulla mappa' : 'Scheda salvata');
         return ok2;
       }
