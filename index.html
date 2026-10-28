@@ -4430,7 +4430,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
           var data = { gestione: val(f, 'f-pg'), barcaId: val(f, 'f-pb'), cliente: val(f, 'f-pc'), telefono: val(f, 'f-pt'), contratto: val(f, 'f-pk'), fino: val(f, 'f-pf'), note: val(f, 'f-pn'), modificato: new Date().toISOString() };
           if (data.fino && !data.contratto) data.contratto = 'Annuale';
           var old = data.barcaId ? berthOfBoat(data.barcaId) : null;
-          if (old && old.id !== b.id) { var od = postoDoc(old.id) || {}, oref = S.db.collection('posti').doc(old.id); await w(function () { return oref.update({ barcaId: '', modificato: data.modificato }); }); }
+          if (old && old.id !== b.id) await svuota(old.id);
           var ref = S.db.collection('posti').doc(b.id), ok = await w(function () { return ref.set(data); });
           if (ok && data.barcaId) await postoBarca(data.barcaId, b.id);
           if (ok && d.barcaId && d.barcaId !== data.barcaId) await postoBarca(d.barcaId, '', b.id);
@@ -4589,7 +4589,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     async function assign(berthId, boatId, boatData) {
       var b = BY[berthId], boat = boatById(boatId) || boatData; if (!b || !boat) return false;
       var now = new Date().toISOString(), old = berthOfBoat(boatId);
-      if (old && old.id !== berthId) { var od = S.db.collection('posti').doc(old.id); if (!(await w(function () { return od.update({ barcaId: '', modificato: now }); }))) return false; }
+      if (old && old.id !== berthId && !(await svuota(old.id))) return false;
       var d = postoDoc(berthId), ref = S.db.collection('posti').doc(berthId), via = d && d.barcaId && d.barcaId !== boatId && boatById(d.barcaId) ? d.barcaId : '', ok;
       if (d) ok = await w(function () { return ref.update({ barcaId: boatId, cliente: (!via && d.cliente) || boat.proprietario || d.cliente || '', modificato: now }); });
       else ok = await w(function () { return ref.set({ gestione: 'marina', barcaId: boatId, cliente: boat.proprietario || '', telefono: boat.telefono || '', contratto: '', fino: '', note: '', modificato: now }); });
@@ -4598,11 +4598,14 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       if (boatById(boatId)) await postoBarca(boatId, berthId);
       return true;
     }
-    async function release(boatId) { // la barca esce dal porto (alaggio, o altro posto scritto nella scheda): il posto si libera senza barca, cliente e contratto (Torcio, 28/10/2026)
+    function svuota(id) { // la barca lascia il posto (alaggio, altro posto nella scheda, spostata in un altro posto): si libera senza barca, cliente e contratto (Torcio, 28/10/2026)
+      var d = postoDoc(id) || {}, ref = S.db.collection('posti').doc(id);
+      if (d.gestione === 'nostro') return w(function () { return ref.set({ gestione: 'nostro', barcaId: '', cliente: '', telefono: '', contratto: '', fino: '', note: '', modificato: new Date().toISOString() }); });
+      return delSeq([ref]);
+    }
+    async function release(boatId) {
       var b = berthOfBoat(boatId); if (!b) return true;
-      var d = postoDoc(b.id) || {}, ref = S.db.collection('posti').doc(b.id), now = new Date().toISOString(), ok;
-      if (d.gestione === 'nostro') ok = await w(function () { return ref.set({ gestione: 'nostro', barcaId: '', cliente: '', telefono: '', contratto: '', fino: '', note: '', modificato: now }); });
-      else ok = await delSeq([ref]);
+      var ok = await svuota(b.id);
       if (ok) await postoBarca(boatId, '', b.id);
       return ok;
     }
