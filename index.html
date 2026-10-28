@@ -1721,7 +1721,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     if (V.boatView === 'storia') return viewStoria(b);
     var h = '<section class="hero"><div class="main"><div class="pills">' +
       (b.stato ? '<span class="pill acc">' + esc(b.stato) + '</span>' : '') + (b.tipo ? '<span class="pill">' + esc(b.tipo) + '</span>' : '') +
-      (Porto.berthLabel(b.id) ? '<span class="pill teal">Porto · ' + esc(Porto.berthLabel(b.id)) + '</span>' : '') + (b.vendita && b.vendita.attiva ? '<span class="pill vio">In vendita</span>' : '') + '</div>' +
+      (Porto.berthLabel(b.id) ? '<span class="pill teal">' + (Porto.aTerra(b) ? 'Posto ' + esc(Porto.berthLabel(b.id)) + ' · a terra' : 'Porto · ' + esc(Porto.berthLabel(b.id))) + '</span>' : '') + (b.vendita && b.vendita.attiva ? '<span class="pill vio">In vendita</span>' : '') + '</div>' +
       '<h2>' + esc(b.nome || 'Senza nome') + '</h2>' + (b.modello ? '<div class="model">' + esc(b.modello) + '</div>' : '') + '</div>' +
       '<span class="posto' + (b.posto ? '' : ' empty') + '">' + esc(b.posto || 'posto') + '</span></section>';
     var missD = b.daCompletare ? boatMissing(b) : [];
@@ -4065,6 +4065,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     var FS = FACES, LS = LINES, FB = [], BL = [];
     function postoDoc(id) { return (S.posti && S.posti[id]) || null; }
     function berthBoat(b) { var d = postoDoc(b.id); return d && d.barcaId ? boatById(d.barcaId) : null; }
+    function aTerra(boat) { return !!boat && (boat.stato === 'In rimessaggio' || boat.stato === 'In lavorazione'); } // in cantiere: il posto resta suo, vuoto
     function statoOf(b) {
       var d = postoDoc(b.id), occ = !!(d && (d.barcaId && boatById(d.barcaId) || d.cliente));
       if (d && d.gestione === 'nostro') return occ ? 'occupato' : 'libero';
@@ -4080,13 +4081,13 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     };
     var boatsKey = '';
     function buildBoats() {
-      var key = BERTHS.map(function (b) { var bt = berthBoat(b); return bt ? b.id + ':' + bt.id + ':' + bt.lunghezza + ':' + bt.larghezza + ':' + bt.tipo : ''; }).join('|');
+      var key = BERTHS.map(function (b) { var bt = berthBoat(b); return bt ? b.id + ':' + bt.id + ':' + bt.lunghezza + ':' + bt.larghezza + ':' + bt.tipo + ':' + aTerra(bt) : ''; }).join('|');
       if (key === boatsKey) return; boatsKey = key;
       FB.length = 0; BL.length = 0; FACES = FB; LINES = BL;
       BERTHS.forEach(function (b) {
         b.deck = null; b.top = 1; b.barca = null;
         var boat = berthBoat(b), L0 = boat ? num(boat.lunghezza) : null;
-        if (!boat || !L0) return;
+        if (!boat || !L0 || aTerra(boat)) return;
         var B0 = num(boat.larghezza) || beamOf(boat).B;
         b.barca = { L: Math.min(L0, b.len + 2), B: B0, tipo: tipoGeom(boat.tipo) };
         boatGeom(b);
@@ -4329,8 +4330,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       return h;
     }
     function view() {
-      var due = dueList().length, ven = vendite().length;
-      return '<div class="map-ctrl">' +
+      var due = dueList().length, ven = vendite().length, dc = S.isOwner && S.canWrite ? daCollegare() : null, ndc = dc ? dc.agg.length + dc.nuovi.length : 0;
+      return (ndc ? '<button type="button" class="btn sec" data-act="pt-collega" style="width:100%;margin-bottom:10px">Collega i posti scritti nelle schede (' + ndc + ')</button>' : '') + '<div class="map-ctrl">' +
         '<button type="button" class="chip-b" data-act="pt-find">Trova posto</button><button type="button" class="chip-b" data-act="pt-broker">Brokeraggio <b id="pt-nven">' + ven + '</b></button>' +
         '<button type="button" class="chip-b" data-act="pt-contracts">Contratti <b id="pt-ndue" style="color:var(--soon)">' + (due || '') + '</b></button><button type="button" class="chip-b" data-act="pt-search">Cerca</button></div>' +
         '<div class="pt-chips" id="pt-chips">' + chipsHtml() + '</div>' + mlStrip('Cerca posto, barca o cliente', listHtml()) +
@@ -4357,6 +4358,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       var pills = '<span class="pill ' + st.pill + '">' + esc(st.s) + '</span>';
       if (d.fino && daysUntil(d.fino) != null && daysUntil(d.fino) <= 30 && stt !== 'marina') { var dd = daysUntil(d.fino); pills += ' <span class="pill ' + (dd < 0 ? 'late' : 'soon') + '">' + (dd < 0 ? 'Contratto scaduto' : dd === 0 ? 'Scade oggi' : 'Scade tra ' + dd + (dd === 1 ? ' giorno' : ' giorni')) + '</span>'; }
       if (inVendita(boat)) pills += ' <span class="pill vio">In vendita ' + esc(fmtEuro(boat.vendita.prezzo, true)) + '</span>';
+      if (aTerra(boat)) pills += ' <span class="pill">Barca a terra · posto tenuto</span>';
       if (boat && num(boat.lunghezza) > b.len) pills += ' <span class="pill late">Più lunga del posto</span>';
       h += '<div>' + pills + '</div><dl class="pt-kv">';
       h += '<dt>Posto</dt><dd>' + fmtNum(b.len, 2) + ' × ' + fmtNum(b.wid, 2) + ' m</dd><dt>Zona</dt><dd>' + esc(b.zona) + '</dd>';
@@ -4411,6 +4413,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
           var ref = S.db.collection('posti').doc(b.id), ok;
           if (d.gestione === 'nostro') ok = await w(function () { return ref.set({ gestione: 'nostro', barcaId: '', cliente: '', telefono: '', contratto: '', fino: '', note: '', modificato: new Date().toISOString() }); });
           else ok = await delSeq([ref]);
+          if (ok && d.barcaId) await postoBarca(d.barcaId, '', b.id);
           if (ok) { closeSheet(); toast(d.gestione === 'nostro' ? 'Posto libero' : 'Posto della Marina'); }
         } : null,
         onOpen: function (f) {
@@ -4427,8 +4430,10 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
           var data = { gestione: val(f, 'f-pg'), barcaId: val(f, 'f-pb'), cliente: val(f, 'f-pc'), telefono: val(f, 'f-pt'), contratto: val(f, 'f-pk'), fino: val(f, 'f-pf'), note: val(f, 'f-pn'), modificato: new Date().toISOString() };
           if (data.fino && !data.contratto) data.contratto = 'Annuale';
           var old = data.barcaId ? berthOfBoat(data.barcaId) : null;
-          if (old && old.id !== b.id) { var od = postoDoc(old.id) || {}, oref = S.db.collection('posti').doc(old.id); await w(function () { return oref.update({ barcaId: '', modificato: data.modificato }); }); }
+          if (old && old.id !== b.id) await svuota(old.id);
           var ref = S.db.collection('posti').doc(b.id), ok = await w(function () { return ref.set(data); });
+          if (ok && data.barcaId) await postoBarca(data.barcaId, b.id);
+          if (ok && d.barcaId && d.barcaId !== data.barcaId) await postoBarca(d.barcaId, '', b.id);
           if (ok) toast(old && old.id !== b.id ? 'Barca spostata da ' + old.id + ' a ' + b.id : 'Posto salvato');
           return ok;
         }
@@ -4452,7 +4457,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     }
     var TIPI_R = ['Motore', 'Vela', 'Gommone'];
     function matches(q) { return vendite().filter(function (x) { var L = num(x.lunghezza); return (!q.tipo || x.tipo === q.tipo) && L != null && L >= (num(q.Lmin) || 0) && L <= (num(q.Lmax) || 99) && (!num(q.budget) || num(x.vendita.prezzo) <= q.budget * 1.05); }); }
-    function dove(x) { var o = berthOfBoat(x.id); return o ? 'Porto · ' + o.id : x.stato === 'In acqua' ? 'In acqua' : 'Cantiere'; }
+    function dove(x) { var o = berthOfBoat(x.id); return o ? (aTerra(x) ? 'Cantiere · posto ' : 'Porto · ') + o.id : x.stato === 'In acqua' ? 'In acqua' : 'Cantiere'; }
     function brokerSheet() {
       var list = vendite().sort(function (a, b) { return (num(a.vendita.prezzo) || 0) - (num(b.vendita.prezzo) || 0); }), rq = (S.richieste || []).slice();
       var body = '<p class="context">Le barche in vendita sono quelle segnate “In vendita” dalla loro scheda o dal posto in porto.</p>' +
@@ -4550,6 +4555,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
         case 'pt-close': P.sel = null; card(); draw(); return true;
         case 'pt-filter': var f = t.getAttribute('data-f'); if (f === 'fit') { P.filter = null; P.fit = null; } else P.filter = P.filter === f ? null : f; refresh(); return true;
         case 'pt-edit': if (P.sel && BY[P.sel]) postoSheet(BY[P.sel]); return true;
+        case 'pt-collega': collegaSheet(); return true;
         case 'pt-openboat': var bb = P.sel && berthBoat(BY[P.sel]); if (bb) { V.tab = 'barche'; V.boatId = bb.id; V.boatView = null; window.scrollTo(0, 0); render(); } return true;
         case 'pt-sell': var sb = P.sel && berthBoat(BY[P.sel]); if (sb) venditaSheet(sb); return true;
         case 'pt-sellpick': sellPick(); return true;
@@ -4573,20 +4579,68 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       return { own: own ? { id: own.id, zona: own.zona, len: own.len, wid: own.wid } : null, free: free.slice(0, 12).map(function (b) { return { id: b.id, zona: b.zona, len: b.len, wid: b.wid }; }) };
     }
     function exists(id) { return !!BY[id]; }
-    async function assign(berthId, boatId) {
-      var b = BY[berthId], boat = boatById(boatId); if (!b || !boat) return false;
-      var now = new Date().toISOString(), old = berthOfBoat(boatId);
-      if (old && old.id !== berthId) { var od = S.db.collection('posti').doc(old.id); if (!(await w(function () { return od.update({ barcaId: '', modificato: now }); }))) return false; }
-      var d = postoDoc(berthId), ref = S.db.collection('posti').doc(berthId);
-      if (d) return w(function () { return ref.update({ barcaId: boatId, cliente: d.cliente || boat.proprietario || '', modificato: now }); });
-      return w(function () { return ref.set({ gestione: 'marina', barcaId: boatId, cliente: boat.proprietario || '', telefono: boat.telefono || '', contratto: '', fino: '', note: '', modificato: now }); });
+    function codice(s) { var id = String(s || '').toUpperCase().replace(/[\s\-·.]+/g, '').replace(/^([A-Z]+)0+(\d)/, '$1$2'); return BY[id] ? id : ''; } // «c 12», «C-12», «C012» -> C12
+    function info(id) { var b = BY[id]; if (!b) return null; var d = postoDoc(id) || {}, bt = berthBoat(b); return { id: id, zona: b.zona, len: b.len, wid: b.wid, stato: STATI[statoOf(b)].s, barca: bt, cliente: d.cliente || '' }; }
+    // Il campo Posto della scheda barca segue il posto al porto (Torcio, 28/10/2026). «se» = tocca la scheda solo se ha ancora quel posto
+    async function postoBarca(boatId, val, se) {
+      var x = boatById(boatId); if (!x || (x.posto || '') === val || (se && x.posto !== se)) return true;
+      var r = S.db.collection('barche').doc(boatId); return w(function () { return r.update({ posto: val, modificato: new Date().toISOString() }); });
     }
-    async function release(boatId, keepClient) {
-      var b = berthOfBoat(boatId); if (!b) return true;
-      var d = postoDoc(b.id) || {}, ref = S.db.collection('posti').doc(b.id), now = new Date().toISOString();
-      if (keepClient) return w(function () { return ref.update({ barcaId: '', modificato: now }); });
-      if (d.gestione === 'nostro') return w(function () { return ref.set({ gestione: 'nostro', barcaId: '', cliente: '', telefono: '', contratto: '', fino: '', note: '', modificato: now }); });
+    async function assign(berthId, boatId, boatData) {
+      var b = BY[berthId], boat = boatById(boatId) || boatData; if (!b || !boat) return false;
+      var now = new Date().toISOString(), old = berthOfBoat(boatId);
+      if (old && old.id !== berthId && !(await svuota(old.id))) return false;
+      var d = postoDoc(berthId), ref = S.db.collection('posti').doc(berthId), via = d && d.barcaId && d.barcaId !== boatId && boatById(d.barcaId) ? d.barcaId : '', ok;
+      if (d) ok = await w(function () { return ref.update({ barcaId: boatId, cliente: (!via && d.cliente) || boat.proprietario || d.cliente || '', modificato: now }); });
+      else ok = await w(function () { return ref.set({ gestione: 'marina', barcaId: boatId, cliente: boat.proprietario || '', telefono: boat.telefono || '', contratto: '', fino: '', note: '', modificato: now }); });
+      if (!ok) return false;
+      if (via) await postoBarca(via, '', berthId);
+      if (boatById(boatId)) await postoBarca(boatId, berthId);
+      return true;
+    }
+    function svuota(id) { // la barca lascia il posto (alaggio, altro posto nella scheda, spostata in un altro posto): si libera senza barca, cliente e contratto (Torcio, 28/10/2026)
+      var d = postoDoc(id) || {}, ref = S.db.collection('posti').doc(id);
+      if (d.gestione === 'nostro') return w(function () { return ref.set({ gestione: 'nostro', barcaId: '', cliente: '', telefono: '', contratto: '', fino: '', note: '', modificato: new Date().toISOString() }); });
       return delSeq([ref]);
+    }
+    async function release(boatId) {
+      var b = berthOfBoat(boatId); if (!b) return true;
+      var ok = await svuota(b.id);
+      if (ok) await postoBarca(boatId, '', b.id);
+      return ok;
+    }
+    // Posti scritti a mano nelle schede, da collegare alla mappa (una volta, dall'amministratore)
+    function daCollegare() {
+      var r = { agg: [], nuovi: [], occ: [], altro: [] }, presi = {};
+      S.boats.forEach(function (x) { var o = berthOfBoat(x.id); if (o) presi[o.id] = x; });
+      S.boats.slice().sort(byName).forEach(function (x) {
+        var o = berthOfBoat(x.id), t = String(x.posto || '').trim(), c = codice(t);
+        if (o) { if (t !== o.id) r.agg.push({ b: x, id: o.id, t: t }); return; }
+        if (!t) return;
+        if (!c) { r.altro.push({ b: x, t: t }); return; }
+        if (presi[c]) { r.occ.push({ b: x, id: c, t: t, altra: presi[c] }); return; }
+        presi[c] = x; r.nuovi.push({ b: x, id: c, t: t });
+      });
+      return r;
+    }
+    function collegaSheet() {
+      var r = daCollegare(), i = 0;
+      function riga(x, testo) { return '<label class="check"><input type="checkbox" data-i="' + (i++) + '" checked> <span><b>' + esc(x.b.nome || 'Barca') + '</b> · ' + esc(testo) + '</span></label>'; }
+      var tutti = r.agg.concat(r.nuovi);
+      var body = '<p class="context">Nelle schede c’è un posto scritto a mano. Quelli che corrispondono a un posto del porto li collego alla mappa: togli la spunta a quelli sbagliati.</p>' +
+        (r.nuovi.length ? '<div class="lbl">Da collegare alla mappa (' + r.nuovi.length + ')</div>' + r.nuovi.map(function (x) { return riga(x, (x.t !== x.id ? '«' + x.t + '» → ' : '') + 'posto ' + x.id + ' · ' + BY[x.id].zona); }).join('') : '') +
+        (r.agg.length ? '<div class="lbl">Già sulla mappa: aggiorno la scheda (' + r.agg.length + ')</div>' + r.agg.map(function (x) { return riga(x, (x.t ? '«' + x.t + '» → ' : '') + x.id); }).join('') : '') +
+        (r.occ.length ? '<div class="lbl">Posto già preso da un’altra barca (' + r.occ.length + ')</div><div class="group pan">' + r.occ.map(function (x) { return '<div class="kv-row"><span class="k">' + esc(x.b.nome || 'Barca') + ' · «' + esc(x.t) + '»</span><span class="v">' + esc(x.id + ': ' + (x.altra.nome || 'altra barca')) + '</span></div>'; }).join('') + '</div><p class="cap" style="margin:6px 2px 0">Sistemale dalla scheda della barca o toccando il posto sulla mappa.</p>' : '') +
+        (r.altro.length ? '<div class="lbl">Non sono posti del porto: restano come testo (' + r.altro.length + ')</div><div class="group pan">' + r.altro.map(function (x) { return '<div class="kv-row"><span class="k">' + esc(x.b.nome || 'Barca') + '</span><span class="v">' + esc(x.t) + '</span></div>'; }).join('') + '</div>' : '');
+      openSheet({
+        title: 'Collega i posti delle schede', body: body, submitLabel: tutti.length ? 'Collega' : 'Chiudi',
+        onSubmit: async function (f) {
+          var n = 0, sel = Array.prototype.filter.call(f.querySelectorAll('input[data-i]'), function (c) { return c.checked; }).map(function (c) { return tutti[+c.getAttribute('data-i')]; });
+          for (var k = 0; k < sel.length; k++) { var x = sel[k], ok = r.agg.indexOf(x) >= 0 ? await postoBarca(x.b.id, x.id) : await assign(x.id, x.b.id); if (!ok) return false; n++; }
+          if (n) toast(n === 1 ? '1 barca collegata' : n + ' barche collegate');
+          return true;
+        }
+      });
     }
     function vecchioNuovo(id) { // numerazione del 27/10 (da ovest / da nord) -> numerazione dal lato dell'ingresso
       var m = /^([A-Z]+)(\d+)$/.exec(id); if (!m || !BY[id]) return id;
@@ -4599,7 +4653,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     }
     function gotoBerth(id) { if (BY[id]) { P.sel = id; P.flyOnMount = true; } }
     function dueCount() { return dueList().length; }
-    return { vecchioNuovo: vecchioNuovo, view: view, mount: mount, unmount: unmount, refresh: refresh, click: click, resize: resize, isMounted: function () { return P.mounted && !!$('#porto-root'); }, berthLabel: berthLabel, suggest: suggest, assign: assign, release: release, exists: exists, stats: function () { var c = counts(); c.due = dueList().length; c.richieste = (S.richieste || []).length; return c; }, postoOf: function (id) { return postoDoc(id); }, gotoBerth: gotoBerth, dueCount: dueCount, zone: function () { var z = {}, o = []; BERTHS.forEach(function (b) { var st = statoOf(b); if (st !== 'libero' && st !== 'occupato') return; if (!z[b.zona]) { z[b.zona] = { zona: b.zona, nostri: 0, occupati: 0 }; o.push(z[b.zona]); } z[b.zona].nostri++; if (st === 'occupato') z[b.zona].occupati++; }); return o; },
+    return { vecchioNuovo: vecchioNuovo, view: view, mount: mount, unmount: unmount, refresh: refresh, click: click, resize: resize, isMounted: function () { return P.mounted && !!$('#porto-root'); }, berthLabel: berthLabel, suggest: suggest, assign: assign, release: release, exists: exists, codice: codice, info: info, aTerra: aTerra, ids: function () { return BERTHS.map(function (b) { return b.id; }); }, stats: function () { var c = counts(); c.due = dueList().length; c.richieste = (S.richieste || []).length; return c; }, postoOf: function (id) { return postoDoc(id); }, gotoBerth: gotoBerth, dueCount: dueCount, zone: function () { var z = {}, o = []; BERTHS.forEach(function (b) { var st = statoOf(b); if (st !== 'libero' && st !== 'occupato') return; if (!z[b.zona]) { z[b.zona] = { zona: b.zona, nostri: 0, occupati: 0 }; o.push(z[b.zona]); } z[b.zona].nostri++; if (st === 'occupato') z[b.zona].occupati++; }); return o; },
       contratti: function (gg) { return BERTHS.filter(function (b) { var d = postoDoc(b.id), n = d && d.fino ? daysUntil(d.fino) : null; return n != null && n <= gg && statoOf(b) !== 'marina' && statoOf(b) !== 'libero'; }).map(function (b) { return { id: b.id, d: postoDoc(b.id), boat: berthBoat(b) }; }).sort(function (a, c) { return String(a.d.fino).localeCompare(String(c.d.fino)); }); }, dueList: function () { return dueList().map(function (b) { return { id: b.id, d: postoDoc(b.id), boat: berthBoat(b) }; }); } };
   })();
 
@@ -4871,16 +4925,16 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     });
   }
   function alaggioSheet(b) {
-    var bl = Porto.berthLabel(b.id), d = bl ? Porto.postoOf(bl) || {} : null, keepDef = !!(d && (d.cliente || d.contratto) && (!d.fino || d.fino >= todayISO()));
+    var bl = Porto.berthLabel(b.id);
     openSheet({
       title: 'Alaggio fatto · ' + (b.nome || 'Barca'), submitLabel: 'Conferma',
       body: '<p class="context">' + esc(b.nome || 'La barca') + ' ora è a terra.</p>' +
-        (bl ? field(lab('f-ap', 'Il posto ' + bl + ' al porto'), '<select id="f-ap"><option value="keep"' + (keepDef ? ' selected' : '') + '>Resta al cliente' + (d.cliente ? ' (' + esc(d.cliente) + ')' : '') + ', vuoto</option><option value="free"' + (keepDef ? '' : ' selected') + '>Si libera</option></select>', d.fino ? 'Contratto fino al ' + fmtDate(d.fino) + '.' : '') : '') +
+        (bl ? '<p class="cap" style="margin:0 2px 12px">Il posto ' + esc(bl) + ' al porto si libera: tolgo barca, cliente e contratto.</p>' : '') +
         '<label class="check"><input type="checkbox" id="f-apos" checked> Dopo, posizionala sulla mappa del cantiere</label>',
       onSubmit: async function (f) {
-        if (bl && !(await Porto.release(b.id, val(f, 'f-ap') === 'keep'))) return false;
+        if (bl && !(await Porto.release(b.id))) return false;
         var go = f.querySelector('#f-apos').checked;
-        toast(bl ? 'Posto ' + bl + (val(f, 'f-ap') === 'keep' ? ' tenuto al cliente' : ' libero') : 'Alaggio registrato');
+        toast(bl ? 'Posto ' + bl + ' libero' : 'Alaggio registrato');
         if (go) setTimeout(function () {
           M.prevTab = V.tab; M.prevBoat = null; V.tab = 'mappa'; V.boatId = null; M.area = 'cantiere'; if (M.mode !== '2d') { dispose3D(); M.mode = '2d'; } M.mounted = null; window.scrollTo(0, 0); render();
           setTimeout(function () { var x = boatById(b.id); if (!x) return; if (boatPos(x)) { M.sel = x.id; mapDraw(); } else if (boatDims(x)) placeBoat(x.id); else dimsSheet(x); }, 350);
@@ -8024,6 +8078,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'A|Ognuno dei riepiloghi ha i suoi riquadri da sistemare come in Home: tieni premuto (o «⋯» sul computer) per grandezza, posizione o per toglierli.'] },
     barca: { t: 'Scheda della barca', p: 'Qui c’è tutta la storia della barca.', li: [
       'La matita in alto modifica i dati: modello, misure, motori, stato, ore motore, proprietario con telefono ed email.',
+      '«Posto al porto» è il posto della barca nel porto di San Vincenzo (es. C12): salvando, la barca va in quel posto anche sulla mappa del porto, e se la sposti dalla mappa la scheda si aggiorna. Se la barca sta altrove scrivi dove (es. capannone): resta come testo e il posto al porto si libera.',
       'Nella matita ogni motore è una riga con marca e modello, matricola, cv e ore: «Aggiungi riga» per un altro motore (copia marca e cv del primo), × per toglierlo. Il numero dei motori si conta da solo.',
       'Toccando «Ore motore» si aggiornano le ore di ogni motore; per scadenze e tagliandi conta il motore con più ore.',
       'Sotto trovi attrezzatura di bordo, ricambi montati, batterie, vari, scadenze, servizi, preventivi e lavori: ognuno ha il suo + per aggiungere da qui.',
@@ -8090,7 +8145,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     vari: { t: 'Vari e alaggi', p: 'Le uscite e i rientri in acqua delle barche, con data e ora.', li: [
       'Con il + programmi un varo o un alaggio.',
       'Quando lo segni fatto lo stato della barca si aggiorna da solo: «In acqua» o «In rimessaggio».',
-      'Al varo l’app chiede in quale posto del porto va e propone i vostri posti liberi adatti; all’alaggio ricorda di metterla sulla mappa del cantiere.'] },
+      'Al varo l’app chiede in quale posto del porto va e propone i vostri posti liberi adatti (o il suo posto, se ce l’ha); all’alaggio il posto al porto si libera (senza barca, cliente e contratto) e l’app ricorda di metterla sulla mappa del cantiere.'] },
     magazzino: { t: 'Magazzino', p: 'Ricambi, prodotti e materiali con quantità, posizione e scorta minima.', li: [
       'Le quantità si scalano da sole quando qualcuno segna un ricambio in una mansione.',
       '«Da riordinare» e «Lista della spesa» raccolgono gli articoli sotto scorta, divisi per fornitore.',
@@ -8257,7 +8312,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   var BP_MIS = [[-1, 7, 'fino a 7 m'], [7, 9, '7–9 m'], [9, 11, '9–11 m'], [11, 13, '11–13 m'], [13, 15, '13–15 m'], [15, 18, '15–18 m'], [18, 999, 'oltre 18 m']]; // lunghezza della barca, come le misure dei pontili
   function bpInMis(L, r) { return L != null && L > r[0] && L <= r[1]; }
   function boatPontile(b) {
-    for (var k in (S.posti || {})) if (S.posti[k] && S.posti[k].barcaId === b.id) { var m = /^([A-Z]+)-\d/.exec(k); if (m) return m[1] === 'Z' ? 'Darsena' : m[1]; }
+    for (var k in (S.posti || {})) if (S.posti[k] && S.posti[k].barcaId === b.id) { var m = /^([A-Z]+)\d/.exec(k); if (m && Porto.exists(k)) return m[1] === 'DA' ? 'Darsena' : m[1]; }
     var m2 = /^([A-Z])\s*-?\s*\d/.exec(String(b.posto || '').trim().toUpperCase());
     return m2 ? m2[1] : /darsena/i.test(b.posto || '') ? 'Darsena' : '';
   }
@@ -8299,7 +8354,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     pons.sort(function (a, c) { return a === 'Darsena' ? 1 : c === 'Darsena' ? -1 : a.localeCompare(c); });
     var mis = BP_MIS.filter(function (r) { return boats.some(function (x) { return bpInMis(num(x.b.lunghezza), r); }); });
     function chips(kind, list, cur) {
-      return '<div class="chips" data-k="' + kind + '">' + list.map(function (v, i) { var key = kind === 'pon' ? v : String(i), t = kind === 'pon' ? (v === 'Darsena' ? v : 'Pontile ' + v) : v[2];
+      return '<div class="chips" data-k="' + kind + '">' + list.map(function (v, i) { var key = kind === 'pon' ? v : String(i), t = kind === 'pon' ? (v === 'Darsena' ? v : ({ BC: 'Banchina cantiere', MU: 'Muro', PM: 'Pontile muro', AE: 'Accosti esterni' })[v] || 'Fila ' + v) : v[2];
         return '<button type="button" data-v="' + esc(key) + '" aria-pressed="' + (key === String(cur)) + '">' + esc(t) + '</button>'; }).join('') + '</div>';
     }
     function rows() {
@@ -8607,7 +8662,9 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       '<div class="grid2">' + field(lab('f-tipo', 'Tipo'), '<select id="f-tipo">' + opts(TIPI_BARCA, b.tipo) + '</select>') + field(lab('f-stato', 'Stato'), '<select id="f-stato">' + opts(STATI_BARCA, b.stato) + '</select>') + '</div>' +
       '<div class="grid2">' + field(lab('f-lunghezza', 'Lunghezza f.t. (m)'), inp('f-lunghezza', num(b.lunghezza) != null ? String(b.lunghezza).replace('.', ',') : '', 'type="text" inputmode="decimal" placeholder="es. 9,80"')) + field(lab('f-larghezza', 'Larghezza max (m)'), inp('f-larghezza', num(b.larghezza) != null ? String(b.larghezza).replace('.', ',') : '', 'type="text" inputmode="decimal" placeholder="es. 3,10"')) + '</div>' +
       '<span class="hint" style="margin-top:-8px">La larghezza massima (baglio) serve per la mappa. Se la lasci vuota la stimo dalla lunghezza.</span>' +
-      '<div class="grid2">' + field(lab('f-anno', 'Anno'), inp('f-anno', b.anno, 'type="text" inputmode="numeric" placeholder="es. 2018"')) + field(lab('f-posto', 'Posto'), inp('f-posto', b.posto, 'type="text" placeholder="es. B12"')) + '</div>' +
+      '<div class="grid2">' + field(lab('f-anno', 'Anno'), inp('f-anno', b.anno, 'type="text" inputmode="numeric" placeholder="es. 2018"')) + field(lab('f-posto', 'Posto al porto'), inp('f-posto', (!isNew && Porto.berthLabel(b.id)) || b.posto, 'type="text" list="f-postoL" autocapitalize="characters" autocomplete="off" placeholder="es. C12"') +
+        '<datalist id="f-postoL">' + Porto.ids().map(function (id) { return '<option value="' + id + '">'; }).join('') + '</datalist>') + '</div>' +
+      '<span class="hint" id="f-postoH" style="margin-top:-8px"></span>' +
       field(lab('f-immatricolazione', 'Immatricolazione'), inp('f-immatricolazione', b.immatricolazione, 'type="text" autocapitalize="characters"')) +
       '<div class="lbl">Motore</div>' +
       field(lab('f-motoreTipo', 'Installazione'), '<select id="f-motoreTipo">' + opts(TIPI_MOTORE, b.motoreTipo) + '</select>') +
@@ -8633,11 +8690,27 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
           .concat([S.db.collection('barche').doc(b.id)]);
         if (await delSeq(refs)) { closeSheet(); V.boatId = null; render(); toast('Barca eliminata'); }
       },
-      onOpen: function (f) { motInit(f, b); },
+      onOpen: function (f) {
+        motInit(f, b);
+        var pi = f.querySelector('#f-posto'), ph = f.querySelector('#f-postoH');
+        function hint() { // cosa succede al porto salvando
+          var t = pi.value.trim(), id = Porto.codice(t), x = id && Porto.info(id), L = parseDec(val(f, 'f-lunghezza')), m;
+          if (!t) m = 'Il posto del porto di San Vincenzo, es. C12. Se la barca sta altrove scrivi dove (es. capannone): resta come testo.';
+          else if (!x) m = 'Non è un posto del porto: lo salvo come testo.';
+          else {
+            m = 'Posto ' + id + ' · ' + x.zona + ' · ' + x.stato.toLowerCase() + '.';
+            if (x.barca && x.barca.id !== b.id) m += ' Ora c’è ' + (x.barca.nome || 'un’altra barca') + ': resterà senza posto.';
+            if (L && L > x.len) m += ' Attenzione: la barca è lunga ' + fmtNum(L, 2) + ' m.';
+          }
+          ph.textContent = m;
+        }
+        pi.addEventListener('input', hint); f.querySelector('#f-lunghezza').addEventListener('input', hint); hint();
+      },
       onSubmit: async function (f) {
+        var pTxt = val(f, 'f-posto'), pId = Porto.codice(pTxt);
         var data = {
           nome: val(f, 'f-nome'), modello: val(f, 'f-modello'), tipo: val(f, 'f-tipo'), stato: val(f, 'f-stato'),
-          lunghezza: parseDec(val(f, 'f-lunghezza')), larghezza: parseDec(val(f, 'f-larghezza')), anno: val(f, 'f-anno'), posto: val(f, 'f-posto'), immatricolazione: val(f, 'f-immatricolazione'),
+          lunghezza: parseDec(val(f, 'f-lunghezza')), larghezza: parseDec(val(f, 'f-larghezza')), anno: val(f, 'f-anno'), posto: pId || pTxt, immatricolazione: val(f, 'f-immatricolazione'),
           motoreTipo: val(f, 'f-motoreTipo'),
           proprietario: val(f, 'f-proprietario'), telefono: val(f, 'f-telefono'), email: val(f, 'f-email'), note: val(f, 'f-note'),
           tipologia: val(f, 'f-tipologia'), altezzaScafo: parseDec(val(f, 'f-altScafo')), altezzaMax: parseDec(val(f, 'f-altMax')), coloreScafo: val(f, 'f-colS'), coloreCarena: val(f, 'f-colC'), fascia: val(f, 'f-fascia') || 'nessuna', coloreFascia: val(f, 'f-colF'),
@@ -8651,12 +8724,15 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
           data.creato = data.modificato;
           var ref = S.db.collection('barche').doc(); S.pendingBoat = ref.id;
           var ok = await w(function () { return ref.set(data); });
+          if (ok && pId) await Porto.assign(pId, ref.id, data);
           if (ok) { V.tab = 'barche'; V.boatId = ref.id; V.boatLavAll = false; window.scrollTo(0, 0); render(); toast('Barca aggiunta'); }
           return ok;
         }
         var r2 = S.db.collection('barche').doc(b.id);
-        var ok2 = await w(function () { return r2.update(data); });
-        if (ok2) toast('Scheda salvata');
+        var ok2 = await w(function () { return r2.update(data); }), cur = Porto.berthLabel(b.id);
+        if (ok2 && pId && pId !== cur) ok2 = await Porto.assign(pId, b.id);
+        else if (ok2 && !pId && cur) ok2 = await Porto.release(b.id);
+        if (ok2) toast(pId && pId !== cur ? 'Scheda salvata · posto ' + pId + ' sulla mappa' : 'Scheda salvata');
         return ok2;
       }
     });
