@@ -3757,28 +3757,29 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   function mx(p) { return (p - 500) * MPX; }
   function mz(p) { return (p - 1850) * MPX; }
   function M2(a) { var o = []; for (var i = 0; i < a.length; i += 2) o.push([mx(a[i]), mz(a[i + 1])]); return o; }
-  // Posti barca (397, contati sulla foto con Torcio il 27/10/2026): per ogni zona, in ordine da ovest a est o da nord a sud
+  // Posti barca (397, contati sulla foto con Torcio il 27/10/2026). Il posto 1 di ogni fila è dal lato dove si entra (Torcio, 28/10/2026):
+  // file dei pontili e banchina cantiere da est (banchina), muro e pontile muro da nord, darsena e accosti esterni da sud
   var PTS = {
-    BC: [1380,2130,1420,2130,1460,2130,1500,2130,1540,2130,1580,2130,1620,2130,1652,2126,1675,2130,1715,2130,1735,2130,1780,2130,1812,2130,1850,2130,1890,2130],
+    BC: [1890,2130,1850,2130,1812,2130,1780,2130,1735,2130,1715,2130,1675,2130,1652,2126,1620,2130,1580,2130,1540,2130,1500,2130,1460,2130,1420,2130,1380,2130],
     MU: [1130,2180,1120,2210,1100,2245,1080,2275,1060,2300,1050,2325,1040,2350,1020,2385,977,2413,950,2430,960,2475,930,2520,920,2555,910,2585,893,2607,880,2640,852,2654,841,2688,833,2741,825,2780,810,2815,800,2840,790,2865,777,2899],
     PM: [750,2960,809,2990,758,3013,745,3060,802,3053,737,3113,785,3120,733,3169,782,3190,721,3227,771,3249,712,3281,710,3310,755,3325,695,3370,740,3380,685,3455,735,3440,720,3510,660,3580,710,3580],
-    A: [1395,2345,1460,2345,1500,2345,1550,2345,1593,2345,1650,2345,1682,2345,1720,2345,1740,2345,1755,2338,1801,2338,1847,2338,1893,2338],
-    B: [1345,2430,1373,2430,1397,2430,1420,2430,1442,2430,1462,2430,1484,2430,1505,2430,1525,2430,1545,2430,1562,2430,1580,2430,1602,2430,1628,2430,1652,2430,1675,2430,1695,2430,1715,2430,1732,2430,1750,2430,1770,2430,1790,2430,1810,2430,1830,2430,1853,2430,1872,2430,1892,2430],
-    C: [1150,2555,1177,2555,1203,2555,1228,2555,1250,2555,1270,2555,1298,2555,1323,2555,1350,2555,1372,2555,1395,2555,1420,2555,1445,2555,1470,2555,1492,2555,1515,2555,1538,2555,1560,2555,1585,2555,1605,2555,1630,2555,1655,2555,1675,2555,1700,2555,1721,2541,1742,2555,1770,2555,1795,2555,1818,2555,1845,2555,1872,2555,1895,2555],
-    D: [1120,2650,1155,2650,1185,2650,1223,2650,1250,2650,1282,2650,1312,2650,1350,2650,1371,2660,1395,2650,1435,2650,1468,2650,1500,2650,1530,2650,1568,2650,1598,2650,1625,2650,1655,2650,1690,2650,1722,2650,1755,2650,1788,2650,1820,2650,1855,2650,1890,2650],
-    E: [985,2864,1030,2870,1072,2870,1115,2870,1162,2870,1200,2870,1240,2870,1277,2870,1315,2870,1353,2870,1393,2867,1415,2870,1470,2870,1508,2870,1548,2870,1590,2870,1625,2870,1662,2870,1702,2870,1740,2870,1782,2870,1819,2853,1855,2840],
-    F: [936,2968,984,2996,1030,3005,1080,3005,1130,3005,1170,3005,1215,3005,1255,3005,1300,3005,1355,3005,1390,3005,1435,3005,1472,3005,1518,3005,1560,3005,1608,3005,1650,3005,1695,3005,1740,3005,1780,3005,1818,3005],
-    G: [942,3268,985,3280,1033,3280,1078,3280,1125,3280,1168,3280,1215,3280,1260,3280,1300,3280,1348,3280,1392,3280,1435,3280,1477,3280,1520,3280,1562,3280,1610,3280,1652,3280,1695,3280,1738,3280,1780,3280,1820,3280],
-    H: [930,3360,990,3425,1033,3425,1085,3425,1125,3425,1170,3425,1215,3425,1260,3425,1300,3425,1345,3425,1390,3425,1435,3425,1477,3425,1525,3425,1570,3425,1615,3425,1655,3425,1700,3425,1740,3425,1780,3425,1820,3425],
-    I: [921,3738,960,3720,1012,3720,1065,3720,1115,3720,1162,3720,1215,3720,1268,3720,1320,3720,1370,3720,1420,3720,1475,3720,1522,3720,1578,3720,1625,3720,1675,3720,1725,3720,1775,3720,1819,3726],
-    L: [918,3863,960,3885,1012,3868,1065,3885,1120,3885,1168,3885,1218,3885,1270,3885,1320,3885,1370,3885,1420,3885,1475,3885,1522,3885,1578,3885,1625,3885,1675,3885,1725,3885,1775,3885,1820,3868],
-    M: [870,4260,950,4260,1010,4260,1060,4260,1120,4260,1175,4260,1230,4260,1280,4260,1340,4260,1388,4260,1440,4260,1490,4260,1550,4260,1605,4260,1665,4260,1715,4260,1775,4260,1825,4260],
-    N: [875,4440,955,4440,1012,4440,1065,4440,1125,4440,1175,4440,1235,4440,1280,4440,1340,4440,1392,4440,1450,4440,1500,4440,1560,4440,1605,4440,1660,4440,1715,4440,1780,4440,1830,4440],
-    O: [886,4836,955,4820,1015,4820,1065,4820,1125,4820,1172,4820,1230,4820,1282,4820,1335,4820,1390,4820,1452,4820,1500,4820,1560,4820,1610,4820,1668,4820,1720,4820,1780,4820,1830,4820],
-    P: [880,5000,958,5000,1018,5000,1085,5000,1135,5000,1190,5000,1235,5000,1285,5000,1338,5000,1390,5000,1435,5000,1480,5000,1530,5000,1585,5000,1635,5000,1690,5000,1735,5000,1790,5000,1835,5000],
-    Q: [1215,5310,1272,5310,1325,5310,1372,5310,1422,5310,1472,5310,1530,5310,1575,5310,1632,5310,1680,5310,1730,5310,1782,5310,1827,5317,1450,5445,1710,5445],
-    DA: [1330,5650,1330,5685,1330,5735,1330,5805,1330,5875,1330,5925,1330,5985,1330,6040,1330,6095,1330,6155,1330,6215,1740,5515,1740,5570,1740,5635,1740,5695,1740,5750,1740,5810,1740,5875,1740,5935,1740,5995,1740,6050,1740,6100,1740,6140,1740,6180,1740,6220],
-    AE: [1000,5638,1000,5699,980,6220]
+    A: [1893,2338,1847,2338,1801,2338,1755,2338,1740,2345,1720,2345,1682,2345,1650,2345,1593,2345,1550,2345,1500,2345,1460,2345,1395,2345],
+    B: [1892,2430,1872,2430,1853,2430,1830,2430,1810,2430,1790,2430,1770,2430,1750,2430,1732,2430,1715,2430,1695,2430,1675,2430,1652,2430,1628,2430,1602,2430,1580,2430,1562,2430,1545,2430,1525,2430,1505,2430,1484,2430,1462,2430,1442,2430,1420,2430,1397,2430,1373,2430,1345,2430],
+    C: [1895,2555,1872,2555,1845,2555,1818,2555,1795,2555,1770,2555,1742,2555,1721,2541,1700,2555,1675,2555,1655,2555,1630,2555,1605,2555,1585,2555,1560,2555,1538,2555,1515,2555,1492,2555,1470,2555,1445,2555,1420,2555,1395,2555,1372,2555,1350,2555,1323,2555,1298,2555,1270,2555,1250,2555,1228,2555,1203,2555,1177,2555,1150,2555],
+    D: [1890,2650,1855,2650,1820,2650,1788,2650,1755,2650,1722,2650,1690,2650,1655,2650,1625,2650,1598,2650,1568,2650,1530,2650,1500,2650,1468,2650,1435,2650,1395,2650,1371,2660,1350,2650,1312,2650,1282,2650,1250,2650,1223,2650,1185,2650,1155,2650,1120,2650],
+    E: [1855,2840,1819,2853,1782,2870,1740,2870,1702,2870,1662,2870,1625,2870,1590,2870,1548,2870,1508,2870,1470,2870,1415,2870,1393,2867,1353,2870,1315,2870,1277,2870,1240,2870,1200,2870,1162,2870,1115,2870,1072,2870,1030,2870,985,2864],
+    F: [1818,3005,1780,3005,1740,3005,1695,3005,1650,3005,1608,3005,1560,3005,1518,3005,1472,3005,1435,3005,1390,3005,1355,3005,1300,3005,1255,3005,1215,3005,1170,3005,1130,3005,1080,3005,1030,3005,984,2996,936,2968],
+    G: [1820,3280,1780,3280,1738,3280,1695,3280,1652,3280,1610,3280,1562,3280,1520,3280,1477,3280,1435,3280,1392,3280,1348,3280,1300,3280,1260,3280,1215,3280,1168,3280,1125,3280,1078,3280,1033,3280,985,3280,942,3268],
+    H: [1820,3425,1780,3425,1740,3425,1700,3425,1655,3425,1615,3425,1570,3425,1525,3425,1477,3425,1435,3425,1390,3425,1345,3425,1300,3425,1260,3425,1215,3425,1170,3425,1125,3425,1085,3425,1033,3425,990,3425,930,3360],
+    I: [1819,3726,1775,3720,1725,3720,1675,3720,1625,3720,1578,3720,1522,3720,1475,3720,1420,3720,1370,3720,1320,3720,1268,3720,1215,3720,1162,3720,1115,3720,1065,3720,1012,3720,960,3720,921,3738],
+    L: [1820,3868,1775,3885,1725,3885,1675,3885,1625,3885,1578,3885,1522,3885,1475,3885,1420,3885,1370,3885,1320,3885,1270,3885,1218,3885,1168,3885,1120,3885,1065,3885,1012,3868,960,3885,918,3863],
+    M: [1825,4260,1775,4260,1715,4260,1665,4260,1605,4260,1550,4260,1490,4260,1440,4260,1388,4260,1340,4260,1280,4260,1230,4260,1175,4260,1120,4260,1060,4260,1010,4260,950,4260,870,4260],
+    N: [1830,4440,1780,4440,1715,4440,1660,4440,1605,4440,1560,4440,1500,4440,1450,4440,1392,4440,1340,4440,1280,4440,1235,4440,1175,4440,1125,4440,1065,4440,1012,4440,955,4440,875,4440],
+    O: [1830,4820,1780,4820,1720,4820,1668,4820,1610,4820,1560,4820,1500,4820,1452,4820,1390,4820,1335,4820,1282,4820,1230,4820,1172,4820,1125,4820,1065,4820,1015,4820,955,4820,886,4836],
+    P: [1835,5000,1790,5000,1735,5000,1690,5000,1635,5000,1585,5000,1530,5000,1480,5000,1435,5000,1390,5000,1338,5000,1285,5000,1235,5000,1190,5000,1135,5000,1085,5000,1018,5000,958,5000,880,5000],
+    Q: [1827,5317,1782,5310,1730,5310,1680,5310,1632,5310,1575,5310,1530,5310,1472,5310,1422,5310,1372,5310,1325,5310,1272,5310,1215,5310,1710,5445,1450,5445],
+    DA: [1330,6215,1330,6155,1330,6095,1330,6040,1330,5985,1330,5925,1330,5875,1330,5805,1330,5735,1330,5685,1330,5650,1740,6220,1740,6180,1740,6140,1740,6100,1740,6050,1740,5995,1740,5935,1740,5875,1740,5810,1740,5750,1740,5695,1740,5635,1740,5570,1740,5515],
+    AE: [980,6220,1000,5699,1000,5638]
   };
   // Bordo della diga verso il porto (banchina del muro, poi sotto la diga) e verso il mare, da nord a sud
   var DIGA_IN = M2([1180, 1850, 1110, 2150, 1060, 2230, 1000, 2300, 935, 2400, 880, 2500, 835, 2600, 800, 2700, 770, 2800, 755, 2900, 740, 2930, 725, 3050, 705, 3150, 680, 3250, 655, 3350, 640, 3450, 620, 3550, 605, 3650, 595, 3800, 588, 4500, 585, 6340]);
@@ -4336,7 +4337,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
         '<div class="m3-hint" id="pt-hint" style="transition:opacity .4s"></div>' +
         '<div class="map-tools"><button type="button" data-act="pt-zin" aria-label="Avvicina">+</button><button type="button" data-act="pt-zout" aria-label="Allontana">−</button><button type="button" data-act="pt-fit" aria-label="Tutto il porto">' + I.fit + '</button></div>' +
         '<div class="map-card" id="pt-card" hidden></div></div>' +
-        '<p class="cap" style="margin:10px 2px 0">Porto disegnato dalla foto dall’alto: 397 posti, con le lettere delle file (A7, F14…); le misure dei posti sono stimate. Ogni posto parte come “della Marina”: toccalo per segnarlo come vostro, assegnare barca e cliente, contratto e scadenza.</p>';
+        '<p class="cap" style="margin:10px 2px 0">Porto disegnato dalla foto dall’alto: 397 posti, con le lettere delle file (A7, F14…, il numero 1 dal lato della banchina); le misure dei posti sono stimate. Ogni posto parte come “della Marina”: toccalo per segnarlo come vostro, assegnare barca e cliente, contratto e scadenza.</p>';
     }
     function listHtml() {
       var list = BERTHS.filter(function (b) { var d = postoDoc(b.id), st = statoOf(b); return st !== 'marina' || (d && d.barcaId); });
@@ -4586,9 +4587,18 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       if (d.gestione === 'nostro') return w(function () { return ref.set({ gestione: 'nostro', barcaId: '', cliente: '', telefono: '', contratto: '', fino: '', note: '', modificato: now }); });
       return delSeq([ref]);
     }
+    function vecchioNuovo(id) { // numerazione del 27/10 (da ovest / da nord) -> numerazione dal lato dell'ingresso
+      var m = /^([A-Z]+)(\d+)$/.exec(id); if (!m || !BY[id]) return id;
+      var k = m[1], o = +m[2], n = PTS[k].length / 2, v = o;
+      if (k === 'Q') v = o <= 13 ? 14 - o : o === 14 ? 15 : 14;
+      else if (k === 'DA') v = o <= 11 ? 12 - o : 37 - o;
+      else if (k === 'AE') v = 4 - o;
+      else if (k !== 'MU' && k !== 'PM') v = n + 1 - o;
+      return k + v;
+    }
     function gotoBerth(id) { if (BY[id]) { P.sel = id; P.flyOnMount = true; } }
     function dueCount() { return dueList().length; }
-    return { view: view, mount: mount, unmount: unmount, refresh: refresh, click: click, resize: resize, isMounted: function () { return P.mounted && !!$('#porto-root'); }, berthLabel: berthLabel, suggest: suggest, assign: assign, release: release, exists: exists, stats: function () { var c = counts(); c.due = dueList().length; c.richieste = (S.richieste || []).length; return c; }, postoOf: function (id) { return postoDoc(id); }, gotoBerth: gotoBerth, dueCount: dueCount, zone: function () { var z = {}, o = []; BERTHS.forEach(function (b) { var st = statoOf(b); if (st !== 'libero' && st !== 'occupato') return; if (!z[b.zona]) { z[b.zona] = { zona: b.zona, nostri: 0, occupati: 0 }; o.push(z[b.zona]); } z[b.zona].nostri++; if (st === 'occupato') z[b.zona].occupati++; }); return o; },
+    return { vecchioNuovo: vecchioNuovo, view: view, mount: mount, unmount: unmount, refresh: refresh, click: click, resize: resize, isMounted: function () { return P.mounted && !!$('#porto-root'); }, berthLabel: berthLabel, suggest: suggest, assign: assign, release: release, exists: exists, stats: function () { var c = counts(); c.due = dueList().length; c.richieste = (S.richieste || []).length; return c; }, postoOf: function (id) { return postoDoc(id); }, gotoBerth: gotoBerth, dueCount: dueCount, zone: function () { var z = {}, o = []; BERTHS.forEach(function (b) { var st = statoOf(b); if (st !== 'libero' && st !== 'occupato') return; if (!z[b.zona]) { z[b.zona] = { zona: b.zona, nostri: 0, occupati: 0 }; o.push(z[b.zona]); } z[b.zona].nostri++; if (st === 'occupato') z[b.zona].occupati++; }); return o; },
       contratti: function (gg) { return BERTHS.filter(function (b) { var d = postoDoc(b.id), n = d && d.fino ? daysUntil(d.fino) : null; return n != null && n <= gg && statoOf(b) !== 'marina' && statoOf(b) !== 'libero'; }).map(function (b) { return { id: b.id, d: postoDoc(b.id), boat: berthBoat(b) }; }).sort(function (a, c) { return String(a.d.fino).localeCompare(String(c.d.fino)); }); }, dueList: function () { return dueList().map(function (b) { return { id: b.id, d: postoDoc(b.id), boat: berthBoat(b) }; }); } };
   })();
 
@@ -5093,6 +5103,21 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     }
   }
   var progPulita = false;
+  var portoRinumerato = false;
+  async function portoRinumera() { // una tantum (Torcio, 28/10/2026): i posti segnati con la numerazione del 27/10 passano al numero nuovo dello stesso posto
+    if (portoRinumerato || !S.isOwner || !S.got.posti || !S.got.imp || (S.portoCfg && S.portoCfg.numerazione >= 2)) return;
+    portoRinumerato = true;
+    var old = S.posti || {}, nuovi = {}, ids = Object.keys(old).filter(function (k) { return k.indexOf('-') < 0; }), now = new Date().toISOString();
+    ids.forEach(function (k) { var d = Object.assign({}, old[k]); delete d.id; nuovi[Porto.vecchioNuovo(k)] = d; });
+    var tutti = ids.concat(Object.keys(nuovi).filter(function (k) { return ids.indexOf(k) < 0; }));
+    for (var i = 0; i < tutti.length; i++) {
+      var k = tutti[i], ref = S.db.collection('posti').doc(k);
+      if (nuovi[k]) { var d = nuovi[k], same = old[k] && JSON.stringify(Object.assign({}, old[k], { id: 0 })) === JSON.stringify(Object.assign({}, d, { id: 0 })); if (!same && !(await w(function () { return ref.set(d); }))) return; }
+      else if (!(await w(function () { return ref.delete(); }))) return;
+    }
+    var rc = S.db.collection('impostazioni').doc('porto');
+    if (await w(function () { return rc.set({ numerazione: 2, posti: ids.length, modificato: now }); }) && ids.length) toast('Posti al porto rinumerati dal lato dell’ingresso');
+  }
   async function progPulizia() { // una tantum (Torcio, 22/10/2026): tolte dal programma le lavorazioni entrate da sole il 22/10 e quelle con la barca rimaste dai giorni prima; restano (o vanno) tra le lavorazioni da fare
     if (progPulita || !S.isOwner || !S.got.lavori || !S.got.programma) return;
     progPulita = true;
@@ -8015,8 +8040,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'Il righello in alto corregge le misure del cantiere.',
       'Sul computer, sopra la mappa, c’è l’elenco delle barche già sistemate con una casella per cercarle: tocchi un nome e la mappa ci va. La scheda della barca si apre a destra.'] },
     porto: { t: 'Porto', p: 'La pianta del porto di San Vincenzo con i 397 posti barca.', li: [
-      'Ogni fila ha una lettera colorata: A e B pescatori e residenti, C 7 m, D 9 m, E 11 m, F G H 13 m, I L 15 m, M N O 18 m, P Q 15 m. Il posto si chiama con lettera e numero nella fila, contando da ovest: per esempio A7, F14, L17.',
-      'Le zone senza lettera: BC banchina cantiere, MU muro, PM pontile muro, DA darsena, AE accosti esterni (per esempio MU5).',
+      'Ogni fila ha una lettera colorata: A e B pescatori e residenti, C 7 m, D 9 m, E 11 m, F G H 13 m, I L 15 m, M N O 18 m, P Q 15 m. Il posto si chiama con lettera e numero nella fila: il numero 1 è dal lato dove si entra sul pontile (la banchina, a est). Per esempio A7, F14, L17.',
+      'Le zone senza lettera: BC banchina cantiere (da est), MU muro e PM pontile muro (da nord), DA darsena e AE accosti esterni (da sud). Per esempio MU5.',
       'Trascina per spostarti, due dita o la rotellina per ingrandire: da vicino si leggono i nomi dei posti.',
       'Tocca un posto per segnarlo come vostro o della Marina e assegnare barca, cliente, contratto e scadenza.',
       '«Contratti» elenca i posti in ordine di scadenza, con quelli vicini in alto.',
@@ -10177,8 +10202,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     sub('conferme', function (x) { S.conf = toMap(x); });
     db.collection('impostazioni').onSnapshot(function (snap) {
       var m = null, b = null, ly = {};
-      snap.docs.forEach(function (d) { if (/^layout_/.test(d.id)) ly[d.id] = d.data(); else if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); else if (d.id === 'rifiuti') S.rifCfg = d.data(); else if (d.id === 'notifiche') S.notifCfg = d.data(); else if (d.id === 'meteo') S.meteoCfg = d.data(); else if (d.id === 'strumenti') S.strCfg = d.data(); else if (d.id === 'percorso') S.percorso = d.data(); else if (d.id === 'categorie') { S.catCfg = d.data(); catApply(); } });
-      var mc = m !== S.mapCfg; S.mapCfg = m; S.bkInfo = b; S.layouts = ly;
+      snap.docs.forEach(function (d) { if (/^layout_/.test(d.id)) ly[d.id] = d.data(); else if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); else if (d.id === 'rifiuti') S.rifCfg = d.data(); else if (d.id === 'notifiche') S.notifCfg = d.data(); else if (d.id === 'meteo') S.meteoCfg = d.data(); else if (d.id === 'strumenti') S.strCfg = d.data(); else if (d.id === 'percorso') S.percorso = d.data(); else if (d.id === 'porto') S.portoCfg = d.data(); else if (d.id === 'categorie') { S.catCfg = d.data(); catApply(); } });
+      var mc = m !== S.mapCfg; S.mapCfg = m; S.bkInfo = b; S.layouts = ly; S.got.imp = true; portoRinumera();
       if ((V.tab === 'mappa' && mc) || V.tab === 'backup' || V.tab === 'batterie' || V.tab === 'rifiuti' || V.tab === 'notifiche' || V.tab === 'categorie' || V.tab === 'strumenti' || V.tab === 'home' || V.tab === 'barche' || V.tab === 'pannello' || V.tab === 'riepiloghi') { if (!LY.drag) render(); }
     }, function () { });
     sub('magazzino', function (x) { S.mag = x; });
@@ -10194,7 +10219,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     sub('attrezzatura', function (x) { S.attr = x; });
     sub('programma', function (x) { S.prog = x; S.got.programma = true; progPulizia(); });
     sub('cariche', function (x) { S.cariche = x; });
-    sub('posti', function (x) { S.posti = toMap(x); });
+    sub('posti', function (x) { S.posti = toMap(x); S.got.posti = true; portoRinumera(); });
     sub('richieste', function (x) { S.richieste = x; });
     sub('rifiuti', function (x) { S.rif = x; });
     sub('ritiri', function (x) { S.ritiri = x; });
@@ -10215,7 +10240,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       if (u) {
         S.user = u;
         var me = await u.me();
-        S.me = me || {}; S.myId = (me && me.id) || null; S.isOwner = !!(me && me.isOwner); S.creatore = !!(me && me.creatore);
+        S.me = me || {}; S.myId = (me && me.id) || null; S.isOwner = !!(me && me.isOwner); portoRinumera(); S.creatore = !!(me && me.creatore);
         try { S.isEditor = !!(await u.canEdit()); } catch (e) { S.isEditor = S.isOwner; }
         var c = await u.can('data.write');
         if (c === false) S.canWrite = false;
