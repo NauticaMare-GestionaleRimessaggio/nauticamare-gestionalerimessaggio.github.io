@@ -50,8 +50,9 @@ service cloud.firestore {
       allow create: if cliente() && request.resource.data.cliente == request.auth.uid
         && request.resource.data.barcaId in get(profilo()).data.get('barche', [])
         && request.resource.data.stato == 'inviata'
-        && request.resource.data.tipo in ['varo', 'problema']
-        && request.resource.data.keys().hasOnly(['cliente', 'nome', 'barcaId', 'tipo', 'data', 'testo', 'foto', 'stato', 'creato'])
+        && request.resource.data.tipo in ['varo', 'problema', 'lavoro']
+        && request.resource.data.keys().hasOnly(['cliente', 'nome', 'barcaId', 'tipo', 'data', 'testo', 'foto', 'stato', 'creato', 'scadId'])
+        && request.resource.data.get('scadId', '') is string && request.resource.data.get('scadId', '').size() <= 60
         && request.resource.data.get('testo', '') is string && request.resource.data.get('testo', '').size() <= 2000
         && request.resource.data.get('foto', []) is list && request.resource.data.get('foto', []).size() <= 3;
     }
