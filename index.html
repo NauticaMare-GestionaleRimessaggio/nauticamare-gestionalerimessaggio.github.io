@@ -240,6 +240,10 @@ button.row:active, .row .hit:active { opacity: .65; }
 .search input:focus { outline: none; border-color: var(--accent); }
 .rb-acts { display: flex; flex-direction: row !important; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .rb-row[hidden], .rb-sec[hidden] { display: none !important; }
+.stag .kv-row { display: grid; grid-template-columns: minmax(0, 1.4fr) .8fr .8fr 1.2fr; gap: 8px; align-items: center; }
+.stag .kv-row .v { text-align: right; }
+.stag-h { font-size: .8rem; color: var(--muted, #9aa); }
+@media (max-width: 600px) { .stag .kv-row { grid-template-columns: minmax(0, 1fr) .7fr .7fr; } .stag .kv-row .v:last-child { grid-column: 1 / -1; text-align: left; } }
 .rb-acts .btn, .rb-b { padding: 6px 10px; font-size: .85rem; min-height: 0; text-decoration: none; }
 @media (max-width: 600px) { .rb-row { flex-wrap: wrap; } .rb-row .rb-acts { width: 100%; justify-content: flex-start; padding: 0 12px 10px; } }
 .sub.nq { white-space: normal; overflow-wrap: anywhere; }
@@ -2088,6 +2092,110 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     return Object.keys(days).sort();
   }
   function toMap(list) { var m = {}; list.forEach(function (x) { m[x.id] = x; }); return m; }
+  /* ---------- Più depositi (idea X51, Strumenti in più › depositi) e materiale di consumo (X52, › consumo) ----------
+     Depositi: lo stesso articolo in più posti (capannone, furgone, container) con giacenze separate. Ogni movimento
+     ha il campo dep (vuoto = il primo deposito, quello principale); «Sposta» toglie da uno e mette nell'altro.
+     I ricambi delle mansioni si scaricano dal deposito principale. Il totale dell'articolo resta lo stesso di prima.
+     Consumo: lo scarico senza barca si assegna a un reparto, con il totale per mese. */
+  function depOn() { return strOn('depositi'); }
+  function depList() { var l = S.depCfg && !S.depCfg._del && Array.isArray(S.depCfg.lista) ? S.depCfg.lista.filter(Boolean) : []; return l.length ? l : ['Magazzino', 'Furgone dell’assistenza']; }
+  function depMain() { return depList()[0]; }
+  function depOf(x) { var d = x && x.dep; return d && depList().indexOf(d) >= 0 ? d : depMain(); }
+  function stockDep(id) {
+    var m = {}; depList().forEach(function (d) { m[d] = 0; });
+    S.mov.forEach(function (x) { if (x.articoloId === id) { var d = depOf(x); m[d] = (m[d] || 0) + (num(x.qta) || 0); } });
+    S.lavori.forEach(function (l) { (l.ricambi || []).forEach(function (r) { if (r.articoloId === id) m[depMain()] -= num(r.qta) || 0; }); });
+    return m;
+  }
+  function depTxt(m) { var s = stockDep(m.id); return depList().map(function (d) { return d + ' ' + fmtQ(s[d] || 0, m.um); }).join(' · '); }
+  function depSel(id, cur, label) { return field(lab(id, label), '<select id="' + id + '">' + depList().map(function (d) { return '<option value="' + esc(d) + '"' + (d === cur ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('') + '</select>'); }
+  function depCfgSheet() {
+    openSheet({ title: 'Depositi', submitLabel: 'Salva',
+      body: '<p class="context">Uno per riga. Il primo è il deposito principale: da lì si scaricano i ricambi delle mansioni.</p>' + field(lab('f-depl', 'Depositi'), '<textarea id="f-depl" rows="5">' + esc(depList().join('\n')) + '</textarea>'),
+      onSubmit: async function (f) {
+        var l = val(f, 'f-depl').split(/\n+/).map(function (x) { return x.trim(); }).filter(function (x, i, a) { return x && a.indexOf(x) === i; }).slice(0, 12);
+        if (!l.length) { formErr('Scrivi almeno un deposito.'); return false; }
+        var r = S.db.collection('impostazioni').doc('depositi'), d = { lista: l, modificato: new Date().toISOString() };
+        if (await w(function () { return r.set(d); })) { S.depCfg = d; toast('Depositi salvati'); return true; } return false;
+      } });
+  }
+  function depVediSheet(dep) {
+    var st = [], h;
+    S.mag.forEach(function (m) { var q = stockDep(m.id)[dep] || 0; if (q) st.push([m, q]); });
+    st.sort(function (a, b) { return String(a[0].nome).localeCompare(String(b[0].nome), 'it'); });
+    h = '<div class="chips" role="group" aria-label="Deposito" style="margin-top:0;flex-wrap:wrap">' + depList().map(function (d) { return '<button type="button" data-act="dep-vedi" data-d="' + esc(d) + '" aria-pressed="' + (d === dep) + '">' + esc(d) + '</button>'; }).join('') + '</div>';
+    h += st.length ? '<div class="group" style="margin-top:10px">' + st.map(function (x) { return '<button type="button" class="row" data-act="mag-mv" data-id="' + esc(x[0].id) + '"><span class="main"><span class="title">' + esc(x[0].nome) + '</span></span><span class="side"><b>' + esc(fmtQ(x[1], x[0].um)) + '</b></span></button>'; }).join('') + '</div>'
+      : '<p class="context" style="margin-top:10px">Niente in ' + esc(dep) + '. Per rifornirlo apri un articolo, «Carico o scarico» › «Sposta».</p>';
+    if (S.isOwner) h += '<button type="button" class="link" data-act="dep-cfg" style="margin-top:12px">Cambia i nomi dei depositi</button>';
+    openSheet({ title: 'Cosa c’è in: ' + dep, menu: true, body: h });
+  }
+  /* Barattoli aperti e avanzi (idea X49, Strumenti in più › barattoli): raccolta «barattoli». Quando apri un barattolo
+     di vernice o resina segni quanto resta e dove l'hai messo; prima di prenderne uno nuovo l'app mostra gli avanzi dello
+     stesso prodotto e da quando sono aperti (dopo i mesi indicati non vanno più usati). */
+  function barOn() { return strOn('barattoli'); }
+  var BAR_RESTA = [['pieno', 'Quasi pieno'], ['meta', 'Metà'], ['poco', 'Poco'], ['fondo', 'Il fondo']];
+  function barAperti(aid) { return (S.barattoli || []).filter(function (x) { return !x.finito && (!aid || x.articoloId === aid); }).sort(function (a, b) { return String(a.aperto || '').localeCompare(String(b.aperto || '')); }); }
+  function barScade(x) { var m = num(x.mesi) || 6; var d = new Date(isoToUTC(x.aperto || todayISO())); d.setUTCMonth(d.getUTCMonth() + m); return utcToISO(d.getTime()); }
+  function barNome(x) { var m = x.articoloId && S.mag.find(function (a) { return a.id === x.articoloId; }); return m ? m.nome : x.nome || 'Barattolo'; }
+  function barRow(x) {
+    var sc = barScade(x), old = sc < todayISO(), r = (BAR_RESTA.find(function (q) { return q[0] === x.resta; }) || [, ''])[1];
+    return '<button type="button" class="row" data-act="bar-edit" data-id="' + esc(x.id) + '"><span class="main"><span class="title">' + esc(barNome(x)) + '</span><span class="sub">' + esc(['aperto il ' + fmtDate(x.aperto), r ? 'resta: ' + r.toLowerCase() : '', x.dove ? 'dove: ' + x.dove : ''].filter(Boolean).join(' · ')) + '</span></span>' +
+      '<span class="side">' + (old ? '<span class="pill late">Da non usare</span>' : '<span class="pill ok">Buono fino al ' + esc(fmtDate(sc)) + '</span>') + '</span></button>';
+  }
+  function barAvviso(aid) {
+    var L = barAperti(aid); if (!L.length) return '';
+    return '<div class="notice" style="margin:10px 0"><b>Prima di aprirne uno nuovo:</b> ' + (L.length === 1 ? 'c’è un avanzo aperto' : 'ci sono ' + L.length + ' avanzi aperti') + ' di questo prodotto.<div class="group" style="margin-top:8px">' + L.map(barRow).join('') + '</div></div>';
+  }
+  function barList() {
+    var L = barAperti(), h = '<p class="context">Vernici, resine, stucchi aperti: quanto resta e dove sono. Dopo i mesi indicati non vanno più usati (lo dice la scheda tecnica).</p>' +
+      (S.canWrite ? '<button type="button" class="btn" data-act="bar-new" style="width:100%;margin:6px 0 10px">' + I.plus + 'Ho aperto un barattolo</button>' : '');
+    h += L.length ? '<div class="group">' + L.map(barRow).join('') + '</div>' : '<p class="context">Nessun barattolo aperto segnato.</p>';
+    openSheet({ title: 'Barattoli aperti', menu: true, body: h });
+  }
+  function barSheet(x, aid) {
+    var isNew = !x; x = x || { articoloId: aid || '', aperto: todayISO(), resta: 'pieno', mesi: null };
+    var arts = S.mag.slice().sort(function (a, b) { return String(a.nome).localeCompare(String(b.nome), 'it'); });
+    var am = x.articoloId && S.mag.find(function (a) { return a.id === x.articoloId; });
+    openSheet({
+      title: isNew ? 'Barattolo aperto' : barNome(x), submitLabel: 'Salva', deleteLabel: 'Elimina', deleteText: 'Lo togli dall’elenco. Se è finito, meglio spuntare «Finito».',
+      body: field(lab('fb-art', 'Prodotto'), '<select id="fb-art"><option value="">Non è in magazzino (scrivo il nome)</option>' + arts.map(function (a) { return '<option value="' + esc(a.id) + '"' + (a.id === x.articoloId ? ' selected' : '') + '>' + esc(a.nome) + '</option>'; }).join('') + '</select>') +
+        '<div id="fb-nomeW"' + (x.articoloId ? ' hidden' : '') + '>' + field(lab('fb-nome', 'Nome del prodotto'), inp('fb-nome', x.nome, 'placeholder="es. Primer epossidico grigio"')) + '</div>' +
+        '<div class="grid2">' + field(lab('fb-ap', 'Aperto il'), inp('fb-ap', x.aperto, 'type="date"')) + field(lab('fb-r', 'Quanto resta'), '<select id="fb-r">' + opts(BAR_RESTA, x.resta) + '</select>') + '</div>' +
+        '<div class="grid2">' + field(lab('fb-dove', 'Dove l’hai messo'), inp('fb-dove', x.dove, 'placeholder="es. armadio vernici, ripiano 2"')) + field(lab('fb-m', 'Si usa entro (mesi dall’apertura)'), inp('fb-m', x.mesi != null ? String(x.mesi) : (am && am.mesiAperto ? String(am.mesiAperto) : ''), 'type="text" inputmode="numeric" placeholder="6"')) + '</div>' +
+        (!isNew ? '<label class="check"><input type="checkbox" id="fb-fin"' + (x.finito ? ' checked' : '') + '> Finito o buttato</label>' : ''),
+      item: isNew ? null : x, onDelete: isNew ? null : async function () { if (await delSeq([S.db.collection('barattoli').doc(x.id)])) { closeSheet(); toast('Tolto dall’elenco'); } },
+      onOpen: function (f) { var s = f.querySelector('#fb-art'); s.addEventListener('change', function () { f.querySelector('#fb-nomeW').hidden = !!s.value; }); },
+      onSubmit: async function (f) {
+        var now = new Date().toISOString(), mi = parseInt(val(f, 'fb-m'), 10), fin = f.querySelector('#fb-fin');
+        var d = { articoloId: val(f, 'fb-art'), nome: val(f, 'fb-art') ? '' : val(f, 'fb-nome'), aperto: val(f, 'fb-ap') || todayISO(), resta: val(f, 'fb-r'), dove: val(f, 'fb-dove'), mesi: mi > 0 ? mi : null, finito: !!(fin && fin.checked), modificato: now };
+        if (!d.articoloId && !d.nome) { formErr('Scegli il prodotto o scrivi il nome.'); return false; }
+        var ok;
+        if (isNew) { d.creato = now; d.creatoDa = S.myId || ''; var r = S.db.collection('barattoli').doc(); ok = await w(function () { return r.set(d); }); }
+        else { var r2 = S.db.collection('barattoli').doc(x.id); ok = await w(function () { return r2.update(d); }); }
+        if (ok) toast(d.finito ? 'Segnato come finito' : 'Barattolo salvato');
+        return ok;
+      }
+    });
+  }
+  function consOn() { return strOn('consumo'); }
+  var CONS_REP = ['Cantiere', 'Officina', 'Verniciatura', 'Vetroresina e carpenteria', 'Pulizie'];
+  function consReparti() { var o = CONS_REP.slice(); S.mov.forEach(function (x) { if (x.reparto && o.indexOf(x.reparto) < 0) o.push(x.reparto); }); return o; }
+  function consSheet() {
+    var mesi = [], t = todayISO(); for (var i = 0; i < 6; i++) { var d = new Date(Date.UTC(+t.slice(0, 4), +t.slice(5, 7) - 1 - i, 1)); mesi.push(utcToISO(d.getTime()).slice(0, 7)); }
+    var mk = V.consMese && mesi.indexOf(V.consMese) >= 0 ? V.consMese : mesi[0], by = {}, n = 0;
+    S.mov.forEach(function (x) {
+      if (x.tipo !== 'scarico' || x.barcaId || String(x.data || '').slice(0, 7) !== mk) return;
+      var r = x.reparto || 'Cantiere', m = S.mag.find(function (a) { return a.id === x.articoloId; }); if (!m) return;
+      by[r] = by[r] || {}; by[r][m.id] = by[r][m.id] || [m, 0]; by[r][m.id][1] += -(num(x.qta) || 0); n++;
+    });
+    var h = '<p class="context">Gli scarichi senza barca (dischi, guanti, nastro, stracci…) divisi per reparto, mese per mese.</p><div class="chips" role="group" aria-label="Mese" style="flex-wrap:wrap">' + mesi.map(function (m) { return '<button type="button" data-act="cons-mese" data-m="' + m + '" aria-pressed="' + (m === mk) + '">' + esc(monthLabel(m)) + '</button>'; }).join('') + '</div>';
+    var reps = Object.keys(by).sort(function (a, b) { return a.localeCompare(b, 'it'); });
+    h += reps.length ? reps.map(function (r) {
+      var L = Object.keys(by[r]).map(function (k) { return by[r][k]; }).sort(function (a, b) { return String(a[0].nome).localeCompare(String(b[0].nome), 'it'); });
+      return '<div class="lbl">' + esc(r) + ' (' + L.length + (L.length === 1 ? ' articolo' : ' articoli') + ')</div><div class="group">' + L.map(function (x) { return '<div class="kv-row"><span class="k">' + esc(x[0].nome) + '</span><span class="v">' + esc(fmtQ(x[1], x[0].um)) + '</span></div>'; }).join('') + '</div>';
+    }).join('') : '<p class="context" style="margin-top:10px">Nessuno scarico senza barca in ' + esc(monthLabel(mk)) + '.</p>';
+    openSheet({ title: 'Materiale di consumo', menu: true, body: h });
+  }
   function stockMap() {
     var m = {};
     S.mov.forEach(function (x) { if (x.articoloId) m[x.articoloId] = (m[x.articoloId] || 0) + (num(x.qta) || 0); });
@@ -4990,6 +5098,21 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     setTimeout(function () { toast(d ? 'Attenzione: hai già scritto «' + d.l.titolo + '» per questo giorno. Se è un doppione, cancellane una.' : 'Attenzione: ' + nameOf(m[0].l.utente) + ' ha già segnato «' + m[0].l.titolo + '» su questa barca il ' + fmtDate(m[0].l.data) + '.', true); }, 1600);
   }
 
+  /* Confronto tra stagioni (idea X60, Strumenti in più › stagioni): ore per categoria di quest'anno, dal 1° gennaio
+     a oggi, affiancate allo stesso periodo dell'anno scorso, con la differenza */
+  function stagBlock() {
+    var t = todayISO(), y = +t.slice(0, 4), a = panEntries({ a: y + '-01-01', b: t }), p = panEntries({ a: (y - 1) + '-01-01', b: (y - 1) + t.slice(4) });
+    var m = {}; function add(L, k) { L.forEach(function (l) { var c = l.barcaId ? l.categoria || 'Altro' : 'Lavori di cantiere'; m[c] = m[c] || [0, 0]; m[c][k] += num(l.oreLavoro); }); }
+    add(a, 0); add(p, 1);
+    var rows = Object.keys(m).map(function (k) { return [k, m[k][0], m[k][1]]; }).sort(function (x, z) { return (z[1] + z[2]) - (x[1] + x[2]); });
+    var ta = rows.reduce(function (s, r) { return s + r[1]; }, 0), tp = rows.reduce(function (s, r) { return s + r[2]; }, 0);
+    function diff(x, z) { var d = x - z; if (!z && !x) return '<span class="cap">–</span>'; var pc = z ? Math.round(d / z * 100) : null; return '<span class="pill ' + (d > 0 ? 'acc' : d < 0 ? 'soon' : '') + '">' + (d > 0 ? '▲ +' : d < 0 ? '▼ ' : '') + esc(fmtNum(d, 1)) + ' h' + (pc != null && d ? ' (' + (pc > 0 ? '+' : '') + pc + '%)' : '') + '</span>'; }
+    var h = secH('Confronto tra stagioni') + '<p class="cap" style="margin:0 2px 8px">Ore per categoria dal 1° gennaio a oggi, quest’anno (' + y + ') e lo stesso periodo dell’anno scorso (' + (y - 1) + ').</p>';
+    if (!rows.length) return h + '<div class="notice">Nessuna ora segnata in questi due periodi.</div>';
+    return h + '<div class="group stag"><div class="kv-row stag-h"><span class="k">Categoria</span><span class="v">' + y + '</span><span class="v">' + (y - 1) + '</span><span class="v">Differenza</span></div>' +
+      rows.map(function (r) { return '<div class="kv-row"><span class="k">' + esc(r[0]) + '</span><span class="v">' + esc(fmtNum(r[1], 1)) + ' h</span><span class="v">' + esc(fmtNum(r[2], 1)) + ' h</span><span class="v">' + diff(r[1], r[2]) + '</span></div>'; }).join('') +
+      '<div class="kv-row"><span class="k"><b>Totale</b></span><span class="v"><b>' + esc(fmtNum(ta, 1)) + ' h</b></span><span class="v"><b>' + esc(fmtNum(tp, 1)) + ' h</b></span><span class="v">' + diff(ta, tp) + '</span></div></div>';
+  }
   function viewPannello() {
     var t = todayISO(), wk = panRange('sett'), wkE = panEntries(wk), wkH = wkE.reduce(function (a, l) { return a + num(l.oreLavoro); }, 0);
     var pt = progOf(t), ptDone = pt.filter(function (x) { return x.fatto; }).length;
@@ -5015,6 +5138,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       : V.panBy === 'categoria' ? function (l) { return l.categoria || 'Altro'; } : function (l) { return nameOf(l.utente); };
     o += panBars(panGroup(E, keyFn), 'h');
     B.push({ id: 'ore', t: 'Ore lavorate', sub: 'per persona, barca, cliente o categoria', z: sec, d: 'l', h: fn(o) });
+    if (strOn('stagioni')) B.push({ id: 'stag', t: 'Confronto tra stagioni', sub: 'ore per categoria, quest’anno e l’anno scorso', z: sec, d: 'l', nuovo: '2026-11-02', h: stagBlock });
     B.push({ id: 'sosp', t: 'Ore sospette', sub: 'doppioni e lavori già segnati da altri', z: sec, d: 'l', nuovo: '2026-11-02', h: sospBlock });
     // Servizi
     var since = utcToISO(isoToUTC(t) - 30 * 86400000), done = (opsOn() ? S.ops : []).filter(function (o) { return opDone(o) && String(o.completataIl || '').slice(0, 10) >= since && num(o.oreReali) > 0; });
@@ -7516,6 +7640,10 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     ['qrbarca', 'Etichetta QR sulla barca', 'Nella scheda della barca: stampa un’etichetta col QR (una o tutte, 8 per foglio A4). Inquadrata con il telefono apre la scheda di quella barca. Spenta: il tasto sparisce, le etichette già attaccate continuano ad aprire l’app.'],
     ['postogiusto', 'Trova il posto giusto', 'Ogni posto del porto prende la misura della sua fila (C 7 m, D 9 m…), e nel posto si può scrivere una misura diversa. Nella scheda della barca e al varo propone i posti liberi dove entra. Spento: le misure stimate di prima.'],
     ['deposito', 'Roba del cliente in deposito', 'Nella scheda della barca: tender, fuoribordo, cuscini, tendalini con foto e posto in cui sono riposti; alla riconsegna si spunta cosa si restituisce. Il cliente li vede nel portale, con le foto. Spento sparisce dalla scheda e dal portale; quello già segnato resta.'],
+    ['barattoli', 'Barattoli aperti e avanzi', 'In Magazzino: quando apri un barattolo di vernice o resina segni quanto resta e dove l’hai messo. Prima di prenderne uno nuovo l’app mostra gli avanzi dello stesso prodotto e dopo quanti mesi non vanno più usati.'],
+    ['depositi', 'Più depositi', 'Lo stesso articolo in più posti (capannone, furgone dell’assistenza, container) con giacenze separate. Nel carico e scarico scegli il deposito; con «Sposta» rifornisci il furgone dal magazzino. Spento: si torna a una sola giacenza, i movimenti restano.'],
+    ['consumo', 'Materiale di consumo', 'Dischi abrasivi, guanti, nastro, stracci: allo scarico senza barca scegli il reparto (cantiere, officina, verniciatura…). In Magazzino il totale per mese e per reparto.'],
+    ['stagioni', 'Confronto tra stagioni', 'Nel Pannello le ore per categoria di quest’anno, dal 1° gennaio a oggi, affiancate allo stesso periodo dell’anno scorso, con la differenza: dove si lavora di più e dove di meno.'],
     ['targhetta', 'Targhetta da foto', 'Nei componenti a bordo della barca: fotografi la targhetta del motore o dell’apparecchio e l’AI compila marca, modello, matricola e anno. Controlli e salvi. Spento: il tasto sparisce.'],
     ['tablet', 'Tablet condiviso con PIN', 'Un tablet in officina per tutti: ognuno tocca il suo nome e scrive il suo PIN di 4 cifre. Dopo 5 minuti senza tocchi si richiude. In Utenti e permessi scegli quale account è il tablet; il PIN si mette da Il mio account.']];
   function strSpento(t) { return '<div class="notice" style="margin-top:12px">' + esc(t) + '. Si riaccende da Altro › Strumenti in più (lo fa l’amministratore): quello già salvato ricompare.</div>'; }
@@ -7560,7 +7688,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     ['barche', 'Barche'], ['lavori', 'Lavorazioni e mansioni'], ['scadenze', 'Scadenze'], ['vari', 'Vari e alaggi'],
     ['magazzino', 'Ricambi del magazzino'], ['movimenti', 'Carichi e scarichi di magazzino'], ['operazioni', 'Servizi di cantiere'],
     ['opModelli', 'Gruppi dei servizi'], ['mezzi', 'Mezzi e carrelli'], ['conferme', 'Giornate confermate'],
-    ['dipendenti', 'Nomi dei dipendenti'], ['impostazioni', 'Misure della mappa'], ['posti', 'Posti al porto'], ['attrezzatura', 'Attrezzatura di bordo'], ['deposito', 'Roba del cliente in deposito'], ['componenti', 'Componenti a bordo'], ['verbali', 'Verbali di presa in carico'], ['programma', 'Programma dei lavori'], ['cariche', 'Cariche delle batterie'], ['richieste', 'Richieste di chi cerca una barca'], ['rifiuti', 'Rifiuti segnati'], ['ritiri', 'Ritiri dei rifiuti'], ['scadCantiere', 'Scadenze del cantiere'], ['preventivi', 'Preventivi'], ['assenze', 'Ferie e permessi'], ['giri', 'Giri di controllo'], ['ditte', 'Ditte esterne'], ['kit', 'Kit di ricambi'], ['inventari', 'Inventari del magazzino'],
+    ['dipendenti', 'Nomi dei dipendenti'], ['impostazioni', 'Misure della mappa'], ['posti', 'Posti al porto'], ['attrezzatura', 'Attrezzatura di bordo'], ['deposito', 'Roba del cliente in deposito'], ['componenti', 'Componenti a bordo'], ['barattoli', 'Barattoli aperti'], ['verbali', 'Verbali di presa in carico'], ['programma', 'Programma dei lavori'], ['cariche', 'Cariche delle batterie'], ['richieste', 'Richieste di chi cerca una barca'], ['rifiuti', 'Rifiuti segnati'], ['ritiri', 'Ritiri dei rifiuti'], ['scadCantiere', 'Scadenze del cantiere'], ['preventivi', 'Preventivi'], ['assenze', 'Ferie e permessi'], ['giri', 'Giri di controllo'], ['ditte', 'Ditte esterne'], ['kit', 'Kit di ricambi'], ['inventari', 'Inventari del magazzino'],
     ['checklist', 'Vecchie checklist'], ['checkBarca', 'Vecchie liste per barca'], ['modelli', 'Vecchi modelli di checklist']
   ];
   var BK_OLD = ['checklist', 'checkBarca', 'modelli'];
@@ -7575,7 +7703,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       barche: S.boats.length, lavori: S.lavoriAll.length, scadenze: S.scadenze.length, vari: S.vari.length, magazzino: S.mag.length, movimenti: S.mov.length,
       operazioni: S.ops.length, opModelli: S.opModelli.length, mezzi: S.mezzi.length, conferme: Object.keys(S.conf).length, dipendenti: Object.keys(S.dip).length,
       impostazioni: S.mapCfg ? 1 : 0, checklist: S.check.length, checkBarca: Object.keys(S.ckBarca).length, modelli: S.modelli.length,
-      posti: Object.keys(S.posti || {}).length, attrezzatura: (S.attr || []).length, deposito: (S.depo || []).length, componenti: (S.comp || []).length, verbali: (S.verbali || []).length, programma: (S.prog || []).length,
+      posti: Object.keys(S.posti || {}).length, attrezzatura: (S.attr || []).length, deposito: (S.depo || []).length, componenti: (S.comp || []).length, barattoli: (S.barattoli || []).length, verbali: (S.verbali || []).length, programma: (S.prog || []).length,
       cariche: (S.cariche || []).length, richieste: (S.richieste || []).length, rifiuti: (S.rif || []).length, ritiri: (S.ritiri || []).length, scadCantiere: (S.scadC || []).length, preventivi: (S.prev || []).length, assenze: (S.assenze || []).length, kit: (S.kit || []).length, inventari: (S.inv || []).length
     };
   }
@@ -7875,6 +8003,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       (S.mag.length ? '<button type="button" class="btn sec" data-act="mag-shop" style="width:100%;margin-top:10px">' + I.cart + 'Lista della spesa' + (shopList().length ? ' · ' + shopList().length + (shopList().length === 1 ? ' articolo' : ' articoli') : '') + '</button>' : '') +
       (S.mag.length ? '<div class="chips" role="group" aria-label="Raggruppa gli articoli" style="margin-top:10px"><button type="button" data-act="mag-group" data-g="tipo" aria-pressed="' + (V.magGroup !== 'cat') + '">Per tipo</button><button type="button" data-act="mag-group" data-g="cat" aria-pressed="' + (V.magGroup === 'cat') + '">Per categoria</button><button type="button" data-act="mag-group" data-g="forn" aria-pressed="' + (V.magGroup === 'forn') + '">Per fornitore</button></div>' : '') +
       (S.mag.length && sdsOn() ? '<button type="button" class="btn sec" data-act="sds-list" style="width:100%;margin-top:10px">' + I.doc + 'Schede di sicurezza · ' + S.mag.filter(sdsHa).length + ' di ' + S.mag.filter(function (m) { return sdsHa(m) || sdsServe(m); }).length + '</button>' : '') +
+      (S.mag.length && barOn() ? '<button type="button" class="btn sec" data-act="bar-list" style="width:100%;margin-top:10px">' + I.can + 'Barattoli aperti' + (barAperti().length ? ' · ' + barAperti().length : '') + '</button>' : '') +
+      (S.mag.length && (depOn() || consOn()) ? '<div class="grid2" style="margin-top:10px">' + (depOn() ? '<button type="button" class="btn sec" data-act="dep-vedi" data-d="' + esc(depList()[1] || depMain()) + '">' + I.truck + 'Depositi · ' + depList().length + '</button>' : '') + (consOn() ? '<button type="button" class="btn sec" data-act="cons-open">' + I.chart + 'Materiale di consumo</button>' : '') + '</div>' : '') +
       '<div id="mag-box">' + magListHtml() + '</div>';
   }
 
@@ -10168,24 +10298,37 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     else toast('Codice a barre non trovato nella foto: prova più vicino e dritto.', true);
   }
   function movSheet(m) {
-    var st = stockMap()[m.id] || 0, tipo = V.movTipo === 'carico' ? 'carico' : 'scarico';
+    var st = stockMap()[m.id] || 0, tipo = V.movTipo === 'carico' ? 'carico' : V.movTipo === 'sposta' ? 'sposta' : 'scarico';
     var boats = S.boats.slice().sort(byName);
-    var body = '<div class="preview">In magazzino adesso: <b>' + esc(fmtQ(st, m.um)) + '</b>' + (m.posizione ? ' · ' + esc(m.posizione) : '') + (m.codice ? '<br><span class="cap">Codice ' + esc(m.codice) + '</span>' : '') + '</div>' +
-      '<div class="chips" role="group" aria-label="Carico o scarico" style="margin:12px 0"><button type="button" data-act="mv-tipo" data-t="scarico" aria-pressed="' + (tipo === 'scarico') + '">Scarico (lo prendo)</button><button type="button" data-act="mv-tipo" data-t="carico" aria-pressed="' + (tipo === 'carico') + '">Carico (è arrivato)</button></div>' +
+    if (tipo === 'sposta' || V.movTipo === 'sposta') tipo = depOn() ? 'sposta' : 'scarico';
+    var body = '<div class="preview">In magazzino adesso: <b>' + esc(fmtQ(st, m.um)) + '</b>' + (depOn() ? '<br><span class="cap">' + esc(depTxt(m)) + '</span>' : '') + (m.posizione ? ' · ' + esc(m.posizione) : '') + (m.codice ? '<br><span class="cap">Codice ' + esc(m.codice) + '</span>' : '') + '</div>' +
+      '<div class="chips" role="group" aria-label="Carico o scarico" style="margin:12px 0"><button type="button" data-act="mv-tipo" data-t="scarico" aria-pressed="' + (tipo === 'scarico') + '">' + (depOn() ? 'Scarico' : 'Scarico (lo prendo)') + '</button><button type="button" data-act="mv-tipo" data-t="carico" aria-pressed="' + (tipo === 'carico') + '">' + (depOn() ? 'Carico' : 'Carico (è arrivato)') + '</button>' + (depOn() ? '<button type="button" data-act="mv-tipo" data-t="sposta" aria-pressed="' + (tipo === 'sposta') + '">Sposta</button>' : '') + '</div>' +
       '<input type="hidden" id="f-mvt" value="' + tipo + '">' +
+      (barOn() ? barAvviso(m.id) : '') +
       field(lab('f-mvq', 'Quantità (' + (m.um || 'pz') + ')'), inp('f-mvq', '1', 'type="text" inputmode="decimal" required')) +
-      '<div id="f-mvbW"' + (tipo === 'carico' ? ' hidden' : '') + '>' + field(lab('f-barca', 'Per quale barca (facoltativo)'), '<select id="f-barca"><option value="">Nessuna, uso di cantiere</option>' + boats.map(function (b) { return '<option value="' + esc(b.id) + '">' + esc(boatLabel(b)) + '</option>'; }).join('') + '</select>', 'Se scegli la barca, il pezzo entra nel suo storico ricambi.') + '</div>' +
+      (depOn() ? '<div class="grid2">' + depSel('f-mvd', V.movDep || depMain(), 'Deposito') + '<div id="f-mvaW"' + (tipo === 'sposta' ? '' : ' hidden') + '>' + depSel('f-mva', depList()[1] || depMain(), 'Verso') + '</div></div>' : '') +
+      '<div id="f-mvbW"' + (tipo !== 'scarico' ? ' hidden' : '') + '>' + field(lab('f-barca', 'Per quale barca (facoltativo)'), '<select id="f-barca"><option value="">Nessuna, uso di cantiere</option>' + boats.map(function (b) { return '<option value="' + esc(b.id) + '">' + esc(boatLabel(b)) + '</option>'; }).join('') + '</select>', 'Se scegli la barca, il pezzo entra nel suo storico ricambi.') + (consOn() ? '<div id="f-mvrW">' + field(lab('f-mvr', 'Reparto (se è materiale di consumo)'), inp('f-mvr', '', 'list="f-mvrl" placeholder="Cantiere" autocomplete="off"') + '<datalist id="f-mvrl">' + consReparti().map(function (r) { return '<option value="' + esc(r) + '">'; }).join('') + '</datalist>') + '</div>' : '') + '</div>' +
       '<button type="button" class="btn sec" data-act="mv-next" style="width:100%;margin-top:6px">' + I.camera + 'Salva e inquadra il prossimo</button>' +
       '<button type="button" class="link" data-act="mv-open" data-id="' + esc(m.id) + '" style="margin-top:12px">Apri la scheda dell’articolo</button>';
     openSheet({ title: m.nome, body: body, submitLabel: 'Salva', onSubmit: function (f) { return movSave(f, m); } });
     SHEET.mv = m;
   }
   async function movSave(f, m) {
-    var q = parseDec(val(f, 'f-mvq')), tipo = val(f, 'f-mvt') === 'carico' ? 'carico' : 'scarico', bid = tipo === 'scarico' ? val(f, 'f-barca') : '';
+    var q = parseDec(val(f, 'f-mvq')), tipo = val(f, 'f-mvt') === 'carico' ? 'carico' : val(f, 'f-mvt') === 'sposta' && depOn() ? 'sposta' : 'scarico', bid = tipo === 'scarico' ? val(f, 'f-barca') : '';
     if (!q || q <= 0) { formErr('Scrivi la quantità.'); return false; }
     var now = new Date().toISOString(), b = bid ? boatById(bid) : null;
     var data = { articoloId: m.id, qta: tipo === 'scarico' ? -q : q, tipo: tipo, data: todayISO(), utente: S.myId || '', creato: now, creatoDa: S.myId || '' };
     if (b) { data.barcaId = b.id; if (num(b.oreMotore) != null) data.oreMotore = num(b.oreMotore); }
+    if (depOn()) { var dp = val(f, 'f-mvd'); if (dp && dp !== depMain()) data.dep = dp; V.movDep = dp; }
+    if (consOn() && tipo === 'scarico' && !b) data.reparto = val(f, 'f-mvr') || 'Cantiere';
+    if (tipo === 'sposta') {
+      var da = val(f, 'f-mvd') || depMain(), a2 = val(f, 'f-mva') || depMain();
+      if (da === a2) { formErr('Scegli due depositi diversi.'); return false; }
+      var r1 = S.db.collection('movimenti').doc(), r2m = S.db.collection('movimenti').doc(), base = { articoloId: m.id, tipo: 'sposta', data: todayISO(), utente: S.myId || '', creato: now, creatoDa: S.myId || '', da: da, a: a2 };
+      if (!(await w(function () { return r1.set(Object.assign({}, base, { qta: -q, dep: da === depMain() ? '' : da })); }))) return false;
+      if (!(await w(function () { return r2m.set(Object.assign({}, base, { qta: q, dep: a2 === depMain() ? '' : a2 })); }))) return false;
+      V.movTipo = 'sposta'; toast('Spostato ' + fmtQ(q, m.um) + ' da ' + da + ' a ' + a2); return true;
+    }
     var r = S.db.collection('movimenti').doc();
     if (!(await w(function () { return r.set(data); }))) return false;
     V.movTipo = tipo;
@@ -10194,7 +10337,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   }
   function movesFor(id) {
     var out = [];
-    S.mov.forEach(function (x) { if (x.articoloId === id) out.push({ data: x.data, t: x.tipo === 'rettifica' ? 'Correzione giacenza' + (x.inventario ? ' (inventario)' : '') : x.tipo === 'scarico' ? 'Scarico' + (x.barcaId ? ' · ' + boatLabel(boatById(x.barcaId)) : ' · uso di cantiere') : ['Carico', x.bolla ? 'bolla ' + x.bolla : '', x.fornitore].filter(Boolean).join(' · '), q: num(x.qta) || 0 }); });
+    S.mov.forEach(function (x) { if (x.articoloId === id) out.push({ data: x.data, t: x.tipo === 'rettifica' ? 'Correzione giacenza' + (x.inventario ? ' (inventario)' : '') : x.tipo === 'sposta' ? (num(x.qta) < 0 ? 'Spostato in ' + (x.a || '') : 'Arrivato da ' + (x.da || '')) : x.tipo === 'scarico' ? 'Scarico' + (x.barcaId ? ' · ' + boatLabel(boatById(x.barcaId)) : ' · ' + (x.reparto ? 'consumo ' + x.reparto : 'uso di cantiere')) + (x.dep ? ' · da ' + x.dep : '') : ['Carico', x.bolla ? 'bolla ' + x.bolla : '', x.fornitore].filter(Boolean).join(' · '), q: num(x.qta) || 0 }); });
     S.lavori.forEach(function (l) { (l.ricambi || []).forEach(function (r) { if (r.articoloId === id) out.push({ data: l.data, t: (l.titolo || 'Lavoro') + ' · ' + lavBoatLabel(l), q: -(num(r.qta) || 0) }); }); });
     return out.sort(function (a, b) { return String(b.data || '').localeCompare(String(a.data || '')); }).slice(0, 15);
   }
@@ -10424,7 +10567,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       '<div class="grid2">' + field(lab('f-mu', 'Unità'), '<select id="f-mu">' + opts(UM.map(function (u) { return [u, umL[u]]; }), m.um) + '</select>') +
       field(lab('f-mmin', 'Scorta minima'), inp('f-mmin', num(m.minimo) != null ? String(m.minimo).replace('.', ',') : '', 'type="text" inputmode="decimal" placeholder="es. 2"')) + '</div>' +
       (isNew ? field(lab('f-mq0', 'Quantità che avete adesso'), inp('f-mq0', '', 'type="text" inputmode="decimal" placeholder="es. 10"'))
-        : '<div class="preview">In magazzino adesso: <b>' + esc(fmtQ(st, m.um)) + '</b></div>' +
+        : '<div class="preview">In magazzino adesso: <b>' + esc(fmtQ(st, m.um)) + '</b>' + (depOn() ? '<br><span class="cap">' + esc(depTxt(m)) + '</span>' : '') + '</div>' + (S.canWrite && (depOn() || consOn()) ? '<button type="button" class="btn sec" data-act="mag-mv" data-id="' + esc(m.id) + '" style="width:100%;margin:8px 0">' + I.updown + (depOn() ? 'Carico, scarico o sposta' : 'Carico o scarico') + '</button>' : '') +
           '<div class="grid2">' + field(lab('f-mcar', 'Arrivati (carico)'), inp('f-mcar', '', 'type="text" inputmode="decimal" placeholder="es. 6"')) +
           field(lab('f-mrett', 'Correggi la giacenza a'), inp('f-mrett', '', 'type="text" inputmode="decimal" placeholder="conta reale"')) + '</div>') +
       '<datalist id="forn-list">' + fornitori().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
@@ -10704,7 +10847,15 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       case 'cat-ckall': x = document.querySelectorAll('.cat-ck'); var on = Array.prototype.some.call(x, function (c) { return !c.checked; }); Array.prototype.forEach.call(x, function (c) { c.checked = on; }); break;
       case 'cat-move': if (S.isOwner) catMoveSel(); break;
       case 'mag-move': if (S.canWrite) scanMove(); break;
-      case 'mv-tipo': x = t.getAttribute('data-t'); $('#f-mvt').value = x; Array.prototype.forEach.call(t.parentNode.children, function (c) { c.setAttribute('aria-pressed', String(c === t)); }); $('#f-mvbW').hidden = x === 'carico'; break;
+      case 'mv-tipo': x = t.getAttribute('data-t'); $('#f-mvt').value = x; Array.prototype.forEach.call(t.parentNode.children, function (c) { c.setAttribute('aria-pressed', String(c === t)); }); $('#f-mvbW').hidden = x !== 'scarico'; if ($('#f-mvaW')) $('#f-mvaW').hidden = x !== 'sposta'; if ($('label[for="f-mvd"]')) $('label[for="f-mvd"]').textContent = x === 'sposta' ? 'Da' : 'Deposito'; break;
+      case 'mag-mv': x = S.mag.find(function (a) { return a.id === id; }); if (x && S.canWrite) { closeSheet(); setTimeout(function () { movSheet(x); }, 30); } break;
+      case 'bar-list': barList(); break;
+      case 'bar-new': if (S.canWrite) barSheet(null, t.getAttribute('data-aid') || ''); break;
+      case 'bar-edit': x = (S.barattoli || []).find(function (a) { return a.id === id; }); if (x && S.canWrite) barSheet(x); break;
+      case 'dep-cfg': if (S.isOwner) depCfgSheet(); break;
+      case 'dep-vedi': depVediSheet(t.getAttribute('data-d') || depMain()); break;
+      case 'cons-mese': V.consMese = t.getAttribute('data-m'); consSheet(); break;
+      case 'cons-open': consSheet(); break;
       case 'mv-next': (function () { // la fotocamera si apre subito (serve il tocco), intanto salvo
         var f = $('#sheet-form'), mm = SHEET.mv; if (!f || !mm) return;
         var qq = parseDec(val(f, 'f-mvq')); if (!qq || qq <= 0) { formErr('Scrivi la quantità.'); return; }
@@ -11107,7 +11258,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     sub('conferme', function (x) { S.conf = toMap(x); });
     db.collection('impostazioni').onSnapshot(function (snap) {
       var m = null, b = null, ly = {};
-      snap.docs.forEach(function (d) { if (/^layout_/.test(d.id)) ly[d.id] = d.data(); else if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); else if (d.id === 'rifiuti') S.rifCfg = d.data(); else if (d.id === 'notifiche') S.notifCfg = d.data(); else if (d.id === 'meteo') S.meteoCfg = d.data(); else if (d.id === 'strumenti') S.strCfg = d.data(); else if (d.id === 'percorso') S.percorso = d.data(); else if (d.id === 'porto') S.portoCfg = d.data(); else if (d.id === 'categorie') { S.catCfg = d.data(); catApply(); } });
+      snap.docs.forEach(function (d) { if (/^layout_/.test(d.id)) ly[d.id] = d.data(); else if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); else if (d.id === 'rifiuti') S.rifCfg = d.data(); else if (d.id === 'notifiche') S.notifCfg = d.data(); else if (d.id === 'depositi') S.depCfg = d.data(); else if (d.id === 'meteo') S.meteoCfg = d.data(); else if (d.id === 'strumenti') S.strCfg = d.data(); else if (d.id === 'percorso') S.percorso = d.data(); else if (d.id === 'porto') S.portoCfg = d.data(); else if (d.id === 'categorie') { S.catCfg = d.data(); catApply(); } });
       var mc = m !== S.mapCfg; S.mapCfg = m; S.bkInfo = b; S.layouts = ly; S.got.imp = true; portoRinumera();
       if ((V.tab === 'mappa' && mc) || V.tab === 'backup' || V.tab === 'batterie' || V.tab === 'rifiuti' || V.tab === 'notifiche' || V.tab === 'categorie' || V.tab === 'strumenti' || V.tab === 'home' || V.tab === 'barche' || V.tab === 'pannello' || V.tab === 'riepiloghi') { if (!LY.drag) render(); }
     }, function () { });
@@ -11124,6 +11275,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     sub('attrezzatura', function (x) { S.attr = x; });
     sub('deposito', function (x) { S.depo = x; });
     sub('componenti', function (x) { S.comp = x; });
+    sub('barattoli', function (x) { S.barattoli = x; });
     sub('programma', function (x) { S.prog = x; S.got.programma = true; progPulizia(); });
     sub('cariche', function (x) { S.cariche = x; });
     sub('posti', function (x) { S.posti = toMap(x); S.got.posti = true; portoRinumera(); });
