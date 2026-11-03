@@ -110,7 +110,7 @@
     '#nmfb h5{margin:14px 0 6px;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:#9a9dc0}#nmfb .lv{display:flex;gap:12px;padding:7px 0;border-top:1px solid #23245a;font-size:.95rem}#nmfb .lv .d{flex:none;width:58px;color:#9a9dc0;font-variant-numeric:tabular-nums}#nmfb .dfo{display:flex;gap:6px;flex:none}#nmfb .dfo img{width:52px;height:52px;object-fit:cover;border-radius:9px;background:#23245a;cursor:zoom-in}#nmfb .dfo img.big{position:fixed;inset:0;margin:auto;width:auto;height:auto;max-width:94vw;max-height:80vh;z-index:5;border-radius:12px;box-shadow:0 0 0 100vmax rgba(0,0,0,.7);cursor:zoom-out}' +
     '#nmfb .oy{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 8px}#nmfb .oy button{padding:5px 13px;border-radius:99px;border:1px solid #3a3d7a;background:none;color:#b9bccb;font:inherit;font-size:.85rem;cursor:pointer}#nmfb .oy button[aria-pressed="true"]{background:#2f8ff0;border-color:#2f8ff0;color:#fff}' +
     '#nmfb .odn{display:flex;justify-content:center;margin:6px 0 4px}#nmfb .oc{display:flex;width:100%;align-items:center;gap:10px;padding:9px 0;border:0;border-top:1px solid #23245a;background:none;color:inherit;font:inherit;font-size:.95rem;text-align:left;cursor:pointer}#nmfb .oc i{width:11px;height:11px;border-radius:3px;flex:none}#nmfb .oc span{flex:1}#nmfb .oc b{white-space:nowrap;font-variant-numeric:tabular-nums}#nmfb .oc small{color:#8a8db0;width:12px}' +
-    '#nmfb .ors{padding:0 0 6px 12px;border-left:3px solid;margin:0 0 8px 4px}#nmfb .ors .lv{font-size:.9rem;border-top:0;padding:5px 0}#nmfb .ors .lv .d{width:52px}#nmfb .lv .oh{margin-left:auto;padding-left:8px;white-space:nowrap;color:#c9d4ff;font-variant-numeric:tabular-nums}#nmfb .otot{display:flex;justify-content:space-between;padding:10px 0 2px;border-top:2px solid #3a3d7a;font-weight:700}' +
+    '#nmfb .ors{padding:0 0 6px 12px;border-left:3px solid;margin:0 0 8px 4px}#nmfb .ors .lv{font-size:.9rem;border-top:0;padding:5px 0}#nmfb .ors .lv .d{width:52px}#nmfb .ors .on{display:block;color:#9a9dc0;font-size:.82rem;margin-top:1px}#nmfb .lv .oh{margin-left:auto;padding-left:8px;white-space:nowrap;color:#c9d4ff;font-variant-numeric:tabular-nums}#nmfb .otot{display:flex;justify-content:space-between;padding:10px 0 2px;border-top:2px solid #3a3d7a;font-weight:700}' +
     '#nmfb .gd{margin-top:18px;color:#b9bccb;font-size:.95rem}#nmfb .gd summary{color:#8cc2ff;cursor:pointer;padding:8px 0}#nmfb .gd ul{margin:4px 0 0;padding-left:20px}#nmfb .gd li{margin:6px 0}' +
     '#nmfb .upd{color:#8a8db0;font-size:.82rem;margin-top:10px}#nmfb .more{background:none;border:0;color:#8cc2ff;font:inherit;padding:8px 0;cursor:pointer}' +
     '#nmpan .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;width:100%}#nmpan .chip{display:inline-flex;align-items:center;gap:4px;background:#1e3a5f;color:#d6e8ff;border-radius:99px;padding:4px 4px 4px 10px;font-size:.9rem}' +
@@ -714,7 +714,7 @@
         sec('In attesa di approvazione', by('in_attesa')) + sec('Cantiere', by('attivo').filter(function (id) { return UT[id].ruolo !== 'cliente'; })) +
         sec('Clienti', by('attivo').filter(function (id) { return UT[id].ruolo === 'cliente'; })) + sec('Sospesi', by('bloccato')) +
         '<p class="note"><b>Dipendente</b>: usa tutta l’app; cancella solo ciò che ha aggiunto, modifica solo le proprie mansioni e richieste di ferie. <b>Amministratore</b>: in più cancella tutto, vede il cestino, approva le ferie e i colleghi e cambia i permessi. ' +
-        '<b>Cliente</b>: vede solo le barche che gli colleghi, con stato, posto e lavori eseguiti, senza i nomi dei dipendenti' + (strOnFb('orecliente') ? '; vede anche le ore di lavoro per tipo, con il testo delle mansioni' : ' e senza ore (si accendono da Altro › Strumenti in più › Ore di lavoro al cliente)') + '.</p>' +
+        '<b>Cliente</b>: vede solo le barche che gli colleghi, con stato, posto e lavori eseguiti' + (strOnFb('orecliente') ? '; vede anche le ore di lavoro per tipo, con il testo delle mansioni e il nome di chi le ha fatte (solo giornate confermate)' : ', senza ore né nomi dei dipendenti (si accendono da Altro › Strumenti in più › Ore di lavoro al cliente)') + '.</p>' +
         (olds.length ? '<p class="note"><b>Collega ai dati vecchi</b>: dopo aver ripristinato la copia presa da Claude, scegli chi era quella persona. Mansioni, ore e giornate confermate passano al nuovo account.</p>' : '') +
         '<p class="note">Per far entrare un collega mandagli il link dell’app: si registra da solo e compare qui sopra, in attesa.</p>';
     } else if (PAN === 'cestino' && ME.ruolo === 'admin') {
@@ -897,7 +897,7 @@
     h += '<details class="gd"><summary>? Come funziona questa pagina</summary><ul>' +
       '<li>Per ogni tua barca vedi lo stato (in rimessaggio, in lavorazione, in acqua, consegnata) e dove si trova: al cantiere o al suo posto in porto.</li>' +
       '<li>Sotto ci sono le cose tue che il cantiere tiene in deposito (tender, cuscini, tendalini…), con le foto, e i lavori eseguiti, con la data.</li>' +
-      (CL.ids.some(function (id) { return CL.docs[id] && CL.docs[id].ore; }) ? '<li>In «Ore di lavoro» vedi quante ore ha lavorato il cantiere sulla tua barca, divise per tipo di lavoro: tocca un tipo per leggere giorno per giorno cosa è stato fatto, come l’ha scritto chi ci ha lavorato. Sopra scegli l’anno.</li>' : '') +
+      (CL.ids.some(function (id) { return CL.docs[id] && CL.docs[id].ore; }) ? '<li>In «Ore di lavoro» vedi quante ore ha lavorato il cantiere sulla tua barca, divise per tipo di lavoro: tocca un tipo per leggere giorno per giorno cosa è stato fatto, come l’ha scritto chi ci ha lavorato, con il suo nome. Ci sono le giornate già confermate dal dipendente. Sopra scegli l’anno.</li>' : '') +
       '<li>Se il cantiere sta facendo i lavori di un preventivo, vedi quali sono fatti e quali mancano.</li>' +
       '<li>Con «Chiedi al cantiere» puoi chiedere il varo per un giorno o segnalare un problema con le foto: sotto vedi se è stata ricevuta e confermata.</li>' +
       '<li>Se il cantiere li mostra, vedi anche le scadenze della barca (tagliando, antivegetativa, zattera…): con «Richiedi il lavoro» lo chiedi al cantiere senza telefonare.</li>' +
@@ -930,7 +930,7 @@
       cats.map(function (x) {
         var op = aperta === x.c;
         return '<button class="oc" data-cl="oc" data-id="' + esc(id) + '" data-c="' + esc(x.c) + '" aria-expanded="' + op + '"><small>' + (op ? '▾' : '▸') + '</small><i style="background:' + OCOL[x.c] + '"></i><span>' + esc(x.c) + '</span><b>' + esc(oreH(x.h)) + '</b></button>' +
-          (op ? '<div class="ors" style="border-color:' + OCOL[x.c] + '">' + x.r.map(function (r) { return '<div class="lv"><span class="d">' + esc(dataCorta(r.d)) + '</span><span>' + esc(r.t) + '</span><span class="oh">' + esc(oreH(r.h)) + '</span></div>'; }).join('') + '</div>' : '');
+          (op ? '<div class="ors" style="border-color:' + OCOL[x.c] + '">' + x.r.map(function (r) { return '<div class="lv"><span class="d">' + esc(dataCorta(r.d)) + '</span><span>' + esc(r.t) + (r.n ? '<small class="on">' + esc(r.n) + '</small>' : '') + '</span><span class="oh">' + esc(oreH(r.h)) + '</span></div>'; }).join('') + '</div>' : '');
       }).join('') +
       '<div class="otot"><span>' + (y === 'tutto' ? 'Totale' : 'Totale ' + y) + '</span><span>' + esc(oreH(tot)) + '</span></div>' +
       '<div class="upd" style="margin-top:4px">Tocca un tipo di lavoro per vedere giorno per giorno cosa è stato fatto.</div>';
@@ -949,7 +949,7 @@
   });
 
   document.addEventListener('click', function (e) { var im = e.target.closest && e.target.closest('#nmfb .dfo img'); if (im) im.classList.toggle('big'); });
-  // Il cantiere prepara per ogni barca collegata a un cliente un riepilogo senza nomi dei dipendenti (le ore solo con «Ore di lavoro al cliente» acceso)
+  // Il cantiere prepara per ogni barca collegata a un cliente un riepilogo (ore e nomi dei dipendenti solo con «Ore di lavoro al cliente» acceso)
   var PT_T = null;
   function schedulePortale() { if (!started || !ME || ME.ruolo === 'cliente') return; clearTimeout(PT_T); PT_T = setTimeout(syncPortale, 4000); }
   function stable(x) {
@@ -973,15 +973,17 @@
       porto: p ? { posto: pid, contratto: p.contratto || '', fino: p.fino || '' } : null, lavori: lav, ore: ore, deposito: depoPortale(bid), avanzamento: avPortale(bid), richieste: strOnFb('richieste'), scadenze: scadPortale(bid) };
   }
   // ore di lavoro al cliente (Strumenti in più › orecliente, spento di base): le mansioni della scheda lavoro
-  // con il testo come l'ha scritto il dipendente, la categoria e le ore; mai il nome di chi l'ha fatta.
-  // Contano solo sulla barca principale della mansione (le «altre barche coinvolte» non ricevono le ore).
+  // con il testo come l'ha scritto il dipendente, la categoria, le ore e il nome di chi l'ha fatta.
+  // Solo le giornate già confermate dal dipendente (conferme/{utente}_{giorno}); contano solo sulla barca
+  // principale della mansione (le «altre barche coinvolte» non ricevono le ore).
   function orePortale(bid) {
     if (!strOnFb('orecliente')) return null;
-    var L = LIVE.lavori ? LIVE.lavori.map : {};
+    var L = LIVE.lavori ? LIVE.lavori.map : {}, CF = LIVE.conferme ? LIVE.conferme.map : {};
+    var conf = function (l) { var c = CF[l.utente + '_' + String(l.data).slice(0, 10)]; return !!(c && !c._del); };
     var h = function (l) { var n = parseFloat(String(l.oreLavoro == null ? '' : l.oreLavoro).replace(',', '.')); return isFinite(n) ? n : 0; };
-    return Object.keys(L).map(function (k) { return L[k]; }).filter(function (l) { return l.fonte === 'scheda' && l.barcaId === bid && !l.annullata && !l.daSegnare && !l._del && /^\d{4}-\d{2}-\d{2}/.test(l.data || '') && h(l) > 0; })
+    return Object.keys(L).map(function (k) { return L[k]; }).filter(function (l) { return l.fonte === 'scheda' && l.barcaId === bid && !l.annullata && !l.daSegnare && !l._del && /^\d{4}-\d{2}-\d{2}/.test(l.data || '') && h(l) > 0 && l.utente && conf(l); })
       .sort(function (a, c) { return String(c.data).localeCompare(String(a.data)) || String(c.creato || '').localeCompare(String(a.creato || '')); })
-      .slice(0, 800).map(function (l) { return { d: String(l.data).slice(0, 10), t: String(l.titolo || 'Lavoro').slice(0, 300), c: l.categoria || 'Altro', h: Math.round(h(l) * 100) / 100 }; });
+      .slice(0, 800).map(function (l) { return { d: String(l.data).slice(0, 10), t: String(l.titolo || 'Lavoro').slice(0, 300), c: l.categoria || 'Altro', h: Math.round(h(l) * 100) / 100, n: String((UT[l.utente] || {}).nome || '').slice(0, 60) }; });
   }
   // scadenze ricordate al cliente (idea X63, Strumenti in più › scadcliente): solo tipo, modello e data,
   // quelle scadute da meno di 90 giorni e quelle dei prossimi 60
@@ -1018,7 +1020,7 @@
   function fotoDi(s) { var o = []; (s && s.deposito || []).forEach(function (x) { (x.foto || []).forEach(function (f) { o.push(f); }); }); return o; }
   async function syncPortale() {
     var ids = linkedBoats(); if (!ids.length) return;
-    var need = ['barche', 'lavori', 'posti', 'deposito', 'impostazioni', 'portale', 'preventivi', 'scadenze'];
+    var need = ['barche', 'lavori', 'posti', 'deposito', 'impostazioni', 'portale', 'preventivi', 'scadenze', 'conferme'];
     for (var i = 0; i < need.length; i++) { var L = live(need[i]); await L.start; await whenReady(L, 15000); }
     var cur = LIVE.portale.map;
     ids.forEach(function (bid) {
