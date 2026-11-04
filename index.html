@@ -7695,7 +7695,21 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     if (!S.isOwner) return '<div class="notice" style="margin-top:12px">Gli strumenti li accende o spegne l’amministratore.</div>';
     return '<p class="context" style="margin-top:12px">Accendi solo quello che serve al vostro cantiere. Si può cambiare quando volete: spegnere non cancella niente.</p><div class="group">' +
       STRUMENTI.map(function (x) { var on = strOn(x[0]); return '<div class="row"><span class="main"><span class="title">' + esc(x[1]) + '</span><span class="sub">' + esc(x[2]) + '</span></span>' +
-        '<button type="button" class="btn' + (on ? '' : ' sec') + '" data-act="str-tog" data-k="' + x[0] + '" aria-pressed="' + on + '">' + (on ? 'Acceso' : 'Spento') + '</button></div>'; }).join('') + '</div>';
+        '<button type="button" class="btn' + (on ? '' : ' sec') + '" data-act="str-tog" data-k="' + x[0] + '" aria-pressed="' + on + '">' + (on ? 'Acceso' : 'Spento') + '</button></div>'; }).join('') + '</div>' + viewAiKey();
+  }
+  // Chiave dell'AI gratuita (Google AI Studio, progetto senza fatturazione): la vedono solo gli account del cantiere, non il sito pubblico
+  function viewAiKey() {
+    var k = aiKey();
+    return '<div class="sec-h"><h2>AI dalla foto</h2></div><div class="group"><div class="row" style="flex-wrap:wrap;gap:8px"><span class="main"><span class="title">Chiave gratuita di Google AI Studio</span>' +
+      '<span class="sub">' + (k ? 'Inserita (finisce con …' + esc(k.slice(-4)) + '). Le foto si leggono gratis, con un limite al giorno.' : 'Non inserita: l’AI usa il progetto Firebase, che senza credito non risponde.') + '</span></span>' +
+      '<input type="password" id="ai-key-in" autocomplete="off" placeholder="Incolla la chiave" style="flex:1 1 220px">' +
+      '<button type="button" class="btn" data-act="ai-key">' + (k ? 'Cambia' : 'Salva') + '</button></div></div>';
+  }
+  async function aiKeySave() {
+    if (!S.isOwner || !S.db) return; var el = document.getElementById('ai-key-in'), v = el ? el.value.trim() : '';
+    if (v && !/^[A-Za-z0-9._-]{20,200}$/.test(v)) { toast('Questa non sembra una chiave: ricopiala da Google', true); return; }
+    var d = { chiave: v, modificato: new Date().toISOString(), da: S.myId || '' }, r = S.db.collection('impostazioni').doc('ai');
+    if (await w(function () { return r.set(d); })) { S.aiCfg = d; toast(v ? 'Chiave salvata' : 'Chiave tolta'); render(); }
   }
   async function strToggle(k) {
     if (!S.isOwner || !S.db) return; var d = Object.assign({}, S.strCfg && !S.strCfg._del ? S.strCfg : {}); delete d._del; d[k] = !strOn(k); d.modificato = new Date().toISOString();
@@ -10409,20 +10423,32 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   }
   function magByCode(code) { code = String(code || '').trim(); if (!code) return null; for (var i = 0; i < S.mag.length; i++) { var c = String(S.mag[i].codice || '').trim(); if (c && c === code) return S.mag[i]; } return null; }
   function aiOn() { var c = window.NM_FIREBASE_CONFIG; return !!(window.__NM_FB && c && c.apiKey && c.projectId); }
-  var AI_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+  /* AI dalla foto: se l'amministratore ha inserito la chiave di un progetto AI Studio gratuito (Strumenti in più,
+     salvata in impostazioni/ai: la leggono solo gli account del cantiere) si usa quella, senza fatturazione e senza App Check;
+     altrimenti la strada di Firebase AI Logic (progetto a pagamento). */
+  function aiKey() { var c = S.aiCfg; return (c && !c._del && c.chiave) || ''; }
   async function aiAsk(dataUrl, prompt) {
     if (!aiOn()) throw { code: 'ai_off' };
-    var c = window.NM_FIREBASE_CONFIG, b64 = String(dataUrl).split(',')[1], last = null;
-    var hd = { 'Content-Type': 'application/json', 'x-goog-api-key': c.apiKey, 'X-Firebase-AppId': c.appId || '' };
-    var tk = window.__NM_FB.appCheckToken ? await window.__NM_FB.appCheckToken() : ''; // App Check: dal 2/11/2026 senza gettone l'AI risponde «non autorizzato»
-    if (tk) hd['X-Firebase-AppCheck'] = tk;
+    var c = window.NM_FIREBASE_CONFIG, b64 = String(dataUrl).split(',')[1], last = null, hd, base;
+    var key = aiKey(), AI_MODELS = key ? ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest'] : ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+    if (key) {
+      hd = { 'Content-Type': 'application/json', 'x-goog-api-key': key };
+      base = 'https://generativelanguage.googleapis.com/v1beta/models/';
+    } else {
+      hd = { 'Content-Type': 'application/json', 'x-goog-api-key': c.apiKey, 'X-Firebase-AppId': c.appId || '' };
+      var tk = window.__NM_FB.appCheckToken ? await window.__NM_FB.appCheckToken() : ''; // App Check: dal 2/11/2026 senza gettone l'AI risponde «non autorizzato»
+      if (tk) hd['X-Firebase-AppCheck'] = tk;
+      base = 'https://firebasevertexai.googleapis.com/v1beta/projects/' + encodeURIComponent(c.projectId) + '/models/';
+    }
     for (var i = 0; i < AI_MODELS.length; i++) {
-      var r = await fetch('https://firebasevertexai.googleapis.com/v1beta/projects/' + encodeURIComponent(c.projectId) + '/models/' + AI_MODELS[i] + ':generateContent', {
+      var r = await fetch(base + AI_MODELS[i] + ':generateContent', {
         method: 'POST', headers: hd,
         body: JSON.stringify({ contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/jpeg', data: b64 } }, { text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1 } })
       }).catch(function () { return null; });
       if (!r) throw { code: 'rete' };
-      if (r.status === 404) { last = 'modello'; continue; }
+      if (r.status === 404) { last = last || 'modello'; continue; }
+      if (r.status === 503 || r.status === 500) { last = 'occupato'; continue; } // modello sovraccarico: si prova il successivo
+      if (r.status === 402) throw { code: 'crediti' };
       if (r.status === 403 || r.status === 401) throw { code: 'ai_off' };
       if (r.status === 429) throw { code: 'troppe' };
       if (!r.ok) throw { code: 'ai_err' };
@@ -10430,12 +10456,12 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       var txt = t.map(function (p) { return p.text || ''; }).join('').replace(/^```(json)?|```$/g, '').trim();
       try { return JSON.parse(txt); } catch (e) { throw { code: 'ai_err' }; }
     }
-    throw { code: last === 'modello' ? 'ai_off' : 'ai_err' };
+    throw { code: last === 'occupato' ? 'occupato' : last === 'modello' ? 'ai_off' : 'ai_err' };
   }
   function aiErrMsg(e) {
     var c = e && e.code;
     return c === 'ai_off' ? 'Il riconoscimento con l’AI non è ancora attivo: va acceso una volta nella console di Firebase (AI Logic). Intanto scrivi a mano.'
-      : c === 'rete' ? 'Serve internet per il riconoscimento con l’AI.' : c === 'troppe' ? 'Troppe richieste in poco tempo: riprova tra un minuto.' : 'Non sono riuscito a riconoscerlo: scrivilo a mano.';
+      : c === 'rete' ? 'Serve internet per il riconoscimento con l’AI.' : c === 'troppe' ? 'Troppe richieste in poco tempo (o finite le foto gratis di oggi): riprova tra un minuto.' : c === 'occupato' ? 'L’AI di Google è molto occupata in questo momento: riprova tra qualche minuto.' : c === 'crediti' ? 'L’AI ha finito il credito: intanto scrivi a mano.' : 'Non sono riuscito a riconoscerlo: scrivilo a mano.';
   }
   var AI_PEZZO = 'Sei in un cantiere nautico italiano. Nella foto c’è un ricambio, un prodotto o un materiale (anche la sua scatola o etichetta). ' +
     'Rispondi SOLO con un JSON: {"nome": nome breve in italiano come lo scriverebbe un meccanico (es. "Filtro olio Yamaha F200"), "marca": "", "codice": codice articolo o part number se leggibile, altrimenti "", ' +
@@ -11188,6 +11214,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       case 'mis-tab': V.misTab = t.getAttribute('data-v'); render(); break;
       case 'mis-ug': V.misUg = t.getAttribute('data-v'); render(); break;
       case 'str-tog': strToggle(t.getAttribute('data-k')); break;
+      case 'ai-key': aiKeySave(); break;
       case 'mis-u': (function () { var f = t.getAttribute('data-f'), u = t.getAttribute('data-u'); if (f === 'k') V.misKu = u; else if (f === 'fd') V.misFdu = u; else if (f === 'fp') V.misFpu = u; })(); render(); break;
       case 'ass-no': if (confirm('Rifiutare la richiesta?')) assDecide(id, false); break;
       case 'new-attr': if (S.canWrite) attrSheet(null, t.getAttribute('data-boat') || V.boatId); break;
@@ -11305,7 +11332,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     sub('conferme', function (x) { S.conf = toMap(x); });
     db.collection('impostazioni').onSnapshot(function (snap) {
       var m = null, b = null, ly = {};
-      snap.docs.forEach(function (d) { if (/^layout_/.test(d.id)) ly[d.id] = d.data(); else if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); else if (d.id === 'rifiuti') S.rifCfg = d.data(); else if (d.id === 'notifiche') S.notifCfg = d.data(); else if (d.id === 'depositi') S.depCfg = d.data(); else if (d.id === 'meteo') S.meteoCfg = d.data(); else if (d.id === 'strumenti') S.strCfg = d.data(); else if (d.id === 'percorso') S.percorso = d.data(); else if (d.id === 'porto') S.portoCfg = d.data(); else if (d.id === 'categorie') { S.catCfg = d.data(); catApply(); } });
+      snap.docs.forEach(function (d) { if (/^layout_/.test(d.id)) ly[d.id] = d.data(); else if (d.id === 'mappa') m = d.data(); else if (d.id === 'backup') b = d.data(); else if (d.id === 'batterie') S.battCfg = d.data(); else if (d.id === 'rifiuti') S.rifCfg = d.data(); else if (d.id === 'notifiche') S.notifCfg = d.data(); else if (d.id === 'depositi') S.depCfg = d.data(); else if (d.id === 'meteo') S.meteoCfg = d.data(); else if (d.id === 'strumenti') S.strCfg = d.data(); else if (d.id === 'ai') S.aiCfg = d.data(); else if (d.id === 'percorso') S.percorso = d.data(); else if (d.id === 'porto') S.portoCfg = d.data(); else if (d.id === 'categorie') { S.catCfg = d.data(); catApply(); } });
       var mc = m !== S.mapCfg; S.mapCfg = m; S.bkInfo = b; S.layouts = ly; S.got.imp = true; portoRinumera();
       if ((V.tab === 'mappa' && mc) || V.tab === 'backup' || V.tab === 'batterie' || V.tab === 'rifiuti' || V.tab === 'notifiche' || V.tab === 'categorie' || V.tab === 'strumenti' || V.tab === 'home' || V.tab === 'barche' || V.tab === 'pannello' || V.tab === 'riepiloghi') { if (!LY.drag) render(); }
     }, function () { });
