@@ -906,7 +906,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
 .sb-mt .s { font-size: .74rem; color: var(--muted); line-height: 1.25; }
 .sb-mt.soon { background: linear-gradient(160deg, #4A3218, #2A2030); border-color: #6B4A20; } .sb-mt.soon .s { color: var(--soon); }
 .sb-mt.late { background: linear-gradient(160deg, #4A1E22, #2A1A2E); border-color: #7A2C30; } .sb-mt.late .s { color: var(--late); }
-.sb-tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; margin: 16px -14px 0; padding: 0 14px; border-bottom: 1px solid var(--line); position: sticky; top: calc(54px + env(safe-area-inset-top, 0px)); z-index: 4; background: rgba(6, 0, 46, .82); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.sb-tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; margin: 16px -14px 0; padding: 0 14px; border-bottom: 1px solid var(--line); position: sticky; top: calc(54px + env(safe-area-inset-top, 0px)); z-index: 4; background: rgba(6, 0, 46, .82); background: color-mix(in srgb, var(--bg) 85%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 .sb-tabs::-webkit-scrollbar { display: none; }
 .sb-tabs button { flex: none; border: 0; background: none; color: var(--muted); font-weight: 600; font-size: .92rem; padding: 10px 11px; border-bottom: 2px solid transparent; white-space: nowrap; }
 .sb-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
@@ -11964,7 +11964,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       case 'gq-go': gqGo(t.getAttribute('data-k'), id); break;
       case 'gq-cli': x = $('#gq'); if (x) { x.value = V.gq = t.getAttribute('data-q'); $('#gq-res').innerHTML = gqResults(V.gq); } break;
       case 'res-open': V.boatView = 'resoconto'; window.scrollTo(0, 0); render(); break;
-      case 'sb-tab': V.boatTab = t.getAttribute('data-t') || 'cr'; render(); var tb = document.querySelector('.sb-tabs'); if (tb && tb.getBoundingClientRect().top < 0) tb.scrollIntoView(); break;
+      case 'sb-tab': V.boatTab = t.getAttribute('data-t') || 'cr'; render(); var tsel = document.querySelector('.sb-tabs [aria-selected="true"]'); if (tsel) tsel.parentNode.scrollLeft += tsel.getBoundingClientRect().left - tsel.parentNode.getBoundingClientRect().left - 40; break;
       case 'sb-sis': if (S.isOwner && S.canWrite) sbSistema(); break;
       case 'storia-open': V.boatView = 'storia'; V.stFiltro = 'tutto'; V.stTutto = false; window.scrollTo(0, 0); render(); break;
       case 'st-filtro': V.stFiltro = t.getAttribute('data-f'); V.stTutto = false; render(); break;

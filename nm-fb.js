@@ -1064,7 +1064,7 @@
     if (k === 'out') logout();
     else if (k === 'pw') auth.sendPasswordResetEmail(ME.email).then(function () { toast('Ti ho mandato l’email per cambiare la password.'); }, function (er) { toast(authErr(er)); });
     else if (k === 'tab') { CL.tab = t.getAttribute('data-id'); renderCliente(); var b0 = $('#nmfb .btabs'); if (b0) b0.scrollIntoView({ block: 'nearest' }); }
-    else if (k === 'st') { CL.st[t.getAttribute('data-id')] = t.getAttribute('data-t'); renderCliente(); }
+    else if (k === 'st') { CL.st[t.getAttribute('data-id')] = t.getAttribute('data-t'); renderCliente(); var cs0 = document.querySelector('#nmfb .bc.on .crt [aria-selected="true"]') || document.querySelector('#nmfb .crt [aria-selected="true"]'); if (cs0) cs0.parentNode.scrollLeft += cs0.getBoundingClientRect().left - cs0.parentNode.getBoundingClientRect().left - 40; }
     else if (k === 'more') { var id = t.getAttribute('data-id'); CL.all[id] = !CL.all[id]; renderCliente(); }
     else if (k === 'oy') { CL.oy[t.getAttribute('data-id')] = t.getAttribute('data-y'); CL.oc[t.getAttribute('data-id')] = null; renderCliente(); }
     else if (k === 'oc') { var oi = t.getAttribute('data-id'), oc = t.getAttribute('data-c'); CL.oc[oi] = CL.oc[oi] === oc ? null : oc; renderCliente(); }
