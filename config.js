@@ -26,4 +26,4 @@ window.NM_APPCHECK = { tipo: 'enterprise', siteKey: '' };
    l'amministratore sceglie il suo account Google, quello proprietario del progetto Firebase.
    Qui va l'«ID client» creato in Google Cloud › Google Auth Platform › Clients (non è un segreto: si vede comunque
    nella finestra di Google). Vuoto = il tasto toglie solo il profilo, l'accesso resta. */
-window.NM_GOOGLE_CLIENT_ID = '';
+window.NM_GOOGLE_CLIENT_ID = '417308637094-9j9tijjq1d9csnce1j6qhhgckr144evc.apps.googleusercontent.com';
