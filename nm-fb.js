@@ -134,7 +134,7 @@
     '#nmpan .chip button{background:none;border:0;color:#d6e8ff;font-size:1.1rem;line-height:1;padding:2px 6px;cursor:pointer}' +
     '#nmpan .conf{position:fixed;inset:0;z-index:5;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:16px}' +
     '#nmpan .conf .box{background:#1b1c20;border:1px solid #2a2c31;border-radius:16px;max-width:460px;width:100%;max-height:100%;overflow-y:auto;padding:18px}' +
-    '#nmpan .conf h3{margin:0 0 10px;font-size:1.1rem}#nmpan .conf ul{margin:0;padding-left:20px;color:#c9ccd6;font-size:.95rem}#nmpan .conf li{margin:6px 0}' +
+    '#nmpan .conf h3{margin:0 0 10px;font-size:1.1rem}#nmpan .conf ul{margin:0;padding-left:20px;color:#c9ccd6;font-size:.95rem}#nmpan .conf li{margin:6px 0}#nmpan .conf .err{color:#ff8a80;margin:12px 0 0;font-size:.95rem}' +
     '#nmpan .conf .acts{justify-content:flex-end;margin-top:16px}#nmpan button.b.dan{background:#c62828;border-color:#c62828;color:#fff}' +
     /* computer e tablet: il pannello lascia libero il menù a sinistra dell'app (largo 236px) */
     '@media (min-width:768px) and (min-height:500px){#nmpan{left:236px}}' +
@@ -775,14 +775,16 @@
       var sec = function (t, list) { return list.length ? '<h4>' + t + ' (' + list.length + ')</h4><div class="grp">' + list.map(row).join('') + '</div>' : ''; };
       h = '<div class="top"><button class="back" data-nm="close">‹ Indietro</button><h3>Utenti e permessi</h3><span style="min-width:64px"></span></div>' +
         sec('In attesa di approvazione', by('in_attesa')) + sec('Cantiere', by('attivo').filter(function (id) { return UT[id].ruolo !== 'cliente'; })) +
-        sec('Clienti', by('attivo').filter(function (id) { return UT[id].ruolo === 'cliente'; })) + sec('Sospesi', by('bloccato')) +
+        sec('Clienti', by('attivo').filter(function (id) { return UT[id].ruolo === 'cliente'; })) + sec('Sospesi', by('bloccato')) + exSecHtml() +
         '<p class="note"><b>Ore controllate</b>: per l’avviso «schede lavoro sotto le 8 ore» in primo piano si controllano solo queste persone. ' + (schChi() ? 'Le hai scelte tu: tocca il tasto per cambiare. <button class="b" data-nm="sch-auto">Torna in automatico</button>' : 'Ora è in automatico (chi ha scritto una scheda nell’ultimo mese): tocca il tasto di una persona per scegliere tu.') + '</p>' +
         '<p class="note"><b>Dipendente</b>: usa tutta l’app; cancella solo ciò che ha aggiunto, modifica solo le proprie mansioni e richieste di ferie. <b>Amministratore</b>: in più cancella tutto, vede il cestino, approva le ferie e i colleghi e cambia i permessi. ' +
         '<b>Cliente</b>: vede solo le barche che gli colleghi, con stato, posto e lavori eseguiti' + (strOnFb('orecliente') ? '; vede anche le ore di lavoro per tipo, con il testo delle mansioni e il nome di chi le ha fatte (solo giornate confermate)' : ', senza ore né nomi dei dipendenti (si accendono da Altro › Strumenti in più › Ore di lavoro al cliente)') + '.</p>' +
         (olds.length ? '<p class="note"><b>Collega ai dati vecchi</b>: dopo aver ripristinato la copia presa da Claude, scegli chi era quella persona. Mansioni, ore e giornate confermate passano al nuovo account.</p>' : '') +
         '<p class="note">Per far entrare un collega mandagli il link dell’app: si registra da solo e compare qui sopra, in attesa.</p>' +
-        (by('bloccato').length ? '<p class="note"><b>Cancella account</b>: c’è solo per chi è sospeso o ha avuto la richiesta rifiutata (un account attivo va prima sospeso). La persona sparisce da questo elenco, ma il lavoro che ha fatto resta con il suo nome.</p>' : '') +
+        (by('bloccato').length ? '<p class="note"><b>Cancella account</b>: c’è solo per chi è sospeso o ha avuto la richiesta rifiutata (un account attivo va prima sospeso). La persona sparisce da questo elenco, ma il lavoro che ha fatto resta con il suo nome.' +
+          (GCID ? ' Si cancella subito anche il suo accesso (email e password): si apre la finestra di Google e scegli il tuo account Google, quello con cui entri in Firebase.' : '') + '</p>' : '') +
         delConfHtml();
+      if (GCID) gisPronto().catch(function () { });
     } else if (PAN === 'cestino' && ME.ruolo === 'admin') {
       h = '<div class="top"><button class="back" data-nm="close">‹ Indietro</button><h3>Cestino</h3><span style="min-width:64px"></span></div>' + cestinoHtml() +
         '<p class="note">Qui finisce tutto ciò che viene cancellato, con chi l’ha cancellato e quando. Dopo 60 giorni sparisce per sempre. Le cose cancellate insieme (per esempio una barca con i suoi lavori) si recuperano insieme.</p>';
@@ -811,12 +813,25 @@
     else if (k === 'pin') pinSalva(id, ($('#nm-pin') || {}).value || '');
     else if (k === 'pin-no') { if (confirm('Togliere il tuo PIN? Sul tablet non comparirai più.')) write('pin', id, 'update', { hash: '', modificato: nowISO() }).then(function () { toast('PIN tolto.'); renderPanel(); }, function () { toast('Non riuscito.'); }); }
     else if (k === 'block') { if (confirm('Sospendere ' + (UT[id] && UT[id].nome || '') + '? Non potrà più entrare finché non lo riattivi.')) setUser(id, { stato: 'bloccato' }); }
-    else if (k === 'del') { DELCONF = id; renderPanel(); var bt = $('#nmpan .conf [data-nm="del-no"]'); if (bt) bt.focus(); }
-    else if (k === 'del-no') { DELCONF = null; renderPanel(); }
+    else if (k === 'del') { DELCONF = id; DELERR = ''; renderPanel(); var bt = $('#nmpan .conf [data-nm="del-no"]'); if (bt) bt.focus(); }
+    else if (k === 'del-no') { DELCONF = null; DELERR = ''; renderPanel(); }
     else if (k === 'del-si') {
-      var nd = nomeUtente(id); t.disabled = true;
-      cancellaAccount(id).then(function () { DELCONF = null; toast('Account di ' + nd + ' cancellato. Il suo lavoro resta con il suo nome.'); renderPanel(); },
-        function (er) { DELCONF = null; toast('Non riuscito: ' + (errOf(er).code || 'errore') + '. Riprova.'); renderPanel(); });
+      var nd = nomeUtente(id); t.disabled = true; DELERR = '';
+      // prima l'accesso (la finestra di Google si apre solo dentro il clic), poi il profilo: se Google non va, non si tocca niente
+      (GCID ? gToken().then(function (tok) { return togliAccesso(id, tok); }) : Promise.resolve(null)).then(function (acc) {
+        return cancellaAccount(id, acc !== null).then(function () { return acc; }, function (er) { er.dopoAccesso = acc !== null; throw er; });
+      }).then(function (acc) { DELCONF = null; toast('Account di ' + nd + ' cancellato' + (acc !== null ? ', anche il suo accesso' : '') + '. Il suo lavoro resta con il suo nome.'); renderPanel(); },
+        function (er) {
+          var g = gErrMsg(er);
+          if (g) { DELERR = g; renderPanel(); return; } // la conferma resta aperta: si può riprovare
+          DELCONF = null; DELERR = ''; toast((er && er.dopoAccesso ? 'Accesso tolto, ma il profilo non si è cancellato: ' : 'Non riuscito: ') + (errOf(er).code || 'errore') + '. Riprova.'); renderPanel();
+        });
+    }
+    else if (k === 'acc-ex') {
+      var nx = nomeUtente(id); t.disabled = true;
+      gToken().then(function (tok) { return togliAccesso(id, tok); }).then(function (acc) {
+        return segnaAccessoTolto(id).then(function () { toast(acc ? 'Accesso di ' + nx + ' tolto: la sua email è di nuovo libera.' : 'L’accesso di ' + nx + ' era già stato tolto.'); renderPanel(); });
+      }, function (er) { toast(gErrMsg(er) || ('Non riuscito: ' + (errOf(er).code || 'errore') + '. Riprova.')); renderPanel(); });
     }
   });
   document.addEventListener('change', function (e) {
@@ -846,16 +861,18 @@
       '<li>' + n + ' sparisce da Utenti e permessi e non può più entrare con questo account.</li>' +
       (cl ? '<li>Le sue barche restano nel gestionale; lui non le vede più nell’area clienti. Le richieste che ha mandato restano.</li>'
         : '<li>Il lavoro che ha fatto resta, con il suo nome: mansioni, ore, giornate confermate, ferie e storico delle barche.</li><li>Si tolgono il suo PIN del tablet e gli avvisi sul suo telefono.</li>') +
-      '<li><b>Non si può annullare.</b> Se un giorno torna, si registra di nuovo e lo approvi come una persona nuova.</li></ul>' +
+      (GCID ? '<li>Si cancella subito anche il suo accesso (email e password), così la sua email torna libera. Si apre la finestra di Google: scegli il tuo account Google, quello con cui entri in Firebase.</li>' : '') +
+      '<li><b>Non si può annullare.</b> Se un giorno torna, si registra di nuovo e lo approvi come una persona nuova.</li></ul>' + (DELERR ? '<p class="err" role="alert">' + esc(DELERR) + '</p>' : '') +
       '<div class="acts"><button class="b" data-nm="del-no">Annulla</button><button class="b dan" data-nm="del-si" data-id="' + DELCONF + '">Cancella per sempre</button></div></div></div>';
   }
   function exNomi() { var L = LIVE.impostazioni, c = L && L.map && L.map.exUtenti; return (c && !c._del && c.nomi) || {}; }
-  function cancellaAccount(id) {
+  function cancellaAccount(id, accessoTolto) {
     var u = UT[id];
     if (!u || !ME || ME.ruolo !== 'admin' || u.stato === 'attivo' || u.stato === 'in_attesa' || id === ME.uid) return Promise.reject({ code: 'non_permesso' });
     var b = fs.batch(), ts = FV.serverTimestamp(), ex = {}, c = function (n, d) { return fs.collection(n).doc(d); };
     var c0 = function (n) { var L = LIVE[n]; return !!(L && L.map && L.map[id]); };
     ex[id] = { nome: String(u.nome || u.email || '').slice(0, 80), cliente: u.ruolo === 'cliente' || u.tipo === 'cliente', il: nowISO() };
+    if (accessoTolto) ex[id].accessoTolto = nowISO();
     b.set(c('impostazioni', 'exUtenti'), { nomi: ex, _ts: ts }, { merge: true });
     if (c0('pin')) b.set(c('pin', id), { _del: true, _ts: ts });
     if (c0('notifiche')) b.set(c('notifiche', id), { _del: true, _ts: ts });
@@ -863,6 +880,75 @@
     b.delete(c('utenti', id));
     var nm = ex[id].nome;
     return b.commit().then(function () { attScrivi('cancella l’account di ' + nm); });
+  }
+  /* Togliere davvero l'accesso (email e password) di chi si cancella, subito al clic (scelta di Torcio, 16/11/2026).
+     Dall'app non si può cancellare l'accesso di un'altra persona: serve il permesso del proprietario del progetto Firebase.
+     Al clic si apre la finestra di Google, l'amministratore sceglie il suo account Google (quello con cui entra in Firebase)
+     e Google dà un permesso a tempo (circa un'ora) che serve solo a gestire gli accessi. Il permesso resta in memoria,
+     non si salva da nessuna parte. Senza window.NM_GOOGLE_CLIENT_ID (config.js) si toglie solo il profilo, come prima. */
+  var GCID = String(window.NM_GOOGLE_CLIENT_ID || '').trim(), GSCOPE = 'https://www.googleapis.com/auth/identitytoolkit';
+  var GTOK = null, GGIS = null, GSCEGLI = false, DELERR = '';
+  var IDT = 'https://identitytoolkit.googleapis.com/v1/projects/' + encodeURIComponent((CFG && CFG.projectId) || '') + '/accounts:delete';
+  function gisPronto() { // la libreria di Google si carica quando si apre Utenti e permessi, così il clic apre subito la finestra
+    if (!GCID) return Promise.resolve(false);
+    if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve(true);
+    if (!GGIS) GGIS = new Promise(function (ok, ko) {
+      var sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true;
+      sc.onload = function () { ok(true); }; sc.onerror = function () { GGIS = null; ko({ code: 'google_irraggiungibile' }); };
+      document.head.appendChild(sc);
+    });
+    return GGIS;
+  }
+  function gToken() { // va chiamata subito nel clic, senza attese prima: altrimenti il telefono blocca la finestra
+    if (GTOK && GTOK.scade > Date.now() + 60000) return Promise.resolve(GTOK.t);
+    if (!(window.google && google.accounts && google.accounts.oauth2)) { gisPronto().catch(function () { }); return Promise.reject({ code: 'google_irraggiungibile' }); }
+    return new Promise(function (ok, ko) {
+      var cli = google.accounts.oauth2.initTokenClient({
+        client_id: GCID, scope: GSCOPE,
+        callback: function (r) {
+          if (r && r.access_token && google.accounts.oauth2.hasGrantedAllScopes(r, GSCOPE)) { GTOK = { t: r.access_token, scade: Date.now() + (+r.expires_in || 3000) * 1000 }; GSCEGLI = false; ok(r.access_token); }
+          else ko({ code: (r && r.error) || 'access_denied' });
+        },
+        error_callback: function (e) { ko({ code: (e && e.type) || 'popup_closed' }); }
+      });
+      cli.requestAccessToken({ prompt: GSCEGLI ? 'select_account' : '' });
+    });
+  }
+  // true = accesso cancellato adesso, false = non c'era più (già tolto)
+  function togliAccesso(uid, tok) {
+    return fetch(IDT, { method: 'POST', headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify({ localId: uid }) }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (r.ok) return true;
+        var m = String((j && j.error && j.error.message) || '');
+        if (/USER_NOT_FOUND/.test(m)) return false;
+        if (r.status === 401 || r.status === 403) { GTOK = null; GSCEGLI = true; }
+        throw { code: r.status === 403 ? 'google_senza_permesso' : r.status === 401 ? 'google_scaduto' : 'google_' + (m.split(' ')[0] || r.status) };
+      });
+    }, function () { throw { code: 'google_irraggiungibile' }; });
+  }
+  function gErrMsg(er) {
+    var c = String((er && er.code) || '');
+    if (c === 'popup_closed') return 'Hai chiuso la finestra di Google: non ho cancellato niente.';
+    if (c === 'popup_failed_to_open') return 'Il telefono ha bloccato la finestra di Google: permetti le finestre per questo sito e riprova.';
+    if (c === 'access_denied') return 'Non hai dato il permesso a Google: non ho cancellato niente.';
+    if (c === 'google_senza_permesso') return 'Questo account Google non può cancellare gli accessi: riprova e scegli l’account con cui entri in Firebase.';
+    if (c === 'google_scaduto') return 'Il permesso di Google è scaduto: riprova.';
+    if (c === 'google_irraggiungibile') return 'Google non risponde: controlla la connessione e riprova.';
+    if (/^google_/.test(c)) return 'Google non ha cancellato l’accesso (' + c.slice(7) + '): non ho cancellato niente.';
+    return '';
+  }
+  function segnaAccessoTolto(id) { var o = {}; o[id] = { accessoTolto: nowISO() }; return fs.collection('impostazioni').doc('exUtenti').set({ nomi: o, _ts: FV.serverTimestamp() }, { merge: true }); }
+  // Chi è stato cancellato prima che il tasto togliesse anche l'accesso: non vede niente, ma la sua email è ancora occupata
+  function exSecHtml() {
+    if (!GCID) return '';
+    var ex = exNomi(), ids = Object.keys(ex).filter(function (u) { return !UT[u] && ex[u] && !ex[u].accessoTolto; })
+      .sort(function (a, b) { return String(ex[a].nome || '').localeCompare(String(ex[b].nome || ''), 'it'); });
+    if (!ids.length) return '';
+    return '<h4>Cancellati, accesso ancora da togliere (' + ids.length + ')</h4><div class="grp">' + ids.map(function (u) {
+      var d = String(ex[u].il || '').slice(0, 10).split('-').reverse().join('/');
+      return '<div class="u"><div class="nm">' + esc(ex[u].nome || '(senza nome)') + '</div><div class="em" style="word-break:normal">Cancellato' + (d ? ' il ' + esc(d) : '') + ': la sua email è ancora occupata.</div>' +
+        '<div class="acts"><button class="b red" data-nm="acc-ex" data-id="' + esc(u) + '">Togli l’accesso</button></div></div>';
+    }).join('') + '</div>';
   }
   function setUser(id, f) { f.modificato = nowISO(); return fs.collection('utenti').doc(id).update(f).catch(function (e) { toast('Non riuscito: ' + errOf(e).code); throw e; }); }
   function swap(v, a, b) {

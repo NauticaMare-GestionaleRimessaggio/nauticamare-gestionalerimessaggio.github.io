@@ -21,3 +21,9 @@ window.NM_AVVISI_A = 'andreatorcini01@gmail.com';
 /* App Check: spento dal 4/11/2026. L'AI dalla foto usa la chiave gratuita di Google AI Studio
    (Altro › Strumenti in più / Aspetto dell'app), che non ha bisogno di App Check né della fatturazione. */
 window.NM_APPCHECK = { tipo: 'enterprise', siteKey: '' };
+
+/* «Cancella account» toglie subito anche l'accesso (email e password) della persona, con la finestra di Google:
+   l'amministratore sceglie il suo account Google, quello proprietario del progetto Firebase.
+   Qui va l'«ID client» creato in Google Cloud › Google Auth Platform › Clients (non è un segreto: si vede comunque
+   nella finestra di Google). Vuoto = il tasto toglie solo il profilo, l'accesso resta. */
+window.NM_GOOGLE_CLIENT_ID = '';
