@@ -436,6 +436,28 @@ button.row:active, .row .hit:active { opacity: .65; }
 .pt-chip b { font-family: var(--font-data); color: var(--muted); }
 .pt-chip[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px var(--ink); }
 .pt-chip.off { opacity: .45; }
+.pt-mbar { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 3; background: rgba(24, 25, 29, .97); border: 1.5px solid #FFD60A; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 10px 30px rgba(0, 0, 0, .5); max-width: 560px; margin-inline: auto; }
+.pt-mbar[hidden] { display: none; }
+#pt-multi[aria-pressed="true"] { background: #FFD60A; color: #0E0E10; }
+.pt-mbar .hd { display: flex; align-items: center; gap: 8px; }
+.pt-mbar .hd .title { flex: 1; min-width: 0; font-size: 1.05rem; }
+.pt-mbar .x { border: 0; background: var(--card-2); color: var(--muted); width: 30px; height: 30px; border-radius: 50%; font-size: 1rem; flex: none; }
+.pt-mbar .btn { padding: 9px 13px; font-size: .9rem; }
+.pt-zl { border-top: 1px solid var(--line); padding: 4px 0; }
+.pt-zl summary { display: flex; align-items: center; gap: 10px; padding: 10px 2px; cursor: pointer; list-style: none; }
+.pt-zl summary::-webkit-details-marker { display: none; }
+.pt-zl summary .main { flex: 1; min-width: 0; font-weight: 600; }
+.pt-zl summary::after { content: '›'; color: var(--muted); font-size: 1.3rem; transition: transform .2s; }
+.pt-zl[open] summary::after { transform: rotate(90deg); }
+.pt-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; margin: 6px 0 10px; }
+.pt-pk input { position: absolute; opacity: 0; pointer-events: none; }
+.pt-pk { position: relative; }
+.pt-pk span { display: flex; flex-direction: column; gap: 1px; padding: 7px 8px; border-radius: 10px; background: var(--card-2); border: 1.5px solid transparent; min-height: 44px; justify-content: center; }
+.pt-pk b { font-family: var(--font-data); font-size: .88rem; display: flex; align-items: center; gap: 6px; }
+.pt-pk i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; flex: none; }
+.pt-pk small { font-size: .7rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pt-pk input:checked + span { background: rgba(255, 214, 10, .16); border-color: #FFD60A; }
+.pt-pk input:focus-visible + span { outline: 2px solid var(--accent); }
 .pt-code { font-family: var(--font-data); font-weight: 600; font-size: .9rem; background: var(--card-2); border-radius: 7px; padding: 3px 7px; flex: none; min-width: 46px; text-align: center; }
 .pt-kv { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 3px 10px; font-size: .84rem; margin: 0; }
 .pt-kv dt { color: var(--muted); } .pt-kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -796,6 +818,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
   .ly-i:has(> .ly-c > .sec-h:first-child) > .ly-more { top: 8px; right: 0; }
   .ly-ed { gap: 18px 16px; }
   .map-list { display: flex; }
+  .pt-mbar { left: auto; right: 60px; width: 440px; max-width: calc(100% - 80px); margin: 0; }
   .map-card { left: auto; right: 60px; top: 10px; bottom: auto; width: 360px; max-width: none; max-height: calc(100% - 20px); overflow-y: auto; margin: 0; }
   .m3-hint { top: auto; bottom: 10px; right: auto; max-width: calc(100% - 460px); }
 }
@@ -5524,7 +5547,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     }
 
     // ---------- Camera e disegno ----------
-    var P = { mounted: false, built: false, mode: '2d', sel: null, filter: null, fit: null, moving: false, movT: null, queued: false, anim: null, ro: null, hintT: null };
+    var P = { mounted: false, built: false, mode: '2d', sel: null, filter: null, fit: null, moving: false, movT: null, queued: false, anim: null, ro: null, hintT: null, multi: null };
     var CAM = { tx: 82, tz: 245, yaw: 0, pitch: 1.5533, dist: 330, fov: 0.85 };
     var cv = null, ctx = null, stage = null, W = 1, H = 1, DPR = 1, F = 1, E, Rv, Uv, Fv, GV = null, NEAR = 1.5;
     function basis() {
@@ -5574,8 +5597,9 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       GROUND.forEach(function (q) { var pr = projPoly(q.p); if (!pr) return; path(pr.s); ctx.fillStyle = q.fill; ctx.fill(); });
       BERTHS.forEach(function (b) {
         var pr = projPoly(b.mark); b.sm = pr; if (!pr) return;
-        var st = STATI[statoOf(b)], on = visible(b), sel = b.id === P.sel;
-        if (!on && !sel) return;
+        var st = STATI[statoOf(b)], on = visible(b), sel = b.id === P.sel, ms = scelto(b.id);
+        if (!on && !sel && !ms) return;
+        if (ms) { path(pr.s); ctx.fillStyle = 'rgba(255,214,10,.9)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#FFFFFF'; ctx.stroke(); return; }
         var a = sel ? 0.78 : statoOf(b) === 'marina' ? 0.14 : P.filter ? 0.62 : 0.45;
         path(pr.s); ctx.fillStyle = 'rgba(' + st.c.join(',') + ',' + a + ')'; ctx.fill();
         if (sel) { ctx.lineWidth = 2.5; ctx.strokeStyle = '#FFFFFF'; ctx.stroke(); }
@@ -5642,6 +5666,13 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
           var c = toCam(b.along ? [b.cx, 0.1, b.cz] : [b.base[0] + b.hx * (b.len - 1.6), 0.1, b.base[1] + b.hz * (b.len - 1.6)]);
           if (c[2] >= NEAR) { var s = proj(c); ctx.font = '600 ' + Math.min(12, 6 + sz / 7) + 'px "IBM Plex Mono", ui-monospace, monospace'; ctx.fillStyle = 'rgba(244,245,247,.85)'; ctx.fillText(b.id, s[0], s[1]); }
         }
+        if (scelto(b.id)) {
+          var tk = toCam([b.cx, (b.top || 1) + 2.2, b.cz]); if (tk[2] < NEAR) return;
+          var pk = proj(tk), rk = Math.max(5, Math.min(9, 1000 / tk[2]));
+          ctx.beginPath(); ctx.arc(pk[0], pk[1], rk, 0, Math.PI * 2); ctx.fillStyle = '#FFD60A'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#0E0E10'; ctx.stroke();
+          if (rk >= 6) { ctx.fillStyle = '#0E0E10'; ctx.font = '700 ' + Math.round(rk * 1.3) + 'px -apple-system, "Segoe UI", sans-serif'; ctx.fillText('✓', pk[0], pk[1] + 0.5); }
+          return;
+        }
         var d = postoDoc(b.id), due = d && d.fino && daysUntil(d.fino) != null && daysUntil(d.fino) <= 30, sale = inVendita(berthBoat(b));
         if ((sale || due) && (visible(b) || b.id === P.sel)) {
           var t = toCam([b.cx, (b.top || 1) + 2.2, b.cz]); if (t[2] < NEAR) return;
@@ -5690,6 +5721,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
         if (lb && LABELS[li].look && x >= lb[0] - 6 && x <= lb[0] + lb[2] + 6 && y >= lb[1] - 6 && y <= lb[1] + lb[3] + 6) { P.sel = null; card(); if (P.mode === '2d') setMode('3d', true); animateTo(Object.assign({}, LABELS[li].look), 900); return; }
       }
       BERTHS.forEach(function (b) { [b.sd, b.sm].forEach(function (pr) { if (pr && inPoly(x, y, pr.s) && pr.d < bd) { bd = pr.d; best = b; } }); });
+      if (P.multi) { if (best) { if (P.multi.ids[best.id]) delete P.multi.ids[best.id]; else P.multi.ids[best.id] = 1; P.multi.last = best.pon; } mbar(); draw(); return; }
       P.sel = best ? best.id : null; card(); draw();
     }
     function bindStage() {
@@ -5761,12 +5793,13 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       var due = dueList().length, ven = vendite().length, dc = S.isOwner && S.canWrite ? daCollegare() : null, ndc = dc ? dc.agg.length + dc.nuovi.length : 0;
       return (ndc ? '<button type="button" class="btn sec" data-act="pt-collega" style="width:100%;margin-bottom:10px">Collega i posti scritti nelle schede (' + ndc + ')</button>' : '') + '<div class="map-ctrl">' +
         '<button type="button" class="chip-b" data-act="pt-find">Trova posto</button><button type="button" class="chip-b" data-act="pt-broker">Brokeraggio <b id="pt-nven">' + ven + '</b></button>' +
-        '<button type="button" class="chip-b" data-act="pt-contracts">Contratti <b id="pt-ndue" style="color:var(--soon)">' + (due || '') + '</b></button><button type="button" class="chip-b" data-act="pt-search">Cerca</button></div>' +
+        '<button type="button" class="chip-b" data-act="pt-contracts">Contratti <b id="pt-ndue" style="color:var(--soon)">' + (due || '') + '</b></button><button type="button" class="chip-b" data-act="pt-search">Cerca</button>' +
+        (S.canWrite ? '<button type="button" class="chip-b" data-act="pt-multi" id="pt-multi" aria-pressed="' + !!P.multi + '">Modifica più posti</button>' : '') + '</div>' +
         '<div class="pt-chips" id="pt-chips">' + chipsHtml() + '</div>' + mlStrip('Cerca posto, barca o cliente', listHtml()) +
         '<div class="map-box" id="porto-root" style="background:#070B14"><canvas id="pt-cv" style="display:block;width:100%;height:100%" aria-label="Porto: tocca un posto barca per aprirne la scheda"></canvas>' +
         '<div class="m3-hint" id="pt-hint" style="transition:opacity .4s"></div>' +
         '<div class="map-tools"><button type="button" data-act="pt-zin" aria-label="Avvicina">+</button><button type="button" data-act="pt-zout" aria-label="Allontana">−</button><button type="button" data-act="pt-fit" aria-label="Tutto il porto">' + I.fit + '</button></div>' +
-        '<div class="map-card" id="pt-card" hidden></div></div>' +
+        '<div class="map-card" id="pt-card" hidden></div><div class="pt-mbar" id="pt-mbar" hidden></div></div>' +
         '<p class="cap" style="margin:10px 2px 0">Porto disegnato dalla foto dall’alto: 397 posti, con le lettere delle file (A7, F14…, il numero 1 dal lato della banchina); le misure dei posti sono stimate. Ogni posto parte come “della Marina”: toccalo per segnarlo come vostro, assegnare barca e cliente, contratto e scadenza.</p>';
     }
     function listHtml() {
@@ -5776,8 +5809,8 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
     }
     function card() {
       var el = $('#pt-card'); if (!el) return;
-      var b = P.sel && BY[P.sel];
-      mlMark(P.sel);
+      var b = !P.multi && P.sel && BY[P.sel];
+      mlMark(P.multi ? null : P.sel);
       if (!b) { el.hidden = true; el.innerHTML = ''; return; }
       var d = postoDoc(b.id) || {}, stt = statoOf(b), st = STATI[stt], boat = berthBoat(b), h = '';
       var title = boat ? (boat.nome || 'Barca') : d.cliente ? d.cliente : stt === 'libero' ? 'Posto libero' : 'Posto della Marina';
@@ -5807,7 +5840,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       mlFill(listHtml());
       var nv = $('#pt-nven'), nd = $('#pt-ndue'); if (nv) nv.textContent = vendite().length; if (nd) { var dn = dueList().length; nd.textContent = dn || ''; }
       if (P.sel && !BY[P.sel]) P.sel = null;
-      card(); draw();
+      card(); mbar(); draw();
     }
     function mount() {
       stage = $('#porto-root'); cv = $('#pt-cv'); if (!stage || !cv) return;
@@ -5818,7 +5851,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       if (window.ResizeObserver) { if (P.ro) P.ro.disconnect(); P.ro = new ResizeObserver(resize); P.ro.observe(stage); }
       resize();
       if (!P.camSet) { CAM.dist = fitDist() * (P.mode === '2d' ? 1 : 0.8); if (P.mode === '2d') { CAM.yaw = 0; CAM.pitch = 1.5533; CAM.tx = 82; CAM.tz = 245; } P.camSet = true; }
-      setMode(P.mode, true); card(); draw();
+      setMode(P.mode, true); card(); mbar(); draw();
       if (P.flyOnMount && P.sel && BY[P.sel]) { P.flyOnMount = false; flyTo(BY[P.sel]); }
     }
     function unmount() { P.mounted = false; if (P.ro) { P.ro.disconnect(); P.ro = null; } if (P.anim) { cancelAnimationFrame(P.anim.raf); P.anim = null; } stage = cv = ctx = null; }
@@ -5933,6 +5966,112 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
         }
       });
     }
+    // ---------- Modifica più posti insieme (Torcio, 23/11/2026): si scelgono sulla mappa o dall'elenco, anche quelli occupati ----------
+    function scelto(id) { return !!(P.multi && P.multi.ids[id]); }
+    function sceltiIds() { return P.multi ? BERTHS.filter(function (b) { return P.multi.ids[b.id]; }).map(function (b) { return b.id; }) : []; }
+    function mbar() {
+      var el = $('#pt-mbar'); if (!el) return;
+      if (!P.multi) { el.hidden = true; el.innerHTML = ''; return; }
+      var n = sceltiIds().length, k = P.multi.last, h = '';
+      h += '<div class="hd"><div class="title"><b>' + (n ? n + (n === 1 ? ' posto scelto' : ' posti scelti') : 'Scegli i posti da cambiare') + '</b><span class="cap" style="display:block">' + (n ? 'Tocca un posto giallo per toglierlo' : 'Tocca i posti sulla mappa: diventano gialli') + '</span></div><button type="button" class="x" data-act="pt-multi" aria-label="Chiudi">✕</button></div><div class="m-acts">';
+      if (k) { var fz = BERTHS.filter(function (b) { return b.pon === k; }), tutti = fz.every(function (b) { return scelto(b.id); }); h += '<button type="button" class="btn sec" data-act="pt-mfila" data-f="' + esc(k) + '">' + (tutti ? 'Togli ' : 'Tutta ') + (k.length === 1 ? 'la fila ' : 'la zona ') + esc(k) + '</button>'; }
+      if (P.filter) { var acc = BERTHS.filter(visible).length; if (acc) h += '<button type="button" class="btn sec" data-act="pt-maccesi">Tutti gli accesi (' + acc + ')</button>'; }
+      h += '<button type="button" class="btn sec" data-act="pt-mlista">Dall’elenco</button>';
+      if (n) h += '<button type="button" class="btn sec" data-act="pt-mvia">Svuota</button>';
+      h += '<button type="button" class="btn" data-act="pt-mok"' + (n ? '' : ' disabled') + '>Modifica' + (n ? ' ' + n : '') + '</button></div>';
+      el.innerHTML = h; el.hidden = false;
+    }
+    function listaSheet() {
+      var zone = [], per = {};
+      BERTHS.forEach(function (b) { if (!per[b.pon]) { per[b.pon] = []; zone.push(b.pon); } per[b.pon].push(b); });
+      var body = '<p class="context">Spunta i posti da cambiare, anche quelli già occupati. «Tutta la fila» li spunta tutti insieme.</p>' + zone.map(function (k) {
+        var arr = per[k], ns = arr.filter(function (b) { return scelto(b.id); }).length;
+        return '<details class="pt-zl" data-z="' + esc(k) + '"' + (ns ? ' open' : '') + '><summary><span class="pt-code">' + esc(k) + '</span><span class="main">' + esc(ZONE[k].n) + '</span><span class="cap" data-zc>' + (ns ? ns + ' di ' : '') + arr.length + '</span></summary>' +
+          '<label class="check"><input type="checkbox" data-zall="' + esc(k) + '"' + (ns === arr.length ? ' checked' : '') + '> Tutta la ' + (k.length === 1 ? 'fila' : 'zona') + ' (' + arr.length + ')</label><div class="pt-pick">' +
+          arr.map(function (b) { var d = postoDoc(b.id) || {}, bt = berthBoat(b), st = STATI[statoOf(b)], nm = bt ? bt.nome : d.cliente || ''; return '<label class="pt-pk"><input type="checkbox" value="' + esc(b.id) + '" data-z="' + esc(k) + '"' + (scelto(b.id) ? ' checked' : '') + '><span><b><i style="background:' + st.css + '"></i>' + esc(b.id) + '</b>' + (nm ? '<small>' + esc(nm) + '</small>' : '') + '</span></label>'; }).join('') + '</div></details>';
+      }).join('');
+      openSheet({
+        title: 'Scegli i posti', submitLabel: 'Avanti', body: body,
+        onOpen: function (f) {
+          function tot() { var n = f.querySelectorAll('.pt-pk input:checked').length, sv = $('#sheet-save'); if (sv) sv.textContent = n ? 'Avanti (' + n + ')' : 'Avanti'; }
+          function upd(k) {
+            var all = f.querySelectorAll('.pt-pk input[data-z="' + k + '"]'), on = f.querySelectorAll('.pt-pk input[data-z="' + k + '"]:checked').length, za = f.querySelector('[data-zall="' + k + '"]'), dz = f.querySelector('details[data-z="' + k + '"] [data-zc]');
+            if (za) za.checked = on === all.length; if (dz) dz.textContent = (on ? on + ' di ' : '') + all.length; tot();
+          }
+          f.addEventListener('change', function (e) {
+            var x = e.target, k = x.getAttribute('data-zall');
+            if (k) { Array.prototype.forEach.call(f.querySelectorAll('.pt-pk input[data-z="' + k + '"]'), function (c) { c.checked = x.checked; }); upd(k); }
+            else if (x.closest('.pt-pk')) upd(x.getAttribute('data-z'));
+          });
+          tot();
+        },
+        onSubmit: async function (f) {
+          var ids = {}; Array.prototype.forEach.call(f.querySelectorAll('.pt-pk input:checked'), function (c) { ids[c.value] = 1; });
+          if (!Object.keys(ids).length) { formErr('Spunta almeno un posto.'); return false; }
+          if (!P.multi) P.multi = { ids: {}, last: null };
+          P.multi.ids = ids; P.sel = null;
+          var mb = $('#pt-multi'); if (mb) mb.setAttribute('aria-pressed', 'true');
+          card(); mbar(); draw(); setTimeout(bulkSheet, 30); return true;
+        }
+      });
+    }
+    function bulkSheet() {
+      var ids = sceltiIds(); if (!ids.length) return;
+      var occ = ids.filter(function (id) { var d = postoDoc(id); return d && (d.barcaId && boatById(d.barcaId) || d.cliente); }).length,
+        nos = ids.filter(function (id) { var d = postoDoc(id); return d && d.gestione === 'nostro'; }).length, NC = [['', 'Non cambiare']];
+      var body = '<p class="context"><b>' + ids.length + (ids.length === 1 ? ' posto' : ' posti') + '</b>: ' + esc(ids.slice(0, 12).join(', ') + (ids.length > 12 ? ' e altri ' + (ids.length - 12) : '')) + '. ' +
+        (occ ? occ + (occ === 1 ? ' è occupato' : ' sono occupati') : 'Nessuno è occupato') + ', ' + (nos ? nos + (nos === 1 ? ' è vostro' : ' sono vostri') : 'nessuno è vostro') + '.</p>' +
+        '<p class="context">Cambio solo quello che scegli qui sotto. Il resto di ogni posto (barca, cliente, telefono) resta com’è.</p>' +
+        field(lab('f-mg', 'Chi gestisce il posto'), '<select id="f-mg">' + opts(NC.concat([['marina', 'La Marina'], ['nostro', 'Noi (Nautica Mare)']]), '') + '</select>') +
+        '<div class="grid2">' + field(lab('f-mk', 'Contratto'), '<select id="f-mk">' + opts(NC.concat([['-', 'Nessuno (lo tolgo)'], 'Annuale', 'Stagionale estivo', 'Invernale', 'Mensile', 'Transito']), '') + '</select>') +
+        field(lab('f-mf', 'Fino al'), inp('f-mf', '', 'type="date"'), 'Vuoto: non cambia') + '</div>' +
+        field(lab('f-mno', 'Note'), '<select id="f-mno">' + opts(NC.concat([['add', 'Aggiungi in fondo'], ['set', 'Sostituisci'], ['del', 'Cancella le note']]), '') + '</select>') +
+        '<div id="f-mnw" hidden>' + field(lab('f-mn', 'Testo della nota'), '<textarea id="f-mn" placeholder="es. corrente 32 A, cime nuove a poppa"></textarea>') + '</div>' +
+        (giusto() ? '<div class="grid2">' + field(lab('f-mml', 'Barca max: lunghezza (m)'), inp('f-mml', '', 'type="text" inputmode="decimal" placeholder="non cambiare"')) + field(lab('f-mmw', 'Barca max: larghezza (m)'), inp('f-mmw', '', 'type="text" inputmode="decimal" placeholder="non cambiare"')) + '</div>' : '') +
+        '<div class="notice" id="f-mconf" hidden></div>';
+      var pronto = '';
+      openSheet({
+        title: 'Modifica ' + ids.length + (ids.length === 1 ? ' posto' : ' posti'), submitLabel: 'Salva', body: body,
+        onOpen: function (f) {
+          var no = f.querySelector('#f-mno'), nw = f.querySelector('#f-mnw');
+          function chg() { nw.hidden = !(no.value === 'add' || no.value === 'set'); pronto = ''; var c = $('#f-mconf'), sv = $('#sheet-save'); if (c) c.hidden = true; if (sv) sv.textContent = 'Salva'; }
+          f.addEventListener('input', chg); f.addEventListener('change', chg);
+        },
+        onSubmit: async function (f) {
+          var g = val(f, 'f-mg'), k = val(f, 'f-mk'), fi = val(f, 'f-mf'), nm = val(f, 'f-mno'), nt = val(f, 'f-mn'), ml = giusto() ? parseDec(val(f, 'f-mml')) : null, mw = giusto() ? parseDec(val(f, 'f-mmw')) : null, cosa = [];
+          if ((nm === 'add' || nm === 'set') && !nt) { formErr('Scrivi il testo della nota.'); return false; }
+          if (g) cosa.push('chi gestisce: ' + (g === 'nostro' ? 'voi' : 'la Marina'));
+          if (k) cosa.push(k === '-' ? 'contratto e data tolti' : 'contratto ' + k);
+          if (fi && k !== '-') cosa.push('fino al ' + fmtDate(fi));
+          if (nm) cosa.push(nm === 'add' ? 'nota aggiunta' : nm === 'set' ? 'nota sostituita' : 'note cancellate');
+          if (ml > 0) cosa.push('barca max lunga ' + fmtNum(ml, 2) + ' m');
+          if (mw > 0) cosa.push('barca max larga ' + fmtNum(mw, 2) + ' m');
+          if (!cosa.length) { formErr('Scegli almeno una cosa da cambiare.'); return false; }
+          var key = cosa.join('|');
+          if (pronto !== key) { // prima di salvare tanti posti insieme, il riepilogo e un secondo tocco
+            pronto = key; var c = $('#f-mconf'), sv = $('#sheet-save');
+            c.innerHTML = 'Cambio <b>' + ids.length + (ids.length === 1 ? ' posto' : ' posti') + '</b>: ' + esc(cosa.join(', ')) + '. Tocca «Conferma» per salvare.'; c.hidden = false;
+            if (sv) sv.textContent = 'Conferma'; c.scrollIntoView({ block: 'nearest' }); return false;
+          }
+          var now = new Date().toISOString(), lav = ids.map(function (id) {
+            var d = postoDoc(id), nuovo = !d || !!d._del, x = { modificato: now }, ref = S.db.collection('posti').doc(id);
+            if (g) x.gestione = g;
+            if (k === '-') { x.contratto = ''; x.fino = ''; }
+            else { if (k) x.contratto = k; if (fi) { x.fino = fi; if (!k && (nuovo || !d.contratto)) x.contratto = 'Annuale'; } }
+            if (nm === 'add') x.note = (!nuovo && d.note ? d.note + ' · ' : '') + nt; else if (nm === 'set') x.note = nt; else if (nm === 'del') x.note = '';
+            if (ml > 0) x.lenMax = ml; if (mw > 0) x.widMax = mw;
+            return nuovo ? function () { return ref.set(Object.assign({ gestione: 'marina', barcaId: '', cliente: '', telefono: '', contratto: '', fino: '', note: '' }, x)); } : function () { return ref.update(x); };
+          });
+          for (var i = 0; i < lav.length; i += 20) {
+            var part = lav.slice(i, i + 20);
+            if (!(await w(function () { return Promise.all(part.map(function (fn) { return fn(); })); }))) { if (i) toast('Salvati ' + i + ' posti su ' + ids.length + ': riprova per gli altri', true); return false; }
+          }
+          toast(ids.length === 1 ? 'Posto modificato' : ids.length + ' posti modificati');
+          P.multi = null; var mb = $('#pt-multi'); if (mb) mb.setAttribute('aria-pressed', 'false'); refresh();
+          return true;
+        }
+      });
+    }
     function bRow(b, side) {
       var d = postoDoc(b.id) || {}, boat = berthBoat(b), st = STATI[statoOf(b)];
       return '<button type="button" class="row" data-act="pt-goto" data-id="' + esc(b.id) + '"><span class="pt-code">' + esc(b.id) + '</span><span class="main"><span class="title">' + esc(boat ? boat.nome : d.cliente || (statoOf(b) === 'libero' ? 'Posto libero' : 'Posto della Marina')) + '</span><span class="sub">' + esc(d.cliente || b.zona) + '</span></span><span class="side">' + (side || '<span class="pill ' + st.pill + '">' + esc(st.s) + '</span>') + '</span></button>';
@@ -5977,7 +6116,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
         }
       });
     }
-    function goto(id) { var b = BY[id]; if (!b) return; closeSheet(); P.sel = id; card(); draw(); flyTo(b); }
+    function goto(id) { var b = BY[id]; if (!b) return; closeSheet(); if (P.multi) { P.multi.ids[id] = 1; P.multi.last = b.pon; mbar(); draw(); flyTo(b); return; } P.sel = id; card(); draw(); flyTo(b); }
     function click(act, t) {
       var id = t.getAttribute('data-id');
       switch (act) {
@@ -6002,6 +6141,13 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
         case 'pt-find': findSheet(); return true;
         case 'pt-search': searchSheet(); return true;
         case 'pt-goto': goto(id); return true;
+        case 'pt-multi': P.multi = P.multi ? null : { ids: {}, last: null }; P.sel = null; var mb = $('#pt-multi'); if (mb) mb.setAttribute('aria-pressed', String(!!P.multi)); card(); mbar(); draw(); return true;
+        case 'pt-mfila': if (!P.multi) return true; var fk = t.getAttribute('data-f'), fz = BERTHS.filter(function (b) { return b.pon === fk; }), tutti = fz.every(function (b) { return scelto(b.id); });
+          fz.forEach(function (b) { if (tutti) delete P.multi.ids[b.id]; else P.multi.ids[b.id] = 1; }); mbar(); draw(); return true;
+        case 'pt-maccesi': if (!P.multi) return true; BERTHS.filter(visible).forEach(function (b) { P.multi.ids[b.id] = 1; }); mbar(); draw(); return true;
+        case 'pt-mvia': if (!P.multi) return true; P.multi.ids = {}; mbar(); draw(); return true;
+        case 'pt-mlista': listaSheet(); return true;
+        case 'pt-mok': if (sceltiIds().length) bulkSheet(); return true;
       }
       return false;
     }
@@ -10459,6 +10605,7 @@ body { margin: 0; background: radial-gradient(110% 55% at 50% 0%, #14305C 0%, #0
       'Tocca un posto per segnarlo come vostro o della Marina e assegnare barca, cliente, contratto e scadenza.',
       '«Contratti» elenca i posti in ordine di scadenza, con quelli vicini in alto.',
       '«Trova posto»: scrivi le misure di una barca e si accendono i vostri posti liberi in cui entra.',
+      '«Modifica più posti»: tocchi i posti sulla mappa (diventano gialli, anche quelli occupati) oppure li spunti da «Dall’elenco», anche una fila intera; poi «Modifica» cambia insieme chi gestisce, contratto e scadenza, note e misure massime. Cambia solo quello che scegli e prima di salvare chiede conferma.',
       'Con «Trova il posto giusto» acceso, la barca più grande che ci sta è la misura della fila (o del posto, se è scritta nel posto); nella scheda della barca e al varo ti propone i posti liberi dove entra.',
       '«Brokeraggio»: barche in vendita e persone che cercano una barca, con quelle adatte già abbinate.',
       'Sul computer, sopra la mappa, c’è l’elenco dei vostri posti con la barca o il cliente: tocchi un posto e la mappa ci va. La scheda del posto si apre a destra.'] },
